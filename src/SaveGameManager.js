@@ -181,6 +181,45 @@ function SaveGameManager() {
       position: "relative",
       textAlign: "center"
     }}>
+      <button
+       onClick={() => navigate("/versus")}
+      style={{
+      position: "absolute",
+      top: "18px",
+      right: "18px",
+      padding: "8px 14px",
+      borderRadius: "999px",
+      background: "#22c55e",    
+      color: "#000",        
+      border: "none",
+      cursor: "pointer",
+      fontWeight: 600,
+      boxShadow: "0 2px 6px rgba(0,0,0,0.35)"
+  }}
+>
+  Versus
+</button>
+
+  <button
+    onClick={() => navigate("/duo")}
+    style={{
+    position: "absolute",
+    top: "18px",
+    right: "110px",
+    padding: "8px 14px",
+    borderRadius: "999px",
+    background: "#22c55e",
+    color: "#000",
+    border: "none",
+    cursor: "pointer",
+    fontWeight: 600,
+    boxShadow: "0 2px 6px rgba(0,0,0,0.35)"
+  }}
+>
+  Duo Online
+</button>
+
+
       <h1>Spielstände verwalten</h1>
 
       <div className="savegame-list-scroll" style={{

@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import CreatableSelect from "react-select/creatable";
 import { versionToPokedex } from "./data/versionToPokedex";
 import editionData from "./data/editionData.js";
 import { getGenFromEdition } from "./utils/editionHelpers";
 import * as allLocations from "./locations/index.js";
+import { useDuoSave } from "./duo/useDuoSave";
 
 function getDexIdFromName(pokemonName, pokedex) {
   const entry = Object.entries(pokedex).find(([, name]) => name === pokemonName);
@@ -14,29 +15,56 @@ function getDexIdFromName(pokemonName, pokedex) {
 
 function EncounterTable() {
   const navigate = useNavigate();
+
+  // ===== Duo/Online State =====
+  const activeDuoRoomId = localStorage.getItem("activeDuoRoomId") || "";
+  const { save: duoSave, patchSave: patchDuoSave, error: duoError } = useDuoSave(activeDuoRoomId);
+  const isDuo = !!activeDuoRoomId;
+
+  // ===== Local Save State =====
   const activeSave = localStorage.getItem("activeSave");
   const savegames = JSON.parse(localStorage.getItem("savegames") || "{}");
-  const currentSave = savegames[activeSave];
-  const version = currentSave?.edition || "Alpha Saphir";
-  const linkMode = currentSave?.linkMode || "solo";
-  const slotCount = linkMode === "trio" ? 3 : linkMode === "duo" ? 2 : 1;
+  const currentSave = activeSave ? savegames[activeSave] : null;
 
-  const gen = getGenFromEdition(version);
-  const genData = editionData[version];
-  const pokedex = versionToPokedex[version] || {};
+  // ===== Effective meta (Duo prefers Firestore) =====
+  const effectiveEdition = isDuo ? (duoSave?.edition || "Rot") : (currentSave?.edition || "Alpha Saphir");
+  const effectiveLinkMode = isDuo ? (duoSave?.linkMode || "duo") : (currentSave?.linkMode || "solo");
+  const slotCount = effectiveLinkMode === "trio" ? 3 : effectiveLinkMode === "duo" ? 2 : 1;
 
+  const gen = getGenFromEdition(effectiveEdition);
+  // (genData aktuell nicht genutzt, aber falls du später brauchst)
+  const genData = editionData[effectiveEdition];
+  const pokedex = versionToPokedex[effectiveEdition] || {};
   const locationList = allLocations[`locationsGen${gen}`] || [];
-
   const pokemonList = Object.values(pokedex);
-  const [encounters, setEncounters] = useState(currentSave?.encounters || {});
+
+  // ===== Encounters state =====
+  // Initial: local or empty; wird bei Duo automatisch aus duoSave synchronisiert
+  const [encounters, setEncounters] = useState(() => (currentSave?.encounters || {}));
+
+  // Sobald DuoSave (live) reinkommt: Encounters aus Firestore übernehmen
+  useEffect(() => {
+    if (!isDuo) return;
+    if (!duoSave) return;
+    setEncounters(duoSave.encounters || {});
+  }, [isDuo, duoSave]);
+
+  // Wenn nicht Duo: bei Savewechsel die Encounters aus local neu setzen
+  useEffect(() => {
+    if (isDuo) return;
+    setEncounters(currentSave?.encounters || {});
+  }, [isDuo, activeSave]);
+
+  // ===== Filter/Sort/Theme =====
   const defaultFilters = { Gefangen: true, Entkommen: true, Besiegt: true, Offen: true };
   const [filters, setFilters] = useState(() => {
-      return JSON.parse(localStorage.getItem("encounterFilters")) || defaultFilters;
+    return JSON.parse(localStorage.getItem("encounterFilters")) || defaultFilters;
   });
 
   const [sortMode, setSortMode] = useState(() => {
-      return localStorage.getItem("encounterSortMode") || "route";
+    return localStorage.getItem("encounterSortMode") || "route";
   });
+
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
 
   useEffect(() => {
@@ -51,13 +79,26 @@ function EncounterTable() {
   };
 
   const toggleFilter = (status) => {
-  const updated = { ...filters, [status]: !filters[status] };
+    const updated = { ...filters, [status]: !filters[status] };
     setFilters(updated);
     localStorage.setItem("encounterFilters", JSON.stringify(updated));
   };
 
+  // ===== Save helper (local or Firestore) =====
+  const persistEncounters = async (updatedEncounters) => {
+    if (isDuo) {
+      // Firestore patch
+      await patchDuoSave({ encounters: updatedEncounters });
+      return;
+    }
+    // localStorage save
+    if (activeSave && savegames[activeSave]) {
+      savegames[activeSave].encounters = updatedEncounters;
+      localStorage.setItem("savegames", JSON.stringify(savegames));
+    }
+  };
 
-  const handleChange = (location, field, value) => {
+  const handleChange = async (location, field, value) => {
     const prev = encounters[location] || {};
     const updated = {
       ...encounters,
@@ -87,30 +128,35 @@ function EncounterTable() {
     }
 
     setEncounters(updated);
-    if (savegames[activeSave]) {
-      savegames[activeSave].encounters = updated;
-      localStorage.setItem("savegames", JSON.stringify(savegames));
+    try {
+      await persistEncounters(updated);
+    } catch (e) {
+      console.error(e);
+      // optional: du könntest hier ein UI-Error setzen
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (!window.confirm("Bist du sicher, dass du alle Einträge löschen möchtest?")) return;
     setEncounters({});
-    if (savegames[activeSave]) {
-      savegames[activeSave].encounters = {};
-      localStorage.setItem("savegames", JSON.stringify(savegames));
+    try {
+      await persistEncounters({});
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const usedPokemon = new Set(
-    Object.values(encounters)
-      .flatMap((e) =>
-        Object.entries(e)
-          .filter(([k]) => k.startsWith("pokemon"))
-          .map(([, val]) => val)
-      )
-      .filter(Boolean)
-  );
+  const usedPokemon = useMemo(() => {
+    return new Set(
+      Object.values(encounters)
+        .flatMap((e) =>
+          Object.entries(e)
+            .filter(([k]) => k.startsWith("pokemon"))
+            .map(([, val]) => val)
+        )
+        .filter(Boolean)
+    );
+  }, [encounters]);
 
   let filteredLocations = locationList.filter((loc) => {
     const status = encounters[loc]?.status || "Offen";
@@ -184,7 +230,26 @@ function EncounterTable() {
 
   return (
     <div style={{ position: "relative" }}>
-      <h1>{version} Encounter-Tabelle ({linkMode.toUpperCase()})</h1>
+      {/* Duo Status + Exit */}
+      {isDuo && (
+        <div style={{ marginBottom: 10 }}>
+          <strong style={{ color: "#079e4b" }}>Duo Online aktiv</strong> — Room: <b>{activeDuoRoomId}</b>{" "}
+          <button
+            onClick={() => {
+              localStorage.removeItem("activeDuoRoomId");
+              window.location.reload();
+            }}
+            style={{ marginLeft: 10 }}
+          >
+            Duo verlassen
+          </button>
+        </div>
+      )}
+      {duoError && <p style={{ color: "crimson" }}>{duoError}</p>}
+
+      <h1>
+        {effectiveEdition} Encounter-Tabelle ({effectiveLinkMode.toUpperCase()})
+      </h1>
 
       <div className="button-row">
         <button onClick={toggleTheme}>Dark Mode an/aus</button>
@@ -203,7 +268,14 @@ function EncounterTable() {
             {status}
           </button>
         ))}
-        <select value={sortMode}onChange={(e) => {setSortMode(e.target.value);localStorage.setItem("encounterSortMode", e.target.value);}}>
+
+        <select
+          value={sortMode}
+          onChange={(e) => {
+            setSortMode(e.target.value);
+            localStorage.setItem("encounterSortMode", e.target.value);
+          }}
+        >
           <option value="route">Nach Route</option>
           <option value="offen-oben">Offene oben</option>
           <option value="offen-unten">Offene unten</option>
@@ -225,21 +297,24 @@ function EncounterTable() {
             const data = encounters[loc] || {};
             const status = data.status || "";
             const rowClass =
-              status === "Gefangen" ? "status-caught" :
-              status === "Besiegt" ? "status-fainted" :
-              status === "Entkommen" ? "status-escaped" : "unused-location";
+              status === "Gefangen"
+                ? "status-caught"
+                : status === "Besiegt"
+                ? "status-fainted"
+                : status === "Entkommen"
+                ? "status-escaped"
+                : "unused-location";
 
             const allFilled = [...Array(slotCount)].every((_, i) => !!data[`pokemon${i + 1}`]);
 
             return (
               <tr key={loc} className={rowClass} data-status={status}>
                 <td>{loc}</td>
+
                 {[...Array(slotCount)].map((_, i) => {
                   const slotName = `pokemon${i + 1}`;
                   const selected = data[slotName] || "";
-                  const available = pokemonList.filter(
-                    (p) => !usedPokemon.has(p) || p === selected
-                  );
+                  const available = pokemonList.filter((p) => !usedPokemon.has(p) || p === selected);
 
                   return (
                     <td key={`${loc}-slot-${i}`}>
@@ -249,13 +324,14 @@ function EncounterTable() {
                             key={`${loc}-${i}-${theme}`}
                             options={available.map((name) => ({ label: name, value: name }))}
                             value={selected ? { label: selected, value: selected } : null}
-                            onChange={(selected) => handleChange(loc, slotName, selected?.value || "")}
+                            onChange={(sel) => handleChange(loc, slotName, sel?.value || "")}
                             isClearable
                             isSearchable
                             placeholder={`Pokémon ${i + 1}`}
                             styles={getSelectStyles()}
                           />
                         </div>
+
                         {selected && getDexIdFromName(selected, pokedex) && (
                           <a
                             href={`https://www.pokewiki.de/${selected}#Attacken`}
@@ -264,7 +340,10 @@ function EncounterTable() {
                             title={`PokéWiki: ${selected}`}
                           >
                             <img
-                              src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${getDexIdFromName(selected, pokedex)}.png`}
+                              src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${getDexIdFromName(
+                                selected,
+                                pokedex
+                              )}.png`}
                               alt={selected}
                               style={{ height: "60px", marginLeft: "10px", cursor: "pointer" }}
                             />
@@ -274,11 +353,9 @@ function EncounterTable() {
                     </td>
                   );
                 })}
+
                 <td>
-                  <select
-                    value={status || ""}
-                    onChange={(e) => handleChange(loc, "status", e.target.value)}
-                  >
+                  <select value={status || ""} onChange={(e) => handleChange(loc, "status", e.target.value)}>
                     <option value="">-</option>
                     {allFilled && <option value="Gefangen">Gefangen</option>}
                     {allFilled && <option value="Besiegt">Besiegt</option>}

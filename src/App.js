@@ -1,6 +1,5 @@
 import React, { useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
-
 import EncounterTable from "./EncounterTable";
 import TeamManager from "./TeamManager";
 import SaveGameManager from "./SaveGameManager";
@@ -9,6 +8,8 @@ import ImportPage from "./pages/ImportPage";
 import PokemonDetail from "./pages/PokemonDetail";
 import VersusHome from "./versus/VersusHome";
 import VersusLobby from "./versus/VersusLobby";
+import VersusGame from "./versus/VersusGame";
+import DuoHome from "./duo/DuoHome";
 
 // Hook für Theme-Verwaltung
 function useInitTheme() {
@@ -52,6 +53,8 @@ function AppContent() {
       <Route path="/pokemon/:name" element={<PokemonDetail />} />
       <Route path="/versus" element={<VersusHome />} />
       <Route path="/versus/:roomId" element={<VersusLobby />} />
+      <Route path="/versus/:roomId/game" element={<VersusGame />} />
+      <Route path="/duo" element={<DuoHome />} />
     </Routes>
   );
 }

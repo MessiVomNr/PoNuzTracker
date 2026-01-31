@@ -11,8 +11,9 @@ export default function VersusHome() {
   async function onCreate() {
     setErr("");
     try {
-      const id = await createRoom({ displayName: name.trim() || "Spieler" });
-      nav(`/versus/${id}`);
+      const res = await createRoom({ displayName: name.trim() || "Spieler" });
+      sessionStorage.setItem(`versus_player_${res.roomId}`, res.playerId);
+      nav(`/versus/${res.roomId}`);
     } catch (e) {
       setErr(e.message || String(e));
     }
@@ -22,15 +23,36 @@ export default function VersusHome() {
     setErr("");
     try {
       const id = roomId.trim().toUpperCase();
-      await joinRoom(id, { displayName: name.trim() || "Spieler" });
-      nav(`/versus/${id}`);
+      const res = await joinRoom(id, { displayName: name.trim() || "Spieler" });
+      sessionStorage.setItem(`versus_player_${res.roomId}`, res.playerId);
+      nav(`/versus/${res.roomId}`);
     } catch (e) {
       setErr(e.message || String(e));
     }
   }
 
   return (
-    <div style={{ maxWidth: 520, margin: "24px auto", padding: 16 }}>
+    <div
+      style={{
+        maxWidth: 520,
+        margin: "24px auto",
+        padding: 16,
+        position: "relative",
+      }}
+    >
+      {/* Top right button */}
+      <button
+        onClick={() => nav("/")}
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          padding: "8px 12px",
+        }}
+      >
+        Zur Startseite
+      </button>
+
       <h2>Versus</h2>
       <p>Erstelle einen Room oder tritt einem Room bei.</p>
 
