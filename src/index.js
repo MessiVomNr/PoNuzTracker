@@ -4,6 +4,33 @@ import App from "./App";
 import "./index.css";
 import { BrowserRouter } from "react-router-dom";
 
+/* =========================
+   NOTAUS: Service Worker & Cache löschen
+   Aufruf: https://ponuztracker.pages.dev/?nosw=1
+   ========================= */
+(async () => {
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("nosw")) return;
+
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+
+    // URL ohne nosw neu laden
+    url.searchParams.delete("nosw");
+    window.location.replace(url.toString());
+  } catch (e) {
+    console.error("SW cleanup failed:", e);
+  }
+})();
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
@@ -13,6 +40,7 @@ root.render(
   </React.StrictMode>
 );
 
+// --- Service Worker Registrierung + Update-Flow ---
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
@@ -42,4 +70,3 @@ if ("serviceWorker" in navigator) {
     }
   });
 }
-
