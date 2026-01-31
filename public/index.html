@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pokémon Encounter Tracker</title>
+
+    <!-- Manifest & Icons -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/rayquaza_icon.png" />
+    <link rel="apple-touch-icon" href="/rayquaza_icon.png" />
+
+    <!-- PWA / iOS -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="Nuzlocke" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- Open Graph (optional) -->
+    <meta property="og:title" content="Pokémon Encounter Tracker" />
+    <meta property="og:image" content="/preview.png" />
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+
+    <!-- Background Styles -->
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: auto;
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-top: env(safe-area-inset-top);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+        box-sizing: border-box;
+      }
+
+      body.background-active.light-mode {
+        background-image: url('/backgrounds/background_2.png');
+        background-color: #000000;
+        color: #111;
+        background-repeat: no-repeat;
+        background-size: cover;
+        background-position: center center;
+        background-attachment: fixed;
+      }
+
+      body.background-active.dark-mode {
+        background-image: url('/backgrounds/background_1.png');
+        background-color: #121212;
+        color: #e0e0e0;
+        background-repeat: no-repeat;
+        background-size: cover;
+        background-position: center center;
+        background-attachment: fixed;
+        position: relative;
+      }
+
+      body.background-active.dark-mode::before {
+        content: "";
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.2);
+        z-index: -1;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+
+  <body class="light-mode background-active">
+    <noscript>Diese App benötigt JavaScript.</noscript>
+    <div id="root"></div>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+export { default as locationsGen1 } from "./locations_gen1";
+export { default as locationsGen2 } from "./locations_gen2";
+export { default as locationsGen3 } from "./locations_gen3";
+export { default as locationsGen4 } from "./locations_gen4";
+export { default as locationsGen5 } from "./locations_gen5";
+export { default as locationsGen6 } from "./locations_gen6";
+export { default as locationsGen32 } from "./locations_gen32";
+export { default as locationsGen42 } from "./locations_gen42";
+export { default as locationsGen52 } from "./locations_gen52";
+export { default as locationsGen62 } from "./locations_gen62";
+export { default as locationsGen7 } from "./locations_gen7";
+export { default as locationsGen72 } from "./locations_gen72";
