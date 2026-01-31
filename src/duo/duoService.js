@@ -47,19 +47,23 @@ export async function createDuoRoom({ displayName, edition, linkMode, title }) {
   if (!db) throw new Error("Firestore (db) ist null. Prüfe Firebase ENV / Config.");
   const user = await ensureAnonAuth();
 
-  const roomId = genRoomId(); // ✅ richtige Funktion
+  const roomId = genRoomId();
   const ref = roomRef(roomId);
 
   const player = {
     uid: user.uid,
     displayName: normalizeName(displayName),
     joinedAtMs: nowMs(),
+
+    // ✅ Presence initial
+    online: true,
+    lastActiveAtMs: nowMs(),
   };
 
   const payload = {
     save: defaultSave({ edition, linkMode, title }),
     players: {
-      [user.uid]: player, // ✅ konsistent zu joinDuoRoom
+      [user.uid]: player,
     },
     createdAt: serverTimestamp(),
     createdAtMs: nowMs(),
@@ -67,7 +71,7 @@ export async function createDuoRoom({ displayName, edition, linkMode, title }) {
     updatedAtMs: nowMs(),
   };
 
-  await setDoc(ref, payload); // ✅ payload speichern (nicht roomData)
+  await setDoc(ref, payload);
 
   return { roomId };
 }
@@ -87,6 +91,10 @@ export async function joinDuoRoom(roomId, { displayName }) {
     uid: user.uid,
     displayName: normalizeName(displayName),
     joinedAtMs: nowMs(),
+
+    // ✅ Presence beim Join
+    online: true,
+    lastActiveAtMs: nowMs(),
   };
 
   await updateDoc(ref, {
@@ -129,4 +137,27 @@ export async function updateDuoSave(roomId, patch) {
       updatedAtMs: nowMs(),
     });
   });
+}
+
+export async function touchDuoPresence(roomId, { online } = {}) {
+  if (!db) throw new Error("Firestore (db) ist null. Prüfe Firebase ENV / Config.");
+  const user = await ensureAnonAuth();
+
+  const id = String(roomId || "").trim().toUpperCase();
+  if (!id) throw new Error("Ungültige Room-ID.");
+
+  const ref = roomRef(id);
+
+  const patch = {
+    [`players.${user.uid}.uid`]: user.uid,
+    [`players.${user.uid}.lastActiveAtMs`]: nowMs(),
+    updatedAt: serverTimestamp(),
+    updatedAtMs: nowMs(),
+  };
+
+  if (typeof online === "boolean") {
+    patch[`players.${user.uid}.online`] = online;
+  }
+
+  await updateDoc(ref, patch);
 }

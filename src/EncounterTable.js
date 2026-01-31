@@ -6,18 +6,34 @@ import editionData from "./data/editionData.js";
 import { getGenFromEdition } from "./utils/editionHelpers";
 import * as allLocations from "./locations/index.js";
 import { useDuoSave } from "./duo/useDuoSave";
+import RunTitleBar from "./duo/RunTitleBar";
+import { updateDuoSave } from "./duo/duoService";
+import { upsertRecentRoom } from "./duo/recentRooms";
 
 function getDexIdFromName(pokemonName, pokedex) {
   const entry = Object.entries(pokedex).find(([, name]) => name === pokemonName);
   if (!entry) return null;
   return entry[0].replace("pokedex", "");
 }
+function formatLastActive(ms) {
+  if (!ms) return "unbekannt";
+  const diff = Date.now() - ms;
+  const sec = Math.floor(diff / 1000);
+  if (sec < 10) return "gerade eben";
+  if (sec < 60) return `vor ${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `vor ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `vor ${h} h`;
+  const d = Math.floor(h / 24);
+  return `vor ${d} d`;
+}
 
 function EncounterTable() {
   const navigate = useNavigate();
 
   // ===== Duo/Online State =====
-  const activeDuoRoomId = localStorage.getItem("activeDuoRoomId") || "";
+  const activeDuoRoomId = (localStorage.getItem("activeDuoRoomId") || "").trim().toUpperCase();
   const { save: duoSave, patchSave: patchDuoSave, error: duoError } = useDuoSave(activeDuoRoomId);
   const isDuo = !!activeDuoRoomId;
 
@@ -30,6 +46,25 @@ function EncounterTable() {
   const effectiveEdition = isDuo ? (duoSave?.edition || "Rot") : (currentSave?.edition || "Alpha Saphir");
   const effectiveLinkMode = isDuo ? (duoSave?.linkMode || "duo") : (currentSave?.linkMode || "solo");
   const slotCount = effectiveLinkMode === "trio" ? 3 : effectiveLinkMode === "duo" ? 2 : 1;
+  const presence = useMemo(() => {
+  const playersObj = duoSave?.players;
+  if (!playersObj || typeof playersObj !== "object") return { online: [], all: [] };
+
+  const all = Object.values(playersObj)
+    .filter(Boolean)
+    .map((p) => ({
+      uid: p.uid || "",
+      name: (p.displayName || "Spieler").trim(),
+      online: !!p.online,
+      lastActiveAtMs: p.lastActiveAtMs || 0,
+    }))
+    .sort((a, b) => (b.lastActiveAtMs || 0) - (a.lastActiveAtMs || 0));
+
+  // Online-Definition: online=true ODER Aktivität in den letzten 60 Sekunden
+  const online = all.filter((p) => p.online || (p.lastActiveAtMs && Date.now() - p.lastActiveAtMs < 60000));
+
+  return { online, all };
+}, [duoSave]);
 
   const gen = getGenFromEdition(effectiveEdition);
   // (genData aktuell nicht genutzt, aber falls du später brauchst)
@@ -232,30 +267,58 @@ function EncounterTable() {
     <div style={{ position: "relative" }}>
       {/* Duo Status + Exit */}
       {isDuo && (
-        <div style={{ marginBottom: 10 }}>
-          <strong style={{ color: "#079e4b" }}>Duo Online aktiv</strong> — Room: <b>{activeDuoRoomId}</b>{" "}
-          <button
-  onClick={() => {
-    // Duo beenden
-    localStorage.removeItem("activeDuoRoomId");
+  <>
+    <RunTitleBar
+      title={duoSave?.title}
+      onSaveTitle={async (newTitle) => {
+        if (!activeDuoRoomId) throw new Error("Keine aktive Room-ID gefunden.");
 
-    // Auto-Resume verhindern
-    localStorage.removeItem("activeSave");
-    localStorage.removeItem("current_slot");
+        await updateDuoSave(activeDuoRoomId, { title: newTitle });
 
-    // Einmal-Block für Redirect
-    sessionStorage.setItem("blockAutoResume", "1");
+        upsertRecentRoom({
+          roomId: activeDuoRoomId,
+          title: newTitle,
+          edition: duoSave?.edition || effectiveEdition || "",
+          linkMode: duoSave?.linkMode || effectiveLinkMode || "duo",
+        });
+      }}
+    />
 
-    // Sauber zur Startseite
-    navigate("/duo", { replace: true });
-  }}
->
-  Lobby verlassen
-</button>
+    <div style={{ marginBottom: 12, textAlign: "center" }}>
+      <div style={{ fontWeight: 700, opacity: 0.9 }}>
+        Online: {presence.online.length ? presence.online.map((p) => p.name).join(", ") : "—"}
+      </div>
 
+      {!!presence.all.length && (
+        <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+          {presence.all.map((p) => (
+            <span key={p.uid || p.name} style={{ margin: "0 8px", whiteSpace: "nowrap" }}>
+              {p.name}: {formatLastActive(p.lastActiveAtMs)}
+            </span>
+          ))}
         </div>
       )}
-      {duoError && <p style={{ color: "crimson" }}>{duoError}</p>}
+    </div>
+  </>
+)}
+
+{isDuo && (
+  <div style={{ marginBottom: 12, textAlign: "center" }}>
+    <div style={{ fontWeight: 700, opacity: 0.9 }}>
+      Online: {presence.online.length ? presence.online.map((p) => p.name).join(", ") : "—"}
+    </div>
+
+    {!!presence.all.length && (
+      <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+        {presence.all.map((p) => (
+          <span key={p.uid || p.name} style={{ margin: "0 8px", whiteSpace: "nowrap" }}>
+            {p.name}: {formatLastActive(p.lastActiveAtMs)}
+          </span>
+        ))}
+      </div>
+    )}
+  </div>
+)}
 
       <h1>
         {effectiveEdition} Encounter-Tabelle ({effectiveLinkMode.toUpperCase()})
