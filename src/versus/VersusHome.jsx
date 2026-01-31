@@ -8,26 +8,51 @@ export default function VersusHome() {
   const [roomId, setRoomId] = useState("");
   const [err, setErr] = useState("");
 
+  function normName(v) {
+    return String(v || "").trim() || "Spieler";
+  }
+
+  function normRoomId(v) {
+    return String(v || "").trim().toUpperCase();
+  }
+
   async function onCreate() {
     setErr("");
     try {
-      const res = await createRoom({ displayName: name.trim() || "Spieler" });
-      sessionStorage.setItem(`versus_player_${res.roomId}`, res.playerId);
-      nav(`/versus/${res.roomId}`);
+      const displayName = normName(name);
+
+      // createRoom erwartet STRING (nicht {displayName: ...})
+      const res = await createRoom(displayName);
+
+      const rid = normRoomId(res.roomId);
+      sessionStorage.setItem(`versus_player_${rid}`, res.playerId);
+
+      nav(`/versus/${rid}`);
     } catch (e) {
-      setErr(e.message || String(e));
+      setErr(e?.message || String(e));
     }
   }
 
   async function onJoin() {
     setErr("");
     try {
-      const id = roomId.trim().toUpperCase();
-      const res = await joinRoom(id, { displayName: name.trim() || "Spieler" });
-      sessionStorage.setItem(`versus_player_${res.roomId}`, res.playerId);
-      nav(`/versus/${res.roomId}`);
+      const displayName = normName(name);
+      const rid = normRoomId(roomId);
+
+      if (!rid) {
+        setErr("Bitte eine Room-ID eingeben.");
+        return;
+      }
+
+      // joinRoom erwartet (roomIdString, nameString)
+      const res = await joinRoom(rid, displayName);
+
+      const finalRid = normRoomId(res.roomId);
+      sessionStorage.setItem(`versus_player_${finalRid}`, res.playerId);
+
+      nav(`/versus/${finalRid}`);
     } catch (e) {
-      setErr(e.message || String(e));
+      setErr(e?.message || String(e));
     }
   }
 
@@ -76,7 +101,7 @@ export default function VersusHome() {
         value={roomId}
         onChange={(e) => setRoomId(e.target.value)}
         placeholder="z.B. ABCD12"
-        style={{ width: "100%", padding: 10 }}
+        style={{ width: "100%", padding: 10, textTransform: "uppercase" }}
       />
 
       <div style={{ display: "flex", gap: 10, marginTop: 10 }}>

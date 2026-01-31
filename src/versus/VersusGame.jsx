@@ -1,137 +1,137 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { getRoom, subscribeRoom, setRoomStatus } from "./versusService";
-import DuoVersusAuction from "../pages/DuoVersusAuction";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  onSnapshot,
+  serverTimestamp,
+  arrayUnion,
+} from "firebase/firestore";
+import { db } from "../firebase";
 
-export default function VersusGame() {
-  const { roomId } = useParams();
-  const nav = useNavigate();
+// IMMER gleich normalisieren (case-sensitive Doc-IDs!)
+export function normalizeRoomId(roomId) {
+  return String(roomId || "").trim().toUpperCase();
+}
 
-  const myPlayerId = useMemo(() => {
-    return (
-      sessionStorage.getItem(
-        `versus_player_${String(roomId || "").toUpperCase()}`
-      ) || ""
-    );
-  }, [roomId]);
+function makeRoomCode(len = 6) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // ohne I/O/1/0
+  let out = "";
+  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
 
-  const [room, setRoom] = useState(null);
-  const [err, setErr] = useState("");
+function roomRef(roomId) {
+  return doc(db, "versusRooms", normalizeRoomId(roomId));
+}
 
-  useEffect(() => {
-    let unsub = null;
+// ===== CREATE =====
+export async function createRoom(hostDisplayName = "Spieler") {
+  const id = makeRoomCode(6);
+  const rid = normalizeRoomId(id);
 
-    (async () => {
-      setErr("");
-      const r = await getRoom(roomId);
-      setRoom(r);
-      unsub = subscribeRoom(roomId, (next) => setRoom(next));
-    })().catch((e) => setErr(e?.message || String(e)));
+  const ref = roomRef(rid);
 
-    return () => {
-      if (unsub) unsub();
-    };
-  }, [roomId]);
+  const hostPlayerId = "P" + Math.random().toString(16).slice(2, 10).toUpperCase();
 
-  // Wenn Game nicht mehr running → zurück zur Lobby
-  useEffect(() => {
-    if (!room) return;
-    if (room.status !== "running") {
-      nav(`/versus/${String(roomId || "").toUpperCase()}`);
-    }
-  }, [room, nav, roomId]);
+  const roomData = {
+    id: rid,
+    status: "lobby",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    hostPlayerId,
 
-  async function backToLobby() {
-    try {
-      setErr("");
-      await setRoomStatus(roomId, myPlayerId, "lobby");
-      nav(`/versus/${String(roomId || "").toUpperCase()}`);
-    } catch (e) {
-      setErr(e?.message || String(e));
-    }
+    // players: Array, so wie du es schon nutzt
+    players: [
+      {
+        id: hostPlayerId,
+        displayName: hostDisplayName || "Host",
+        ready: false,
+        joinedAt: Date.now(),
+      },
+    ],
+  };
+
+  await setDoc(ref, roomData);
+
+  return { roomId: rid, playerId: hostPlayerId };
+}
+
+// ===== JOIN =====
+export async function joinRoom(roomId, displayName = "Spieler") {
+  const rid = normalizeRoomId(roomId);
+  const ref = roomRef(rid);
+
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    throw new Error("Room nicht gefunden");
   }
 
-  return (
-    <div
-      style={{
-        width: "min(1400px, 98vw)",
-        height: "100vh",
-        margin: "0 auto",
-        padding: "12px 14px",
-        boxSizing: "border-box",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}
-    >
-      {/* ===== Topbar ===== */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
-        <div style={{ fontSize: 18, fontWeight: 900 }}>Versus Game</div>
+  const playerId = "P" + Math.random().toString(16).slice(2, 10).toUpperCase();
 
-        <div style={{ opacity: 0.85 }}>
-          Room:&nbsp;
-          <span style={{ color: "#4ade80", fontWeight: 800 }}>
-            {String(roomId || "").toUpperCase()}
-          </span>
-          {room?.status && (
-            <>
-              &nbsp;· Status: <b>{room.status}</b>
-            </>
-          )}
-        </div>
+  // Spieler hinzufügen (arrayUnion)
+  await updateDoc(ref, {
+    players: arrayUnion({
+      id: playerId,
+      displayName: displayName || "Spieler",
+      ready: false,
+      joinedAt: Date.now(),
+    }),
+    updatedAt: serverTimestamp(),
+  });
 
-        <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
-          <button
-            onClick={() => nav("/")}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 999,
-              border: "1px solid rgba(255,255,255,0.18)",
-              background: "rgba(255,255,255,0.06)",
-              color: "white",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            Zur Startseite
-          </button>
+  return { roomId: rid, playerId };
+}
 
-          <button
-            onClick={backToLobby}
-            style={{
-              padding: "10px 14px",
-              background: "#22c55e",
-              color: "#000",
-              border: "none",
-              borderRadius: 999,
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
-            Zur Lobby
-          </button>
-        </div>
-      </div>
+// ===== READ =====
+export async function getRoom(roomId) {
+  const rid = normalizeRoomId(roomId);
+  const snap = await getDoc(roomRef(rid));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
+}
 
-      {err && <div style={{ color: "crimson" }}>{err}</div>}
-      {!room && !err && <div style={{ opacity: 0.8 }}>Lade Game-State …</div>}
+// ===== LIVE =====
+export function subscribeRoom(roomId, cb) {
+  const rid = normalizeRoomId(roomId);
+  return onSnapshot(roomRef(rid), (snap) => {
+    cb(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+  });
+}
 
-      {/* ===== Auction Draft (füllt Rest des Screens) ===== */}
-      <div
-        style={{
-          flex: 1,
-          overflow: "hidden",
-        }}
-      >
-        {room && <DuoVersusAuction roomId={roomId} room={room} />}
-      </div>
-    </div>
-  );
+// ===== STATUS =====
+export async function setRoomStatus(roomId, playerId, status) {
+  const rid = normalizeRoomId(roomId);
+  const ref = roomRef(rid);
+
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Room nicht gefunden");
+
+  const data = snap.data();
+  const players = Array.isArray(data.players) ? data.players : [];
+  const nextPlayers = players.map((p) => (p.id === playerId ? { ...p } : p));
+
+  await updateDoc(ref, {
+    status,
+    players: nextPlayers,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+// OPTIONAL: READY Toggle (falls du es nutzt)
+export async function setReady(roomId, playerId, ready) {
+  const rid = normalizeRoomId(roomId);
+  const ref = roomRef(rid);
+
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Room nicht gefunden");
+
+  const data = snap.data();
+  const players = Array.isArray(data.players) ? data.players : [];
+  const nextPlayers = players.map((p) => (p.id === playerId ? { ...p, ready: !!ready } : p));
+
+  await updateDoc(ref, {
+    players: nextPlayers,
+    updatedAt: serverTimestamp(),
+  });
 }

@@ -1,309 +1,190 @@
 // src/versus/versusService.js
-// LocalStorage + BroadcastChannel Room-Service (kein Backend nötig)
-// + intelligentes Cleanup (TTL) über updatedAt/createdAt
+// Firestore Versus Rooms (Online Join möglich)
 
-const ROOMS_KEY = "ponuztracker_versus_rooms_v1";
-const CHANNEL_NAME = "ponuztracker_versus_channel_v1";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  onSnapshot,
+  serverTimestamp,
+  runTransaction,
+  arrayUnion,
+} from "firebase/firestore";
+import { db } from "../firebase";
 
-let bc = null;
-function getBC() {
-  if (typeof BroadcastChannel === "undefined") return null;
-  if (!bc) bc = new BroadcastChannel(CHANNEL_NAME);
-  return bc;
+const COLLECTION = "versusRooms";
+
+export function normalizeRoomId(roomId) {
+  return String(roomId || "").trim().toUpperCase();
 }
 
-function now() {
-  return Date.now();
-}
-
-function safeJsonParse(str, fallback) {
-  try {
-    return JSON.parse(str);
-  } catch {
-    return fallback;
-  }
-}
-
-function isPlainObject(v) {
-  return v !== null && typeof v === "object" && !Array.isArray(v);
-}
-
-/**
- * Cleanup-Regeln (TTL):
- * - Lobby (nie gestartet / status "lobby"): 6 Stunden ohne Aktivität -> löschen
- * - Running (status "running"): 30 Tage ohne Aktivität -> löschen
- * - Finished (status "finished"): 7 Tage ohne Aktivität -> löschen
- *
- * Aktivität bedeutet: updatedAt wird bei Änderungen aktualisiert
- * (join, ready toggles, status changes, später scores etc.)
- */
-function cleanupRooms(rooms) {
-  const t = now();
-
-  const LOBBY_TTL = 6 * 60 * 60 * 1000; // 6 Stunden
-  const RUNNING_TTL = 30 * 24 * 60 * 60 * 1000; // 30 Tage
-  const FINISHED_TTL = 7 * 24 * 60 * 60 * 1000; // 7 Tage
-
-  const out = { ...rooms };
-
-  for (const id of Object.keys(out)) {
-    const r = out[id];
-
-    // kaputte Einträge raus
-    if (!isPlainObject(r)) {
-      delete out[id];
-      continue;
-    }
-
-    const status = r.status || "lobby";
-    const last = r.updatedAt || r.createdAt || 0;
-    const age = t - last;
-
-    if (status === "lobby" && age > LOBBY_TTL) delete out[id];
-    else if (status === "running" && age > RUNNING_TTL) delete out[id];
-    else if (status === "finished" && age > FINISHED_TTL) delete out[id];
-  }
-
-  return out;
-}
-
-function loadRooms() {
-  const raw = localStorage.getItem(ROOMS_KEY);
-  if (!raw) return {};
-
-  const parsed = safeJsonParse(raw, {});
-  const base = isPlainObject(parsed) ? parsed : {};
-  const cleaned = cleanupRooms(base);
-
-  // Wenn cleanup was entfernt hat, speichern wir sofort zurück
-  // (optional, aber praktisch, damit localStorage nicht anwächst)
-  if (Object.keys(cleaned).length !== Object.keys(base).length) {
-    saveRooms(cleaned);
-  }
-
-  return cleaned;
-}
-
-function saveRooms(rooms) {
-  const safe = isPlainObject(rooms) ? rooms : {};
-  localStorage.setItem(ROOMS_KEY, JSON.stringify(safe));
-}
-
-function emitRoomChange(roomId) {
-  const ch = getBC();
-  if (ch) ch.postMessage({ type: "room_changed", roomId, t: now() });
+function normalizeName(v) {
+  const n = String(v ?? "").trim();
+  return n || "Spieler";
 }
 
 function genRoomId() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // ohne I/O/1/0
   let out = "";
-  const buf = new Uint8Array(6);
-  crypto.getRandomValues(buf);
-  for (let i = 0; i < 6; i++) out += chars[buf[i] % chars.length];
+  for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
   return out;
 }
 
 function genPlayerId() {
-  if (crypto?.randomUUID) return crypto.randomUUID();
-  const buf = new Uint8Array(16);
-  crypto.getRandomValues(buf);
-  return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
+  // für SessionStorage reicht das völlig
+  return "P" + Math.random().toString(16).slice(2, 10).toUpperCase();
 }
 
-function normalizeName(displayName) {
-  const n = String(displayName ?? "").trim();
-  return n || "Spieler";
-}
-
-function ensureRoomShape(room) {
-  if (!isPlainObject(room)) return null;
-  room.players = Array.isArray(room.players) ? room.players : [];
-  room.status = room.status || "lobby";
-  room.createdAt = typeof room.createdAt === "number" ? room.createdAt : now();
-  room.updatedAt = typeof room.updatedAt === "number" ? room.updatedAt : room.createdAt;
-  return room;
+function roomRef(roomId) {
+  return doc(db, COLLECTION, normalizeRoomId(roomId));
 }
 
 /**
- * Erstellt einen neuen Room und fügt den Ersteller als Spieler hinzu.
- * @param {{displayName: string}} player
- * @returns {Promise<{ roomId: string, playerId: string }>}
+ * createRoom(displayName)  ODER  createRoom({displayName})
  */
-export async function createRoom(player) {
-  const rooms = loadRooms();
+export async function createRoom(playerOrName) {
+  const displayName = normalizeName(
+    typeof playerOrName === "string" ? playerOrName : playerOrName?.displayName
+  );
 
-  let id = genRoomId();
-  let guard = 0;
-  while (rooms[id] && guard < 20) {
-    id = genRoomId();
-    guard++;
+  // unique room id erzeugen
+  let rid = genRoomId();
+  for (let i = 0; i < 20; i++) {
+    const snap = await getDoc(roomRef(rid));
+    if (!snap.exists()) break;
+    rid = genRoomId();
   }
-  if (rooms[id]) throw new Error("Konnte keine eindeutige Room-ID erzeugen.");
 
-  const p = {
-    id: genPlayerId(),
-    displayName: normalizeName(player?.displayName),
-    joinedAt: now(),
-    ready: false,
+  const playerId = genPlayerId();
+
+  const data = {
+    id: rid,
+    status: "lobby",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    hostPlayerId: playerId,
+    players: [
+      {
+        id: playerId,
+        displayName,
+        ready: false,
+        joinedAt: Date.now(),
+      },
+    ],
   };
 
-  const t = now();
+  await setDoc(roomRef(rid), data);
 
-  rooms[id] = {
-    id,
-    createdAt: t,
-    updatedAt: t,
-    hostPlayerId: p.id,
-    players: [p],
-    status: "lobby", // später: "running"
-  };
-
-  saveRooms(rooms);
-  emitRoomChange(id);
-
-  return { roomId: id, playerId: p.id };
+  return { roomId: rid, playerId };
 }
 
 /**
- * Tritt einem bestehenden Room bei.
- * @param {string} roomId
- * @param {{displayName: string}} player
- * @returns {Promise<{ roomId: string, playerId: string }>}
+ * joinRoom(roomId, displayName)  ODER  joinRoom(roomId, {displayName})
  */
-export async function joinRoom(roomId, player) {
-  const id = String(roomId || "").trim().toUpperCase();
-  if (!id) throw new Error("Bitte eine Room-ID eingeben.");
+export async function joinRoom(roomId, playerOrName) {
+  const rid = normalizeRoomId(roomId);
+  if (!rid) throw new Error("Bitte eine Room-ID eingeben.");
 
-  const rooms = loadRooms();
-  const room = ensureRoomShape(rooms[id]);
-  if (!room) throw new Error("Room nicht gefunden.");
+  const displayName = normalizeName(
+    typeof playerOrName === "string" ? playerOrName : playerOrName?.displayName
+  );
 
-  const p = {
-    id: genPlayerId(),
-    displayName: normalizeName(player?.displayName),
-    joinedAt: now(),
-    ready: false,
-  };
+  const ref = roomRef(rid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Room nicht gefunden.");
 
-  room.players.push(p);
-  room.updatedAt = now();
+  const playerId = genPlayerId();
 
-  rooms[id] = room;
-  saveRooms(rooms);
-  emitRoomChange(id);
+  // Transaction, damit join sicher ist
+  await runTransaction(db, async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists()) throw new Error("Room nicht gefunden.");
 
-  return { roomId: id, playerId: p.id };
+    const room = s.data();
+    const players = Array.isArray(room.players) ? room.players : [];
+
+    // optional: doppelte Namen/PlayerIds verhindern (eher unwahrscheinlich)
+    if (players.some((p) => p?.id === playerId)) return;
+
+    tx.update(ref, {
+      players: arrayUnion({
+        id: playerId,
+        displayName,
+        ready: false,
+        joinedAt: Date.now(),
+      }),
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  return { roomId: rid, playerId };
 }
 
-/**
- * Room-Daten holen
- * @param {string} roomId
- * @returns {Promise<object|null>}
- */
 export async function getRoom(roomId) {
-  const id = String(roomId || "").trim().toUpperCase();
-  if (!id) return null;
+  const rid = normalizeRoomId(roomId);
+  if (!rid) return null;
 
-  const rooms = loadRooms();
-  return ensureRoomShape(rooms[id]) || null;
+  const snap = await getDoc(roomRef(rid));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
 }
 
-/**
- * Ready-Status eines Spielers setzen
- * @param {string} roomId
- * @param {string} playerId
- * @param {boolean} ready
- */
-export async function setReady(roomId, playerId, ready) {
-  const id = String(roomId || "").trim().toUpperCase();
-  if (!id) throw new Error("Ungültige Room-ID.");
-
-  const pid = String(playerId || "").trim();
-  if (!pid) throw new Error("Ungültige Player-ID.");
-
-  const rooms = loadRooms();
-  const room = ensureRoomShape(rooms[id]);
-  if (!room) throw new Error("Room nicht gefunden.");
-
-  const idx = room.players.findIndex((p) => p?.id === pid);
-  if (idx === -1) throw new Error("Spieler nicht im Room gefunden.");
-
-  room.players[idx] = { ...room.players[idx], ready: !!ready };
-  room.updatedAt = now();
-
-  rooms[id] = room;
-  saveRooms(rooms);
-  emitRoomChange(id);
-}
-
-/**
- * Room-Status setzen (z.B. "running" / "lobby") – nur Host darf das
- * @param {string} roomId
- * @param {string} playerId
- * @param {"lobby"|"running"|"finished"} status
- */
-export async function setRoomStatus(roomId, playerId, status) {
-  const id = String(roomId || "").trim().toUpperCase();
-  const pid = String(playerId || "").trim();
-  if (!id || !pid) throw new Error("Ungültige IDs.");
-
-  const rooms = loadRooms();
-  const room = ensureRoomShape(rooms[id]);
-  if (!room) throw new Error("Room nicht gefunden.");
-
-  if (room.hostPlayerId !== pid) throw new Error("Nur der Host darf das ändern.");
-
-  const s =
-    status === "running" ? "running" :
-    status === "finished" ? "finished" :
-    "lobby";
-
-  room.status = s;
-  room.updatedAt = now();
-
-  rooms[id] = room;
-  saveRooms(rooms);
-  emitRoomChange(id);
-}
-
-/**
- * Änderungen an einem Room abonnieren
- * @param {string} roomId
- * @param {(room: object|null) => void} cb
- * @returns {() => void} unsubscribe
- */
 export function subscribeRoom(roomId, cb) {
-  const id = String(roomId || "").trim().toUpperCase();
-  let alive = true;
-
-  async function push() {
-    if (!alive) return;
-    const room = await getRoom(id);
-    cb(room);
+  const rid = normalizeRoomId(roomId);
+  if (!rid) {
+    cb(null);
+    return () => {};
   }
 
-  // initial
-  push();
+  return onSnapshot(roomRef(rid), (snap) => {
+    cb(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+  });
+}
 
-  // storage event (andere Tabs)
-  function onStorage(e) {
-    if (!alive) return;
-    if (e.key === ROOMS_KEY) push();
-  }
-  window.addEventListener("storage", onStorage);
+export async function setReady(roomId, playerId, ready) {
+  const rid = normalizeRoomId(roomId);
+  const pid = String(playerId || "").trim();
+  if (!rid || !pid) throw new Error("Ungültige IDs.");
 
-  // BroadcastChannel (gleicher Tab / andere Tabs)
-  const ch = getBC();
-  function onBC(ev) {
-    if (!alive) return;
-    const msg = ev?.data;
-    if (msg?.type === "room_changed" && msg.roomId === id) push();
-  }
-  if (ch) ch.addEventListener("message", onBC);
+  const ref = roomRef(rid);
 
-  return () => {
-    alive = false;
-    window.removeEventListener("storage", onStorage);
-    if (ch) ch.removeEventListener("message", onBC);
-  };
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Room nicht gefunden.");
+
+    const room = snap.data();
+    const players = Array.isArray(room.players) ? room.players : [];
+
+    const idx = players.findIndex((p) => p?.id === pid);
+    if (idx === -1) throw new Error("Spieler nicht im Room gefunden.");
+
+    const next = [...players];
+    next[idx] = { ...next[idx], ready: !!ready };
+
+    tx.update(ref, { players: next, updatedAt: serverTimestamp() });
+  });
+}
+
+export async function setRoomStatus(roomId, playerId, status) {
+  const rid = normalizeRoomId(roomId);
+  const pid = String(playerId || "").trim();
+  if (!rid || !pid) throw new Error("Ungültige IDs.");
+
+  const ref = roomRef(rid);
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Room nicht gefunden.");
+
+    const room = snap.data();
+    if (room.hostPlayerId !== pid) throw new Error("Nur der Host darf das ändern.");
+
+    const s =
+      status === "running" ? "running" :
+      status === "finished" ? "finished" :
+      "lobby";
+
+    tx.update(ref, { status: s, updatedAt: serverTimestamp() });
+  });
 }
