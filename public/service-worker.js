@@ -1,4 +1,4 @@
-const CACHE_NAME = "nuzlocke-cache-v2";
+const CACHE_NAME = "nuzlocke-cache-v";
 
 // Nur App-Shell pre-cachen (klein halten!)
 const PRECACHE_URLS = ["/", "/index.html", "/manifest.json", "/rayquaza_icon.png"];
@@ -51,15 +51,14 @@ if (req.mode === "navigate") {
   event.respondWith(
     (async () => {
       try {
-        // iOS Safari mag keine Redirect-Responses aus dem Service Worker.
-        // Deshalb immer direkt index.html holen:
+        // iOS-safe: niemals fetch(req), sondern direkt index.html holen
         const fresh = await fetch("/index.html", { cache: "no-store" });
 
         const cache = await caches.open(CACHE_NAME);
         cache.put("/index.html", fresh.clone());
 
         return fresh;
-      } catch (err) {
+      } catch {
         const cached = await caches.match("/index.html");
         return cached || Response.error();
       }
@@ -67,7 +66,6 @@ if (req.mode === "navigate") {
   );
   return;
 }
-
 
   // 2) ASSETS: cache-first (schnell), aber mit Network-Fallback
   event.respondWith(
