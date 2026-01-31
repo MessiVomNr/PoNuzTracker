@@ -13,15 +13,33 @@ root.render(
   </React.StrictMode>
 );
 
-// --- Service Worker: erstmal deaktivieren, um /versus stabil zu machen ---
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      for (const reg of regs) await reg.unregister();
-      console.log("Service Worker unregistered (temporary).");
-    } catch (err) {
-      console.warn("Service Worker unregister failed:", err);
+      const reg = await navigator.serviceWorker.register("/service-worker.js");
+
+      // regelmäßig auf Updates prüfen
+      setInterval(() => reg.update(), 60 * 1000);
+
+      reg.addEventListener("updatefound", () => {
+        const nw = reg.installing;
+        if (!nw) return;
+
+        nw.addEventListener("statechange", () => {
+          if (nw.state === "installed" && navigator.serviceWorker.controller) {
+            // neue Version ist bereit -> sofort aktivieren
+            nw.postMessage({ type: "SKIP_WAITING" });
+          }
+        });
+      });
+
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        // neue Version übernimmt -> reload
+        window.location.reload();
+      });
+    } catch (e) {
+      console.error("Service Worker registration failed:", e);
     }
   });
 }
+
