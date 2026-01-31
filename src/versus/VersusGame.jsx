@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getRoom, subscribeRoom, setRoomStatus } from "./versusService";
+import DuoVersusAuction from "../pages/DuoVersusAuction";
 
 export default function VersusGame() {
   const { roomId } = useParams();
@@ -8,7 +9,9 @@ export default function VersusGame() {
 
   const myPlayerId = useMemo(() => {
     return (
-      sessionStorage.getItem(`versus_player_${String(roomId || "").toUpperCase()}`) || ""
+      sessionStorage.getItem(
+        `versus_player_${String(roomId || "").toUpperCase()}`
+      ) || ""
     );
   }, [roomId]);
 
@@ -22,7 +25,6 @@ export default function VersusGame() {
       setErr("");
       const r = await getRoom(roomId);
       setRoom(r);
-
       unsub = subscribeRoom(roomId, (next) => setRoom(next));
     })().catch((e) => setErr(e?.message || String(e)));
 
@@ -31,7 +33,7 @@ export default function VersusGame() {
     };
   }, [roomId]);
 
-  // Wenn nicht running, zurück zur Lobby
+  // Wenn Game nicht mehr running → zurück zur Lobby
   useEffect(() => {
     if (!room) return;
     if (room.status !== "running") {
@@ -49,78 +51,87 @@ export default function VersusGame() {
     }
   }
 
-  const players = room?.players || [];
-
   return (
     <div
       style={{
-        maxWidth: 520,
-        margin: "24px auto",
-        padding: 20,
-        position: "relative",
+        width: "min(1400px, 98vw)",
+        height: "100vh",
+        margin: "0 auto",
+        padding: "12px 14px",
+        boxSizing: "border-box",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
       }}
     >
-      {/* Top right button */}
-      <button
-        onClick={() => nav("/")}
+      {/* ===== Topbar ===== */}
+      <div
         style={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          padding: "8px 12px",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
         }}
       >
-        Zur Startseite
-      </button>
+        <div style={{ fontSize: 18, fontWeight: 900 }}>Versus Game</div>
 
-      <h2>Versus Game</h2>
+        <div style={{ opacity: 0.85 }}>
+          Room:&nbsp;
+          <span style={{ color: "#4ade80", fontWeight: 800 }}>
+            {String(roomId || "").toUpperCase()}
+          </span>
+          {room?.status && (
+            <>
+              &nbsp;· Status: <b>{room.status}</b>
+            </>
+          )}
+        </div>
 
-      <p>
-        <strong>Room-ID:</strong>{" "}
-        <span style={{ color: "#4ade80" }}>{String(roomId || "").toUpperCase()}</span>
-      </p>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+          <button
+            onClick={() => nav("/")}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 999,
+              border: "1px solid rgba(255,255,255,0.18)",
+              background: "rgba(255,255,255,0.06)",
+              color: "white",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Zur Startseite
+          </button>
 
-      {err && <p style={{ color: "crimson" }}>{err}</p>}
-      {!room && !err && <p>Lade Game-State …</p>}
+          <button
+            onClick={backToLobby}
+            style={{
+              padding: "10px 14px",
+              background: "#22c55e",
+              color: "#000",
+              border: "none",
+              borderRadius: 999,
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            Zur Lobby
+          </button>
+        </div>
+      </div>
 
-      {room && (
-        <>
-          <p style={{ opacity: 0.85 }}>
-            Status: <strong>{room.status}</strong>
-          </p>
+      {err && <div style={{ color: "crimson" }}>{err}</div>}
+      {!room && !err && <div style={{ opacity: 0.8 }}>Lade Game-State …</div>}
 
-          <h3>Spieler</h3>
-          <ul>
-            {players.map((p) => (
-              <li key={p.id}>
-                {p.displayName} {p.id === myPlayerId ? "(du)" : ""}
-              </li>
-            ))}
-          </ul>
-
-          <p style={{ marginTop: 12, opacity: 0.8 }}>
-            Nächster Schritt: Punkte/Regeln/Events hier rein.
-          </p>
-
-          <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
-            <button
-              onClick={backToLobby}
-              style={{
-                padding: "10px 14px",
-                background: "#22c55e",
-                color: "#000",
-                border: "none",
-                borderRadius: "999px",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-              title="Setzt den Room zurück in die Lobby"
-            >
-              Zur Lobby
-            </button>
-          </div>
-        </>
-      )}
+      {/* ===== Auction Draft (füllt Rest des Screens) ===== */}
+      <div
+        style={{
+          flex: 1,
+          overflow: "hidden",
+        }}
+      >
+        {room && <DuoVersusAuction roomId={roomId} room={room} />}
+      </div>
     </div>
   );
 }
