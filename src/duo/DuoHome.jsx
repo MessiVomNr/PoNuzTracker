@@ -1,18 +1,61 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createDuoRoom, joinDuoRoom, subscribeDuoRoom } from "./duoService";
 import RecentRoomsPanel from "./RecentRoomsPanel";
 import { upsertRecentRoom } from "./recentRooms";
 
+// ✅ NEU: Editions-Daten wie Solo
+import editionData from "../data/editionData.js";
+import { getGenFromEdition } from "../utils/editionHelpers";
+
 export default function DuoHome() {
   const nav = useNavigate();
-  const [name, setName] = useState("Spieler");
-  const [roomTitle, setRoomTitle] = useState(""); // ✅ NEU: Name des Online-Runs
+
+  // ✅ Name merken (wie du wolltest)
+  const [name, setName] = useState(() => localStorage.getItem("duoPlayerName") || "Spieler");
+
+  const [roomTitle, setRoomTitle] = useState("");
   const [roomId, setRoomId] = useState("");
   const [mode, setMode] = useState("duo");
   const [edition, setEdition] = useState("Rot");
   const [err, setErr] = useState("");
   const [preview, setPreview] = useState(null);
+
+  // Name immer speichern
+  useEffect(() => {
+    localStorage.setItem("duoPlayerName", name);
+  }, [name]);
+
+  // ===== Editions-Liste wie Solo (aus editionData) =====
+  const editionGroups = useMemo(() => {
+    const keys = Object.keys(editionData || {});
+    const byGen = new Map();
+
+    for (const ed of keys) {
+      const gen = getGenFromEdition(ed) || "Sonstiges";
+      if (!byGen.has(gen)) byGen.set(gen, []);
+      byGen.get(gen).push(ed);
+    }
+
+    // Sortierung: Gen numerisch, dann Name
+    const genOrder = Array.from(byGen.keys()).sort((a, b) => {
+      const na = Number(a);
+      const nb = Number(b);
+      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+      return String(a).localeCompare(String(b));
+    });
+
+    return genOrder.map((gen) => {
+      const list = (byGen.get(gen) || []).slice().sort((a, b) => a.localeCompare(b));
+      return { gen, list };
+    });
+  }, []);
+
+  // Falls im State eine Edition steht, die nicht in editionData ist (custom),
+  // behalten wir sie als Option, damit nichts "kaputt" wirkt.
+  const editionExistsInList = useMemo(() => {
+    return !!editionData?.[edition];
+  }, [edition]);
 
   // Helper: Spieler-Liste aus preview.players ziehen
   const previewPlayerNames = (() => {
@@ -39,23 +82,24 @@ export default function DuoHome() {
   async function onCreate() {
     setErr("");
     try {
+      const displayName = (name || "").trim() || "Spieler";
+      localStorage.setItem("duoPlayerName", displayName);
+
       const res = await createDuoRoom({
-        displayName: name.trim() || "Spieler",
+        displayName,
         edition,
         linkMode: mode,
-        // ✅ NEU: Titel in Firestore speichern
         title: (roomTitle || "").trim(),
       });
 
       localStorage.setItem("activeDuoRoomId", res.roomId);
 
-      // ✅ Recent Rooms speichern (inkl. Titel)
       upsertRecentRoom({
         roomId: res.roomId,
         linkMode: mode,
         edition,
         title: (roomTitle || "").trim(),
-        lastPlayers: [name.trim() || "Spieler"],
+        lastPlayers: [displayName],
       });
 
       nav("/table");
@@ -67,22 +111,24 @@ export default function DuoHome() {
   async function onJoin() {
     setErr("");
     try {
+      const displayName = (name || "").trim() || "Spieler";
+      localStorage.setItem("duoPlayerName", displayName);
+
       const id = roomId.trim().toUpperCase();
-      const res = await joinDuoRoom(id, { displayName: name.trim() || "Spieler" });
+      const res = await joinDuoRoom(id, { displayName });
 
       localStorage.setItem("activeDuoRoomId", res.roomId);
 
-      // ✅ Daten aus Preview übernehmen (wenn vorhanden)
       const linkModeFromPreview = preview?.save?.linkMode;
       const editionFromPreview = preview?.save?.edition;
-      const titleFromPreview = preview?.save?.title || preview?.save?.name; // falls du es mal "name" genannt hast
+      const titleFromPreview = preview?.save?.title || preview?.save?.name;
 
       upsertRecentRoom({
         roomId: res.roomId,
         linkMode: linkModeFromPreview || mode,
         edition: editionFromPreview || edition,
         title: (titleFromPreview || "").trim(),
-        lastPlayers: previewPlayerNames.length ? previewPlayerNames : [name.trim() || "Spieler"],
+        lastPlayers: previewPlayerNames.length ? previewPlayerNames : [displayName],
       });
 
       nav("/table");
@@ -106,7 +152,6 @@ export default function DuoHome() {
       <label style={{ display: "block", marginTop: 12 }}>Dein Name</label>
       <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%", padding: 10 }} />
 
-      {/* ✅ NEU: Titel */}
       <label style={{ display: "block", marginTop: 12 }}>Name des Online-Runs</label>
       <input
         value={roomTitle}
@@ -121,8 +166,21 @@ export default function DuoHome() {
         <option value="trio">Trio</option>
       </select>
 
+      {/* ✅ NEU: Edition als Dropdown wie Solo */}
       <label style={{ display: "block", marginTop: 12 }}>Edition</label>
-      <input value={edition} onChange={(e) => setEdition(e.target.value)} style={{ width: "100%", padding: 10 }} />
+      <select value={edition} onChange={(e) => setEdition(e.target.value)} style={{ width: "100%", padding: 10 }}>
+        {!editionExistsInList && <option value={edition}>Benutzerdefiniert: {edition}</option>}
+
+        {editionGroups.map((g) => (
+          <optgroup key={String(g.gen)} label={`Gen ${g.gen}`}>
+            {g.list.map((ed) => (
+              <option key={ed} value={ed}>
+                {ed}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
 
       <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
         <button onClick={onCreate} style={{ padding: "10px 14px" }}>
@@ -149,8 +207,8 @@ export default function DuoHome() {
       {preview && (
         <div style={{ marginTop: 10, opacity: 0.9 }}>
           <div>
-            Vorschau: <b>{preview.save?.title || preview.save?.name || "—"}</b>{" "}
-            ({preview.save?.edition || "?"} / {preview.save?.linkMode || "?"})
+            Vorschau: <b>{preview.save?.title || preview.save?.name || "—"}</b> ({preview.save?.edition || "?"} /{" "}
+            {preview.save?.linkMode || "?"})
           </div>
           <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
             Spieler: {previewPlayerNames.length ? previewPlayerNames.join(", ") : "—"}
@@ -160,12 +218,11 @@ export default function DuoHome() {
 
       {err && <p style={{ marginTop: 12, color: "crimson" }}>{err}</p>}
 
-      {/* ✅ Recent Rooms Panel */}
       <RecentRoomsPanel
         ttlDays={7}
         onReconnect={(room) => {
           localStorage.setItem("activeDuoRoomId", room.roomId);
-          upsertRecentRoom(room); // lastSeen hochziehen
+          upsertRecentRoom(room);
           nav("/table", { replace: true });
         }}
       />

@@ -139,7 +139,7 @@ export async function updateDuoSave(roomId, patch) {
   });
 }
 
-export async function touchDuoPresence(roomId, { online } = {}) {
+export async function touchDuoPresence(roomId, { online, displayName } = {}) {
   if (!db) throw new Error("Firestore (db) ist null. Prüfe Firebase ENV / Config.");
   const user = await ensureAnonAuth();
 
@@ -157,6 +157,10 @@ export async function touchDuoPresence(roomId, { online } = {}) {
 
   if (typeof online === "boolean") {
     patch[`players.${user.uid}.online`] = online;
+  }
+  const dn = String(displayName ?? "").trim();
+  if (dn) {
+    patch[`players.${user.uid}.displayName`] = dn;
   }
 
   await updateDoc(ref, patch);

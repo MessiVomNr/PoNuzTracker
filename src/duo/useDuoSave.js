@@ -33,12 +33,14 @@ export function useDuoSave(roomId) {
     let timer = null;
 
     const touch = async (online) => {
-      try {
-        await touchDuoPresence(id, { online });
-      } catch (e) {
-        console.warn("presence touch failed:", e?.message || e);
-      }
-    };
+  try {
+    const displayName = localStorage.getItem("duoPlayerName") || "";
+    await touchDuoPresence(id, { online, displayName });
+  } catch (e) {
+    console.warn("presence touch failed:", e?.message || e);
+  }
+};
+
 
     touch(true);
 
