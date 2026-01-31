@@ -257,13 +257,16 @@ function TeamManager() {
           <strong style={{ color: "#079e4b" }}>Duo Online aktiv</strong> — Room: <b>{activeDuoRoomId}</b>{" "}
           <button
             onClick={() => {
-              localStorage.removeItem("activeDuoRoomId");
-              window.location.reload();
-            }}
-            style={{ marginLeft: 10 }}
-          >
-            Duo verlassen
-          </button>
+            localStorage.removeItem("activeDuoRoomId");
+            localStorage.removeItem("activeSave");
+            localStorage.removeItem("current_slot");
+            sessionStorage.setItem("blockAutoResume", "1");
+            navigate("/duo", { replace: true });
+  }}
+>
+  Lobby Verlassen
+</button>
+
         </div>
       )}
       {duoError && <p style={{ color: "crimson" }}>{duoError}</p>}

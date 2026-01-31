@@ -32,21 +32,22 @@ function roomRef(roomId) {
   return doc(db, "duoRooms", String(roomId).toUpperCase());
 }
 
-function defaultSave({ edition = "Rot", linkMode = "duo" } = {}) {
+function defaultSave({ edition = "Rot", linkMode = "duo", title = "" } = {}) {
   return {
     encounters: {},
     team: ["", "", "", "", "", ""],
     gymsDefeated: 0,
     edition,
     linkMode,
+    title: (title || "").trim(),
   };
 }
 
-export async function createDuoRoom({ displayName, edition, linkMode }) {
+export async function createDuoRoom({ displayName, edition, linkMode, title }) {
   if (!db) throw new Error("Firestore (db) ist null. Prüfe Firebase ENV / Config.");
   const user = await ensureAnonAuth();
 
-  const roomId = genRoomId();
+  const roomId = genRoomId(); // ✅ richtige Funktion
   const ref = roomRef(roomId);
 
   const player = {
@@ -55,18 +56,18 @@ export async function createDuoRoom({ displayName, edition, linkMode }) {
     joinedAtMs: nowMs(),
   };
 
-  await setDoc(ref, {
-    roomId,
+  const payload = {
+    save: defaultSave({ edition, linkMode, title }),
+    players: {
+      [user.uid]: player, // ✅ konsistent zu joinDuoRoom
+    },
     createdAt: serverTimestamp(),
+    createdAtMs: nowMs(),
     updatedAt: serverTimestamp(),
     updatedAtMs: nowMs(),
-    hostUid: user.uid,
-    status: "lobby",
-    players: {
-      [user.uid]: player,
-    },
-    save: defaultSave({ edition, linkMode }),
-  });
+  };
+
+  await setDoc(ref, payload); // ✅ payload speichern (nicht roomData)
 
   return { roomId };
 }
