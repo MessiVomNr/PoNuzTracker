@@ -267,6 +267,31 @@ function EncounterTable() {
     <div style={{ position: "relative" }}>
       {/* Duo Status + Exit */}
       {isDuo && (
+        <div style={{ marginBottom: 10 }}>
+          <strong style={{ color: "#079e4b" }}>Duo Online aktiv</strong> — Room: <b>{activeDuoRoomId}</b>{" "}
+          <button
+            onClick={() => {
+              // Duo beenden
+              localStorage.removeItem("activeDuoRoomId");
+
+              // Auto-Resume verhindern
+              localStorage.removeItem("activeSave");
+              localStorage.removeItem("current_slot");
+
+              // Einmal-Block für Redirect
+              sessionStorage.setItem("blockAutoResume", "1");
+
+              // Sauber zur Startseite
+              navigate("/duo", { replace: true });
+            }}
+          >
+            Lobby verlassen
+          </button>
+        </div>
+      )}
+      {duoError && <p style={{ color: "crimson" }}>{duoError}</p>}
+
+      {isDuo && (
   <>
     <RunTitleBar
       title={duoSave?.title}
