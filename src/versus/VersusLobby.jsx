@@ -6,11 +6,11 @@ export default function VersusLobby() {
   const { roomId } = useParams();
   const nav = useNavigate();
 
+  const roomKey = String(roomId || "").toUpperCase();
+
   const myPlayerId = useMemo(() => {
-    return (
-      sessionStorage.getItem(`versus_player_${String(roomId || "").toUpperCase()}`) || ""
-    );
-  }, [roomId]);
+    return sessionStorage.getItem(`versus_player_${roomKey}`) || "";
+  }, [roomKey]);
 
   const [room, setRoom] = useState(null);
   const [err, setErr] = useState("");
@@ -20,24 +20,24 @@ export default function VersusLobby() {
 
     (async () => {
       setErr("");
-      const r = await getRoom(roomId);
+      const r = await getRoom(roomKey);
       setRoom(r);
 
-      unsub = subscribeRoom(roomId, (next) => setRoom(next));
+      unsub = subscribeRoom(roomKey, (next) => setRoom(next));
     })().catch((e) => setErr(e?.message || String(e)));
 
     return () => {
       if (unsub) unsub();
     };
-  }, [roomId]);
+  }, [roomKey]);
 
-  // Auto-Redirect in Game, wenn der Room schon läuft
+  // Auto-Redirect: Wenn Room schon in Auction ist -> direkt zur Auction
   useEffect(() => {
     if (!room) return;
-    if (room.status === "running") {
-      nav(`/versus/${String(roomId || "").toUpperCase()}/game`);
+    if (room.status === "auction") {
+      nav(`/versus/${roomKey}/auction`, { replace: true });
     }
-  }, [room, nav, roomId]);
+  }, [room, nav, roomKey]);
 
   const players = room?.players || [];
   const me = players.find((p) => p.id === myPlayerId);
@@ -53,7 +53,7 @@ export default function VersusLobby() {
         setErr("Dein Spieler-Token fehlt (Tab-Session). Bitte erneut beitreten.");
         return;
       }
-      await setReady(roomId, myPlayerId, !me?.ready);
+      await setReady(roomKey, myPlayerId, !me?.ready);
     } catch (e) {
       setErr(e?.message || String(e));
     }
@@ -62,8 +62,16 @@ export default function VersusLobby() {
   async function startGame() {
     try {
       setErr("");
-      await setRoomStatus(roomId, myPlayerId, "running");
-      nav(`/versus/${String(roomId || "").toUpperCase()}/game`);
+      if (!myPlayerId) {
+        setErr("Dein Spieler-Token fehlt (Tab-Session). Bitte erneut beitreten.");
+        return;
+      }
+
+      // ✅ System A: Start = AUCTION
+      await setRoomStatus(roomKey, myPlayerId, "auction");
+
+      // ✅ Ziel: Auction-Seite
+      nav(`/versus/${roomKey}/auction`, { replace: true });
     } catch (e) {
       setErr(e?.message || String(e));
     }
@@ -78,7 +86,6 @@ export default function VersusLobby() {
         position: "relative",
       }}
     >
-      {/* Top right button */}
       <button
         onClick={() => nav("/")}
         style={{
@@ -94,8 +101,7 @@ export default function VersusLobby() {
       <h2>Versus Lobby</h2>
 
       <p>
-        <strong>Room-ID:</strong>{" "}
-        <span style={{ color: "#4ade80" }}>{String(roomId || "").toUpperCase()}</span>
+        <strong>Room-ID:</strong> <span style={{ color: "#4ade80" }}>{roomKey}</span>
       </p>
 
       {!room && !err && <p>Room wird geladen …</p>}
@@ -151,7 +157,7 @@ export default function VersusLobby() {
                   : ""
               }
             >
-              Spiel starten
+              Draft starten
             </button>
           </div>
         </>

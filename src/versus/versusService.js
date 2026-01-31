@@ -1,5 +1,8 @@
 // src/versus/versusService.js
-// Firestore Versus Rooms (Online Join möglich)
+// Firestore Versus Rooms (Online Join möglich) — SYSTEM A
+// Collection: versusRooms
+// players: Array
+// playerId: sessionStorage (lokal generiert)
 
 import {
   doc,
@@ -72,6 +75,14 @@ export async function createRoom(playerOrName) {
         joinedAt: Date.now(),
       },
     ],
+
+    // optional: Versus-spezifischer Bereich (kannst du später erweitern)
+    versus: {
+      phase: "lobby", // lobby | auction | playing | finished
+      startedAt: null,
+      turn: 0,
+      log: [],
+    },
   };
 
   await setDoc(roomRef(rid), data);
@@ -166,6 +177,11 @@ export async function setReady(roomId, playerId, ready) {
   });
 }
 
+/**
+ * setRoomStatus:
+ * status = lobby | auction | playing | finished
+ * Nur Host darf das.
+ */
 export async function setRoomStatus(roomId, playerId, status) {
   const rid = normalizeRoomId(roomId);
   const pid = String(playerId || "").trim();
@@ -181,10 +197,11 @@ export async function setRoomStatus(roomId, playerId, status) {
     if (room.hostPlayerId !== pid) throw new Error("Nur der Host darf das ändern.");
 
     const s =
-      status === "running" ? "running" :
+      status === "auction" ? "auction" :
+      status === "playing" ? "playing" :
       status === "finished" ? "finished" :
       "lobby";
 
-    tx.update(ref, { status: s, updatedAt: serverTimestamp() });
+    tx.update(ref, { status: s, "versus.phase": s, updatedAt: serverTimestamp() });
   });
 }

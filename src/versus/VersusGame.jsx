@@ -14,32 +14,20 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { db, auth } from "../firebase"; // <-- ggf. Pfad anpassen
+import { db, auth } from "../firebase"; // ggf. Pfad anpassen
 
 /* =========================================================
    CONFIG
 ========================================================= */
-const ROOMS_COL = "duoRooms"; // wenn du Versus-Rooms getrennt willst: z.B. "versusRooms"
+const ROOMS_COL = "duoRooms"; // muss zu deinen Duo-Rooms passen!
 
 /* =========================================================
    HELPERS (named exports)
 ========================================================= */
-
-/**
- * Normalisiert RoomId/Code (User Input).
- * - trim
- * - optional: uppercase (falls du Codes uppercase speicherst)
- */
 export function normalizeRoomId(v) {
-  return String(v || "")
-    .trim()
-    .replace(/\s+/g, "");
+  return String(v || "").trim().replace(/\s+/g, "");
 }
 
-/**
- * Versucht erst docId zu laden; wenn nicht existent, sucht nach Feld `code == input`.
- * Gibt { docId, data } oder null zurück.
- */
 async function resolveRoomDocId(roomIdOrCode) {
   const key = normalizeRoomId(roomIdOrCode);
   if (!key) return null;
@@ -49,7 +37,7 @@ async function resolveRoomDocId(roomIdOrCode) {
   const directSnap = await getDoc(directRef);
   if (directSnap.exists()) return { docId: key, data: directSnap.data() };
 
-  // 2) Als room code probieren
+  // 2) Als code-Feld probieren
   const q = query(collection(db, ROOMS_COL), where("code", "==", key));
   const qsnap = await getDocs(q);
   if (!qsnap.empty) {
@@ -63,28 +51,20 @@ async function resolveRoomDocId(roomIdOrCode) {
 /* =========================================================
    ROOM API (named exports)
 ========================================================= */
-
-export async function createRoom({
-  title = "Versus Run",
-  edition = null,
-  code = null,
-} = {}) {
+export async function createRoom({ title = "Versus Run", edition = null, code = null } = {}) {
   const uid = auth?.currentUser?.uid;
   if (!uid) throw new Error("Not authenticated");
 
   const cleanCode = code ? normalizeRoomId(code) : null;
-
-  // Wenn code gesetzt ist, nutzen wir den code als docId (praktisch für kurze IDs).
-  // Wenn du docId automatisch willst: doc(collection(db, ROOMS_COL)).id verwenden.
   const roomRef = cleanCode ? doc(db, ROOMS_COL, cleanCode) : doc(collection(db, ROOMS_COL));
 
   const roomDoc = {
     title,
     edition,
-    code: cleanCode || roomRef.id, // falls du später per code suchen willst
+    code: cleanCode || roomRef.id,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    status: "lobby", // lobby | ready | playing | finished
+    status: "lobby", // lobby | auction | playing | finished
     players: {
       [uid]: {
         uid,
@@ -94,9 +74,10 @@ export async function createRoom({
         lastSeenAt: serverTimestamp(),
       },
     },
-    // optionales Versus-State (später erweitern)
     versus: {
-      phase: "setup", // setup | draft | battle | done
+      phase: "setup",
+      startedAt: null,
+      turn: 0,
       log: [],
     },
   };
@@ -143,6 +124,7 @@ export function subscribeRoom(roomIdOrCode, cb) {
       cb(null);
       return;
     }
+
     const roomRef = doc(db, ROOMS_COL, resolved.docId);
 
     unsub = onSnapshot(
@@ -190,28 +172,57 @@ export async function setRoomStatus(roomIdOrCode, status) {
   return true;
 }
 
-/* =========================================================
-   DEFAULT EXPORT: React Page/Component (fixes your import)
-========================================================= */
+/**
+ * Startet die "Auction/Draft"-Phase (der eigentliche Draft läuft dann in DuoVersusAuction.jsx)
+ * -> setzt room.status auf "auction" und optional ein Log.
+ */
+export async function startAuction(roomIdOrCode) {
+  const resolved = await resolveRoomDocId(roomIdOrCode);
+  if (!resolved) return false;
 
+  const roomRef = doc(db, ROOMS_COL, resolved.docId);
+
+  await updateDoc(roomRef, {
+    updatedAt: serverTimestamp(),
+    status: "auction",
+    "versus.phase": "auction",
+    "versus.startedAt": serverTimestamp(),
+    "versus.log": arrayUnion({ t: Date.now(), type: "AUCTION_STARTED" }),
+  });
+
+  return true;
+}
+
+/* =========================================================
+   DEFAULT EXPORT: React Page/Component
+========================================================= */
 export default function VersusGame() {
   const navigate = useNavigate();
-  const params = useParams();
-
-  // Passe das an deinen Router an:
-  // z.B. /duo/:roomId/versus oder /versus/:roomId
-  const roomIdOrCode = params.roomId || params.id || params.code || "";
+  const { roomId } = useParams(); // passt zu /versus/:roomId/game
+  const roomIdOrCode = roomId || "";
 
   const [room, setRoom] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [starting, setStarting] = useState(false);
 
   const uid = auth?.currentUser?.uid || null;
+
+  const players = useMemo(() => {
+    if (!room?.players) return [];
+    return Object.values(room.players);
+  }, [room]);
 
   const myPlayer = useMemo(() => {
     if (!room || !uid) return null;
     return room.players?.[uid] || null;
   }, [room, uid]);
+
+  const allReady = useMemo(() => {
+    if (players.length < 2) return false; // Duo-Minimum
+    return players.every((p) => p?.ready === true);
+  }, [players]);
 
   useEffect(() => {
     if (!roomIdOrCode) {
@@ -220,7 +231,9 @@ export default function VersusGame() {
       return;
     }
 
+    setErr("");
     setLoading(true);
+
     const unsub = subscribeRoom(roomIdOrCode, (r) => {
       if (!r) {
         setRoom(null);
@@ -236,9 +249,58 @@ export default function VersusGame() {
     return () => unsub();
   }, [roomIdOrCode]);
 
+  // ✅ Snapshot-Bridge: IMMER mit aufgelöster Doc-ID nach /duo/:docId/versus
+  useEffect(() => {
+    if (!room?.id) return;
+    if (room.status !== "auction") return;
+
+    (async () => {
+      const resolved = await resolveRoomDocId(roomIdOrCode);
+      const targetId = resolved?.docId || room.id;
+      navigate(`/duo/${targetId}/versus`, { replace: true });
+    })();
+  }, [room?.status, room?.id, roomIdOrCode, navigate]);
+
   async function handleToggleReady() {
     if (!room) return;
-    await setReady(room.id, !(myPlayer?.ready));
+    try {
+      setErr("");
+      await setReady(room.id, !(myPlayer?.ready));
+    } catch (e) {
+      setErr(e?.message || "Fehler beim Ready-Update.");
+    }
+  }
+
+  async function handleStartGame() {
+    if (!room || starting) return;
+    try {
+      setErr("");
+      setStarting(true);
+
+      // Nur starten, wenn alle ready sind
+      if (!allReady) {
+        setErr("Noch nicht alle bereit. Beide müssen auf Ready sein.");
+        setStarting(false);
+        return;
+      }
+
+      // ✅ targetId für Navigation: immer echte Firestore Doc-ID
+      const resolved = await resolveRoomDocId(roomIdOrCode);
+      const targetId = resolved?.docId || room.id;
+
+      const ok = await startAuction(targetId);
+      if (!ok) {
+        setErr("Konnte Auction nicht starten (Room nicht gefunden).");
+        setStarting(false);
+        return;
+      }
+
+      // ✅ Ergebnis: DUO AUCTION URL (damit du garantiert auf DuoVersusAuction landest)
+      navigate(`/duo/${targetId}/versus`, { replace: true });
+    } catch (e) {
+      setErr(e?.message || "Fehler beim Starten.");
+      setStarting(false);
+    }
   }
 
   if (loading) {
@@ -255,35 +317,53 @@ export default function VersusGame() {
       <div style={{ padding: 16 }}>
         <h2>Versus</h2>
         <p style={{ marginTop: 8 }}>Room nicht gefunden.</p>
-        <button onClick={() => navigate("/duo")} style={{ marginTop: 12 }}>
-          Zurück zur Lobby
+        <button onClick={() => navigate("/versus")} style={{ marginTop: 12 }}>
+          Zurück
         </button>
       </div>
     );
   }
 
-  const players = room?.players ? Object.values(room.players) : [];
+  const phase = room?.versus?.phase || "setup";
+  const status = room?.status || "lobby";
 
   return (
     <div style={{ padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div>
-          <h2 style={{ margin: 0 }}>Versus</h2>
-          <div style={{ opacity: 0.8, marginTop: 4 }}>
+          <h2 style={{ margin: 0 }}>Versus Lobby</h2>
+
+          <div style={{ opacity: 0.85, marginTop: 6 }}>
             <span>Run: </span>
             <strong>{room.title || "—"}</strong>
             <span style={{ marginLeft: 12 }}>Status: </span>
-            <strong>{room.status || "—"}</strong>
+            <strong>{status}</strong>
+            <span style={{ marginLeft: 12 }}>Phase: </span>
+            <strong>{phase}</strong>
           </div>
-          <div style={{ opacity: 0.7, marginTop: 4 }}>
+
+          <div style={{ opacity: 0.7, marginTop: 6 }}>
             Room ID: <code>{room.id}</code>
           </div>
+
+          {err ? (
+            <div style={{ marginTop: 8, padding: 10, border: "1px solid #c33", borderRadius: 8 }}>
+              <strong>Hinweis:</strong> {err}
+            </div>
+          ) : null}
         </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => navigate(-1)}>Zurück</button>
-          <button onClick={handleToggleReady}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button onClick={() => navigate(-1)} disabled={starting}>
+            Zurück
+          </button>
+
+          <button onClick={handleToggleReady} disabled={starting}>
             {myPlayer?.ready ? "Ready aus" : "Ready"}
+          </button>
+
+          <button onClick={handleStartGame} disabled={starting || !allReady || status === "auction"}>
+            {starting ? "Starte…" : status === "auction" ? "Wechsel…" : "Spiel starten"}
           </button>
         </div>
       </div>
@@ -297,8 +377,7 @@ export default function VersusGame() {
         <ul style={{ lineHeight: 1.7 }}>
           {players.map((p) => (
             <li key={p.uid}>
-              <strong>{p.name || "Player"}</strong>{" "}
-              {p.ready ? "✅ ready" : "⏳ not ready"}
+              <strong>{p.name || "Player"}</strong> {p.ready ? "✅ ready" : "⏳ not ready"}
               {p.uid === uid ? " (du)" : ""}
             </li>
           ))}
@@ -307,10 +386,14 @@ export default function VersusGame() {
 
       <hr style={{ margin: "16px 0" }} />
 
-      <h3>Versus (Platzhalter)</h3>
-      <p style={{ opacity: 0.85 }}>
-        Hier kommt als nächstes dein Draft/Battle/Compare-UI rein (live-sync über room.versus).
-      </p>
+      <div style={{ padding: 12, border: "1px dashed #666", borderRadius: 10 }}>
+        <h3 style={{ marginTop: 0 }}>So funktioniert’s jetzt</h3>
+        <p style={{ marginBottom: 0, opacity: 0.85 }}>
+          Beide klicken <strong>Ready</strong>. Sobald alle ready sind, kann einer <strong>Spiel starten</strong>.
+          Dann setzen wir <code>room.status = "auction"</code> und leiten zu{" "}
+          <code>/duo/:roomId/versus</code> (DuoVersusAuction) weiter.
+        </p>
+      </div>
     </div>
   );
 }
