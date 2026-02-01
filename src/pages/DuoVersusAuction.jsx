@@ -14,6 +14,7 @@ import { pokedex as fullPokedex } from "../data/pokedex.js";
 ========================================================= */
 const evoMemCache = new Map(); // dexId -> line[{dexId,nameKey,evolvesToText}]
 const evoInFlight = new Map(); // dexId -> Promise
+const typeCache = {}; // dexId -> ["water","flying",...]
 
 function safeLower(s) {
   return String(s || "").toLowerCase();
@@ -232,7 +233,7 @@ export default function DuoVersusAuction() {
   const nav = useNavigate();
   const { roomId: roomIdParam } = useParams();
   const roomId = String(roomIdParam || "").toUpperCase();
-
+  const [curTypes, setCurTypes] = useState([]);
   const [room, setRoom] = useState(null);
   const [err, setErr] = useState("");
 
@@ -254,7 +255,7 @@ export default function DuoVersusAuction() {
   const meIsHost = myPlayerId && hostPlayerId ? myPlayerId === hostPlayerId : false;
 
   function goLobby() {
-    nav(`/versus/${roomId}`);
+    nav(`/versus/`);
   }
 
   function openPokemonDetails(dexId) {
@@ -329,7 +330,38 @@ export default function DuoVersusAuction() {
     const r = Math.ceil(x / 100) * 100;
     return Math.max(100, r);
   }
+useEffect(() => {
+  let alive = true;
 
+  (async () => {
+    const dexId = Number(draft?.current?.dexId);
+    if (!dexId) {
+      setCurTypes([]);
+      return;
+    }
+
+    if (typeCache[dexId]) {
+      setCurTypes(typeCache[dexId]);
+      return;
+    }
+
+    try {
+      const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${dexId}`);
+      if (!res.ok) throw new Error("type fetch failed");
+      const data = await res.json();
+      const types = (data?.types || []).map((t) => t?.type?.name).filter(Boolean);
+
+      typeCache[dexId] = types;
+      if (alive) setCurTypes(types);
+    } catch {
+      if (alive) setCurTypes([]);
+    }
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [draft?.current?.dexId]);
   // ===== Evolution UI state (current Pokémon) =====
   const [evoLine, setEvoLine] = useState([]);
   const [evoLoading, setEvoLoading] = useState(false);
@@ -1058,7 +1090,7 @@ export default function DuoVersusAuction() {
           </section>
 
           {/* Current Pokémon */}
-          <section style={{ ...panel, gridColumn: "1 / 2", height: "min(52vh, 520px)" }}>
+          <section style={{ ...panel, gridColumn: "1 / 2" }}>
             <div style={{ fontWeight: 900, marginBottom: 10 }}>
               Aktuelles Pokémon ({draft.auctionCountDone}/{draft.totalPokemon})
             </div>
@@ -1078,6 +1110,25 @@ export default function DuoVersusAuction() {
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 20, fontWeight: 900 }}>{draft.current.name}</div>
                   <div style={{ opacity: 0.8 }}>Dex #{draft.current.dexId}</div>
+                  {curTypes.length > 0 && (
+  <div style={typeIconRow}>
+    {curTypes.map((t) => (
+      <img
+        key={t}
+        src={`/type-icons/${t}.png`}
+        alt={t}
+        title={t}
+        style={typeIcon}
+        onError={(e) => {
+          // falls mal ein Typ nicht existiert -> verstecken statt kaputtes Icon
+          e.currentTarget.style.display = "none";
+        }}
+      />
+    ))}
+  </div>
+)}
+
+
                   <div style={{ marginTop: 6, opacity: 0.85 }}>
                     {draft.hasStarted ? (
                       <>
@@ -1157,7 +1208,7 @@ export default function DuoVersusAuction() {
           </section>
 
           {/* Timer + Bid */}
-          <section style={{ ...panel, gridColumn: "2 / 3", height: "min(52vh, 520px)" }}>
+          <section style={{ ...panel, gridColumn: "2 / 3", height: "min(59vh)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
               <div style={{ fontWeight: 900 }}>Timer</div>
               <button style={btnGhostSmall} onClick={goLobby} title="Zur Versus-Lobby">
@@ -1482,3 +1533,39 @@ const evoCardBtn = {
   color: "rgba(255,255,255,0.95)",
 };
 
+const typeRow = {
+  display: "flex",
+  gap: 8,
+  justifyContent: "center",
+  flexWrap: "wrap",
+  marginTop: 8,
+};
+
+const typeBadge = {
+  padding: "4px 10px",
+  borderRadius: 999,
+  border: "1px solid rgba(255,255,255,0.22)",
+  background: "rgba(0,0,0,0.22)",
+  fontSize: 12,
+  fontWeight: 900,
+  color: "rgba(255,255,255,0.92)",
+  textTransform: "uppercase",
+  letterSpacing: 0.4,
+  textShadow: "0 2px 10px rgba(0,0,0,0.6)",
+};
+const typeIconRow = {
+  display: "flex",
+  gap: 10,
+  justifyContent: "center",
+  alignItems: "center",
+  flexWrap: "wrap",
+  marginTop: 10,
+};
+
+const typeIcon = {
+  width: 42,
+  height:50,
+  objectFit: "contain",
+  imageRendering: "auto",
+  filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.6))",
+};
