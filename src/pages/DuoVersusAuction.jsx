@@ -1,9 +1,10 @@
+// src/versus/DuoVersusAuction.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { subscribeRoom } from "../versus/versusService"; // System A: versusRooms
 import { db } from "../firebase";
 import { doc, runTransaction, updateDoc, serverTimestamp, getDoc } from "firebase/firestore";
-
+import TypeModal from "../versus/TypeModal";
 import { makeShuffledPool, dexIdToImageUrl, getDexCapForGen } from "../utils/pokemonPool";
 import { pokedex as fullPokedex } from "../data/pokedex.js";
 
@@ -202,6 +203,62 @@ const TYPE_LABELS_DE = {
   steel: "Stahl",
   fairy: "Fee",
 };
+function getSpecialTag(dexIdRaw) {
+  const dexId = Number(dexIdRaw);
+
+  // ✅ Starter (komplette Reihen)
+  const STARTERS = new Set([
+    // Gen 1
+    1,2,3,4,5,6,7,8,9,
+    // Gen 2
+    152,153,154,155,156,157,158,159,160,
+    // Gen 3
+    252,253,254,255,256,257,258,259,260,
+    // Gen 4
+    387,388,389,390,391,392,393,394,395,
+    // Gen 5
+    495,496,497,498,499,500,501,502,503,
+    // Gen 6
+    650,651,652,653,654,655,656,657,658,
+  ]);
+
+  // ✅ Pseudo-Legis (Endstufen)
+  const PSEUDO = new Set([149,248,373,376,445,635,706]);
+
+  // ✅ Legendär (grobe Auswahl, kannst du später easy erweitern)
+  const LEGENDARY = new Set([
+    144,145,146,150, // Kanto
+    243,244,245,249,250, // Johto
+    377,378,379,380,381,382,383,384, // Hoenn
+    480,481,482,483,484,485,486,487,488, // Sinnoh
+    494, // Unova
+    716,717,718, // Kalos
+  ]);
+
+  // ✅ Mythisch
+  const MYTHICAL = new Set([
+    151,251,385,386,489,490,491,492,493,494,
+    647,648,649,
+    719,720,
+  ]);
+
+  // ✅ Sub-Legendär (hier “Legendary-like”, aber nicht Boxart)
+  const SUB_LEGENDARY = new Set([
+    144,145,146,150,
+    243,244,245,
+    377,378,379,380,381,
+    480,481,482,
+    647,648,
+  ]);
+
+  if (MYTHICAL.has(dexId)) return { label: "Mythisch", color: "#facc15", text: "#111827" };
+  if (LEGENDARY.has(dexId)) return { label: "Legendär", color: "#a855f7", text: "white" };
+  if (SUB_LEGENDARY.has(dexId)) return { label: "Sub-Legendär", color: "#60a5fa", text: "#0b1220" };
+  if (PSEUDO.has(dexId)) return { label: "Pseudo-Legi", color: "#f97316", text: "#0b1220" };
+  if (STARTERS.has(dexId)) return { label: "Starter-Reihe", color: "#22c55e", text: "#06210f" };
+
+  return null;
+}
 
 function labelPlayer(playerId, room) {
   const arr = room?.players || [];
@@ -257,6 +314,10 @@ export default function DuoVersusAuction() {
   const [curTypes, setCurTypes] = useState([]);
   const [room, setRoom] = useState(null);
   const [err, setErr] = useState("");
+  const [typeModalOpen, setTypeModalOpen] = useState(false);
+
+  // ✅ NEW: Team types map for analysis modal
+  const [teamTypesMap, setTeamTypesMap] = useState({}); // { [dexId]: ["water","flying"] }
 
   // live room
   useEffect(() => {
@@ -280,11 +341,10 @@ export default function DuoVersusAuction() {
   }
 
   function openPokemonDetails(dexId) {
-  const name = getPokemonName(dexId); // deutsches Pokédex-Name-Mapping
-  const slug = encodeURIComponent(String(name).trim().replace(/\s+/g, "_"));
-  window.open(`https://www.pokewiki.de/${slug}#Zucht_und_Entwicklung`, "_blank", "noopener,noreferrer");
-}
-
+    const name = getPokemonName(dexId); // deutsches Pokédex-Name-Mapping
+    const slug = encodeURIComponent(String(name).trim().replace(/\s+/g, "_"));
+    window.open(`https://www.pokewiki.de/${slug}#Zucht_und_Entwicklung`, "_blank", "noopener,noreferrer");
+  }
 
   // Guard: only valid in auction status
   useEffect(() => {
@@ -307,7 +367,6 @@ export default function DuoVersusAuction() {
     totalPokemon: 12,
     secondsPerBid: 10,
     keepEvolvedForms: false, // false = Basisform, true = so bleiben
-
   };
 
   const teamOwners = auction?.teamOwners || {};
@@ -329,25 +388,26 @@ export default function DuoVersusAuction() {
 
     bannedDexIds: [],
   };
-// ===== Avg Preis (Summe / Anzahl gedrafteter Pokémon) =====
-const avgPrice = useMemo(() => {
-  const teams = draft?.teams || {};
-  let totalPrice = 0;
-  let count = 0;
 
-  for (const team of Object.values(teams)) {
-    if (!Array.isArray(team)) continue;
-    for (const p of team) {
-      if (typeof p?.price === "number") {
-        totalPrice += p.price;
-        count += 1;
+  // ===== Avg Preis (Summe / Anzahl gedrafteter Pokémon) =====
+  const avgPrice = useMemo(() => {
+    const teams = draft?.teams || {};
+    let totalPrice = 0;
+    let count = 0;
+
+    for (const team of Object.values(teams)) {
+      if (!Array.isArray(team)) continue;
+      for (const p of team) {
+        if (typeof p?.price === "number") {
+          totalPrice += p.price;
+          count += 1;
+        }
       }
     }
-  }
 
-  if (count === 0) return 0;
-  return Math.round(totalPrice / count);
-}, [draft?.teams]);
+    if (count === 0) return 0;
+    return Math.round(totalPrice / count);
+  }, [draft?.teams]);
 
   const timer = auction?.timer || { running: false, paused: false, remaining: settings.secondsPerBid };
 
@@ -364,6 +424,14 @@ const avgPrice = useMemo(() => {
     return null;
   }, [myPlayerId, teamOwners, teamIds]);
 
+  // ✅ NEW: My team pokemons (for analysis)
+  const myTeamPokemons = useMemo(() => {
+    if (!myTeamId) return [];
+    const teamsObj = draft?.teams || {};
+    const arr = teamsObj?.[myTeamId] || [];
+    return Array.isArray(arr) ? arr : [];
+  }, [myTeamId, draft?.teams]);
+
   // Local-only input
   const [bidInput, setBidInput] = useState(100);
 
@@ -372,38 +440,41 @@ const avgPrice = useMemo(() => {
     const r = Math.ceil(x / 100) * 100;
     return Math.max(100, r);
   }
-useEffect(() => {
-  let alive = true;
 
-  (async () => {
-    const dexId = Number(draft?.current?.dexId);
-    if (!dexId) {
-      setCurTypes([]);
-      return;
-    }
+  // ===== Current Pokemon types (already in your UI) =====
+  useEffect(() => {
+    let alive = true;
 
-    if (typeCache[dexId]) {
-      setCurTypes(typeCache[dexId]);
-      return;
-    }
+    (async () => {
+      const dexId = Number(draft?.current?.dexId);
+      if (!dexId) {
+        setCurTypes([]);
+        return;
+      }
 
-    try {
-      const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${dexId}`);
-      if (!res.ok) throw new Error("type fetch failed");
-      const data = await res.json();
-      const types = (data?.types || []).map((t) => t?.type?.name).filter(Boolean);
+      if (typeCache[dexId]) {
+        setCurTypes(typeCache[dexId]);
+        return;
+      }
 
-      typeCache[dexId] = types;
-      if (alive) setCurTypes(types);
-    } catch {
-      if (alive) setCurTypes([]);
-    }
-  })();
+      try {
+        const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${dexId}`);
+        if (!res.ok) throw new Error("type fetch failed");
+        const data = await res.json();
+        const types = (data?.types || []).map((t) => t?.type?.name).filter(Boolean);
 
-  return () => {
-    alive = false;
-  };
-}, [draft?.current?.dexId]);
+        typeCache[dexId] = types;
+        if (alive) setCurTypes(types);
+      } catch {
+        if (alive) setCurTypes([]);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [draft?.current?.dexId]);
+
   // ===== Evolution UI state (current Pokémon) =====
   const [evoLine, setEvoLine] = useState([]);
   const [evoLoading, setEvoLoading] = useState(false);
@@ -477,6 +548,68 @@ useEffect(() => {
     return baseDexMap?.[id] ?? id;
   }
 
+  // ✅ NEW: Build analysis team objects with types loaded from map
+  const myTeamForAnalysis = useMemo(() => {
+    return (myTeamPokemons || []).map((p) => {
+      const rawDex = Number(p?.dexId);
+      const effectiveDex = settings.keepEvolvedForms ? rawDex : baseDexIdOf(rawDex);
+      return {
+        ...p,
+        dexId: effectiveDex,
+        name: getPokemonName(effectiveDex),
+        types: teamTypesMap?.[effectiveDex] || [],
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(myTeamPokemons), settings.keepEvolvedForms, JSON.stringify(teamTypesMap), JSON.stringify(baseDexMap)]);
+
+  // ✅ NEW: Load types for my team (for TypeModal analysis)
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      const dexIds = (myTeamForAnalysis || [])
+        .map((p) => Number(p?.dexId))
+        .filter(Boolean);
+
+      const uniq = Array.from(new Set(dexIds));
+      if (uniq.length === 0) {
+        if (alive) setTeamTypesMap({});
+        return;
+      }
+
+      const nextMap = { ...(teamTypesMap || {}) };
+
+      for (const dexId of uniq) {
+        if (nextMap[dexId] && nextMap[dexId].length) continue;
+
+        try {
+          if (typeCache[dexId]) {
+            nextMap[dexId] = typeCache[dexId];
+            continue;
+          }
+
+          const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${dexId}`);
+          if (!res.ok) throw new Error("type fetch failed");
+          const data = await res.json();
+          const types = (data?.types || []).map((t) => t?.type?.name).filter(Boolean);
+
+          typeCache[dexId] = types;
+          nextMap[dexId] = types;
+        } catch {
+          nextMap[dexId] = [];
+        }
+      }
+
+      if (alive) setTeamTypesMap(nextMap);
+    })();
+
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify((myTeamForAnalysis || []).map((p) => p.dexId))]);
+
   // ===== Init auction state once (host) =====
   const didInitRef = useRef(false);
   useEffect(() => {
@@ -549,39 +682,38 @@ useEffect(() => {
 
   // ===== Team join/leave (sync, transaction) =====
   async function claimTeam(tid) {
-  // ✅ Join ist in Lobby UND Draft erlaubt
-  if (phase !== "lobby" && phase !== "auction") return;
-  if (!myPlayerId) return;
+    // ✅ Join ist in Lobby UND Draft erlaubt
+    if (phase !== "lobby" && phase !== "auction") return;
+    if (!myPlayerId) return;
 
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(roomRef);
-    if (!snap.exists()) throw new Error("Room nicht gefunden.");
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(roomRef);
+      if (!snap.exists()) throw new Error("Room nicht gefunden.");
 
-    const data = snap.data();
-    const a = data?.versus?.auction;
-    if (!a) throw new Error("Auction nicht initialisiert.");
-    if (data.status !== "auction") throw new Error("Room nicht in Auction.");
+      const data = snap.data();
+      const a = data?.versus?.auction;
+      if (!a) throw new Error("Auction nicht initialisiert.");
+      if (data.status !== "auction") throw new Error("Room nicht in Auction.");
 
-    const s = a.settings || settings;
-    const count = Math.max(2, clampInt(s.participants, 2, 8));
-    const owners = ensureTeamOwners(count, a.teamOwners || {});
+      const s = a.settings || settings;
+      const count = Math.max(2, clampInt(s.participants, 2, 8));
+      const owners = ensureTeamOwners(count, a.teamOwners || {});
 
-    // already in a team?
-    if (Object.values(owners).some((pid) => pid === myPlayerId)) return;
+      // already in a team?
+      if (Object.values(owners).some((pid) => pid === myPlayerId)) return;
 
-    // ✅ nur joinen wenn das Team frei ist
-    if (owners[tid]) return;
+      // ✅ nur joinen wenn das Team frei ist
+      if (owners[tid]) return;
 
-    owners[tid] = myPlayerId;
+      owners[tid] = myPlayerId;
 
-    tx.update(roomRef, {
-      "versus.auction.teamOwners": owners,
-      "versus.auction.updatedAt": serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      tx.update(roomRef, {
+        "versus.auction.teamOwners": owners,
+        "versus.auction.updatedAt": serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
     });
-  });
-}
-
+  }
 
   async function leaveMyTeam() {
     if (phase !== "lobby") return;
@@ -607,30 +739,31 @@ useEffect(() => {
       });
     });
   }
-async function hostKickFromTeam(tid) {
-  if (!meIsHost) return;
-  if (phase !== "lobby" && phase !== "auction") return;
 
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(roomRef);
-    if (!snap.exists()) throw new Error("Room nicht gefunden.");
+  async function hostKickFromTeam(tid) {
+    if (!meIsHost) return;
+    if (phase !== "lobby" && phase !== "auction") return;
 
-    const data = snap.data();
-    const a = data?.versus?.auction;
-    if (!a) throw new Error("Auction nicht initialisiert.");
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(roomRef);
+      if (!snap.exists()) throw new Error("Room nicht gefunden.");
 
-    const owners = { ...(a.teamOwners || {}) };
-    if (!owners[tid]) return; // schon frei
+      const data = snap.data();
+      const a = data?.versus?.auction;
+      if (!a) throw new Error("Auction nicht initialisiert.");
 
-    owners[tid] = null;
+      const owners = { ...(a.teamOwners || {}) };
+      if (!owners[tid]) return; // schon frei
 
-    tx.update(roomRef, {
-      "versus.auction.teamOwners": owners,
-      "versus.auction.updatedAt": serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      owners[tid] = null;
+
+      tx.update(roomRef, {
+        "versus.auction.teamOwners": owners,
+        "versus.auction.updatedAt": serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
     });
-  });
-}
+  }
 
   // ===== Start Draft (host) =====
   async function startDraft() {
@@ -663,7 +796,14 @@ async function hostKickFromTeam(tid) {
 
     await updateDoc(roomRef, {
       "versus.auction.phase": "auction",
-      "versus.auction.settings": { generation: gen, participants, budgetPerTeam, totalPokemon, secondsPerBid, keepEvolvedForms: !!settings.keepEvolvedForms, },
+      "versus.auction.settings": {
+        generation: gen,
+        participants,
+        budgetPerTeam,
+        totalPokemon,
+        secondsPerBid,
+        keepEvolvedForms: !!settings.keepEvolvedForms,
+      },
       "versus.auction.teamOwners": owners,
       "versus.auction.draft": {
         auctionCountDone: 0,
@@ -686,53 +826,51 @@ async function hostKickFromTeam(tid) {
 
     setBidInput(100);
   }
-async function restartDraftToSetup() {
-  if (!meIsHost) return;
 
-  const participants = Math.max(2, clampInt(settings.participants, 2, 8));
-  const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
+  async function restartDraftToSetup() {
+    if (!meIsHost) return;
 
-  const resetAuction = {
-    phase: "lobby",
-    settings: {
-      generation: clampInt(settings.generation, 1, 7),
-      participants,
-      budgetPerTeam: Math.max(0, clampInt(settings.budgetPerTeam, 0, 9999999)),
-      totalPokemon: Math.max(1, clampInt(settings.totalPokemon, 1, 999)),
-      secondsPerBid,
-    },
-    teamOwners: ensureTeamOwners(participants, {}), // ✅ alle Teams wieder frei
-    draft: {
-      auctionCountDone: 0,
-      current: null,
+    const participants = Math.max(2, clampInt(settings.participants, 2, 8));
+    const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
 
-      teamIds: [],
-      budgets: {},
-      teams: {},
+    const resetAuction = {
+      phase: "lobby",
+      settings: {
+        generation: clampInt(settings.generation, 1, 7),
+        participants,
+        budgetPerTeam: Math.max(0, clampInt(settings.budgetPerTeam, 0, 9999999)),
+        totalPokemon: Math.max(1, clampInt(settings.totalPokemon, 1, 999)),
+        secondsPerBid,
+      },
+      teamOwners: ensureTeamOwners(participants, {}), // ✅ alle Teams wieder frei
+      draft: {
+        auctionCountDone: 0,
+        current: null,
 
-      pool: [],
-      poolIndex: 0,
-      totalPokemon: Math.max(1, clampInt(settings.totalPokemon, 1, 999)),
+        teamIds: [],
+        budgets: {},
+        teams: {},
 
-      highestBid: 0,
-      highestTeamId: null,
-      hasStarted: false,
+        pool: [],
+        poolIndex: 0,
+        totalPokemon: Math.max(1, clampInt(settings.totalPokemon, 1, 999)),
 
-      bannedDexIds: [],
-    },
-    timer: { running: false, paused: false, remaining: secondsPerBid },
-    updatedAt: serverTimestamp(),
-  };
+        highestBid: 0,
+        highestTeamId: null,
+        hasStarted: false,
 
-  await updateDoc(roomRef, {
-    "versus.auction": resetAuction,
-    "versus.phase": "auction",
-    updatedAt: serverTimestamp(),
-  });
+        bannedDexIds: [],
+      },
+      timer: { running: false, paused: false, remaining: secondsPerBid },
+      updatedAt: serverTimestamp(),
+    };
 
-  // Optional: direkt in die Lobby-Route zurück (UI wirkt “cleaner”)
-  // goLobby();
-}
+    await updateDoc(roomRef, {
+      "versus.auction": resetAuction,
+      "versus.phase": "auction",
+      updatedAt: serverTimestamp(),
+    });
+  }
 
   // ===== Bidding (transaction sync) =====
   function myBudget() {
@@ -882,13 +1020,13 @@ async function restartDraftToSetup() {
 
           const teams = { ...(d2.teams || {}) };
           const teamArr = Array.isArray(teams[winnerTeam]) ? [...teams[winnerTeam]] : [];
-          const draftedDexId = Number(poke.dexId);                 // gedraftete Form
-const baseDexId = Number(poke.baseDexId ?? poke.dexId);  // Basisform
-teamArr.push({
-  dexId: draftedDexId,
-  baseDexId,
-  price,
-});
+          const draftedDexId = Number(poke.dexId); // gedraftete Form
+          const baseDexId = Number(poke.baseDexId ?? poke.dexId); // Basisform
+          teamArr.push({
+            dexId: draftedDexId,
+            baseDexId,
+            price,
+          });
           teams[winnerTeam] = teamArr;
 
           const prevBanned = Array.isArray(d2.bannedDexIds) ? d2.bannedDexIds : [];
@@ -968,7 +1106,6 @@ teamArr.push({
   function teamIsMine(tid) {
     return teamOwners?.[tid] === myPlayerId;
   }
-  
 
   // ===== Render Guards
   if (!roomId) return <div style={{ padding: 12 }}>Keine Room-ID in der URL.</div>;
@@ -984,24 +1121,33 @@ teamArr.push({
 
           {/* ✅ Zurück zur Lobby Button (immer sichtbar in auction/results) */}
           {(phase === "auction" || phase === "results") && (
-  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-    <button type="button" style={btnGhostSmall} onClick={goLobby} title="Zur Versus-Lobby">
-      ← Zurück zur Lobby
-    </button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button type="button" style={btnGhostSmall} onClick={goLobby} title="Zur Versus-Lobby">
+                ← Zurück zur Lobby
+              </button>
 
-    {meIsHost && (
-      <button
-        type="button"
-        style={btnGhostSmall}
-        onClick={restartDraftToSetup}
-        title="Setzt den Draft zurück und bringt dich zurück zur Setup-Auswahl"
-      >
-        ↻ Restart Draft
-      </button>
-    )}
-  </div>
-)}
+              {/* ✅ NEW: Type / Analysis Modal */}
+              <button
+                type="button"
+                style={btnGhostSmall}
+                onClick={() => setTypeModalOpen(true)}
+                title="Typentabelle + Team-Analyse"
+              >
+                Typen / Analyse
+              </button>
 
+              {meIsHost && (
+                <button
+                  type="button"
+                  style={btnGhostSmall}
+                  onClick={restartDraftToSetup}
+                  title="Setzt den Draft zurück und bringt dich zurück zur Setup-Auswahl"
+                >
+                  ↻ Restart Draft
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ opacity: 0.8, fontSize: 12 }}>
@@ -1076,12 +1222,11 @@ teamArr.push({
                     <select
                       value={settings.keepEvolvedForms ? "keep" : "base"}
                       onChange={(e) => updateSettings({ keepEvolvedForms: e.target.value === "keep" })}
-                      >
+                    >
                       <option value="base">Basisform only</option>
                       <option value="keep">Bleibt wie gedraftet</option>
                     </select>
                   </Row>
-
 
                   <button onClick={startDraft} style={btnPrimary}>
                     Draft starten
@@ -1123,46 +1268,45 @@ teamArr.push({
                       <div style={{ marginTop: 6, fontWeight: 800 }}>{teamTitle(tid)}</div>
 
                       <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-  {free ? (
-    <button
-      type="button"
-      style={btnGhost}
-      onClick={() => claimTeam(tid)}
-      disabled={!myPlayerId || !!myTeamId}
-      title={myTeamId ? "Du bist schon in einem Team" : "Team beitreten"}
-    >
-      Team beitreten
-    </button>
-  ) : mine ? (
-    <button type="button" style={btnGhost} onClick={leaveMyTeam}>
-      Team verlassen
-    </button>
-  ) : (
-    <button type="button" style={{ ...btnGhost, opacity: 0.5 }} disabled>
-      Belegt
-    </button>
-  )}
+                        {free ? (
+                          <button
+                            type="button"
+                            style={btnGhost}
+                            onClick={() => claimTeam(tid)}
+                            disabled={!myPlayerId || !!myTeamId}
+                            title={myTeamId ? "Du bist schon in einem Team" : "Team beitreten"}
+                          >
+                            Team beitreten
+                          </button>
+                        ) : mine ? (
+                          <button type="button" style={btnGhost} onClick={leaveMyTeam}>
+                            Team verlassen
+                          </button>
+                        ) : (
+                          <button type="button" style={{ ...btnGhost, opacity: 0.5 }} disabled>
+                            Belegt
+                          </button>
+                        )}
 
-  {/* ✅ Host kann belegtes Team leeren */}
-  {!free && meIsHost && (
-    <button
-      type="button"
-      style={{ ...btnDanger, padding: "10px 12px" }}
-      onClick={() => hostKickFromTeam(tid)}
-      title="Entfernt den Spieler aus dem Team (Geld/Pokémon bleiben)"
-    >
-      Entfernen
-    </button>
-  )}
-</div>
+                        {/* ✅ Host kann belegtes Team leeren */}
+                        {!free && meIsHost && (
+                          <button
+                            type="button"
+                            style={{ ...btnDanger, padding: "10px 12px" }}
+                            onClick={() => hostKickFromTeam(tid)}
+                            title="Entfernt den Spieler aus dem Team (Geld/Pokémon bleiben)"
+                          >
+                            Entfernen
+                          </button>
+                        )}
+                      </div>
 
+                      <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
+                        Dein Team: <b>{myTeamId ? myTeamId.toUpperCase() : "— (nicht gewählt)"}</b>
+                      </div>
                     </div>
                   );
                 })}
-              </div>
-
-              <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
-                Dein Team: <b>{myTeamId ? myTeamId.toUpperCase() : "— (nicht gewählt)"}</b>
               </div>
             </div>
           </div>
@@ -1181,33 +1325,34 @@ teamArr.push({
                 const team = draft.teams?.[tid] ?? [];
                 const free = teamIsFree(tid);
                 const mine = teamIsMine(tid);
-// ================================
-// Anzeige-Team bestimmen
-// ================================
-let displayTeam = [];
 
-if (settings.keepEvolvedForms) {
-  // ✅ Originalformen anzeigen (so wie gedraftet)
-  displayTeam = team.map((p) => ({
-    dexId: p.dexId,
-    price: p.price,
-  }));
-} else {
-  // ✅ Basisformen deduplizieren
-  const seen = new Set();
-  displayTeam = [];
+                // ================================
+                // Anzeige-Team bestimmen
+                // ================================
+                let displayTeam = [];
 
-  for (const p of team) {
-    const baseDex = baseDexIdOf(p.dexId);
-    if (!seen.has(baseDex)) {
-      seen.add(baseDex);
-      displayTeam.push({
-        dexId: baseDex,
-        price: p.price,
-      });
-    }
-  }
-}
+                if (settings.keepEvolvedForms) {
+                  // ✅ Originalformen anzeigen (so wie gedraftet)
+                  displayTeam = team.map((p) => ({
+                    dexId: p.dexId,
+                    price: p.price,
+                  }));
+                } else {
+                  // ✅ Basisformen deduplizieren
+                  const seen = new Set();
+                  displayTeam = [];
+
+                  for (const p of team) {
+                    const baseDex = baseDexIdOf(p.dexId);
+                    if (!seen.has(baseDex)) {
+                      seen.add(baseDex);
+                      displayTeam.push({
+                        dexId: baseDex,
+                        price: p.price,
+                      });
+                    }
+                  }
+                }
 
                 return (
                   <div
@@ -1219,46 +1364,39 @@ if (settings.keepEvolvedForms) {
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-  <div style={{ fontWeight: 900 }}>
-    {teamTitle(tid)} {mine ? "(du)" : ""}
-  </div>
+                      <div style={{ fontWeight: 900 }}>
+                        {teamTitle(tid)} {mine ? "(du)" : ""}
+                      </div>
 
-  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-    <div style={{ fontWeight: 900 }}>{money}€</div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <div style={{ fontWeight: 900 }}>{money}€</div>
 
-    {!free && meIsHost && (
-      <button
-        type="button"
-        style={{ ...btnDanger, padding: "6px 10px", fontSize: 12 }}
-        onClick={() => hostKickFromTeam(tid)}
-        title="Owner entfernen (Geld/Pokémon bleiben)"
-      >
-        Entfernen
-      </button>
-    )}
-  </div>
-</div>
-{/* ✅ Draft: Team beitreten, wenn Team frei */}
-{phase === "auction" && free && !myTeamId && (
-  <div style={{ marginTop: 8 }}>
-    <button
-      type="button"
-      style={btnGhost}
-      onClick={() => claimTeam(tid)}
-      title="Team beitreten (nur wenn frei)"
-    >
-      Team beitreten
-    </button>
-  </div>
-)}
+                        {!free && meIsHost && (
+                          <button
+                            type="button"
+                            style={{ ...btnDanger, padding: "6px 10px", fontSize: 12 }}
+                            onClick={() => hostKickFromTeam(tid)}
+                            title="Owner entfernen (Geld/Pokémon bleiben)"
+                          >
+                            Entfernen
+                          </button>
+                        )}
+                      </div>
+                    </div>
 
-{/* Hinweis, falls man schon in einem Team ist */}
-{phase === "auction" && free && myTeamId && (
-  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-    Du bist bereits in einem Team.
-  </div>
-)}
+                    {/* ✅ Draft: Team beitreten, wenn Team frei */}
+                    {phase === "auction" && free && !myTeamId && (
+                      <div style={{ marginTop: 8 }}>
+                        <button type="button" style={btnGhost} onClick={() => claimTeam(tid)} title="Team beitreten (nur wenn frei)">
+                          Team beitreten
+                        </button>
+                      </div>
+                    )}
 
+                    {/* Hinweis, falls man schon in einem Team ist */}
+                    {phase === "auction" && free && myTeamId && (
+                      <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Du bist bereits in einem Team.</div>
+                    )}
 
                     <div
                       style={{
@@ -1275,26 +1413,25 @@ if (settings.keepEvolvedForms) {
                         <span style={{ opacity: 0.7, fontSize: 12 }}>Noch keine Pokémon</span>
                       ) : (
                         displayTeam.map((p, idx) => {
-  const name = getPokemonName(p.dexId);
+                          const name = getPokemonName(p.dexId);
 
-  return (
-    <button
-      key={`${tid}-${p.dexId}-${idx}`}
-      onClick={() => openPokemonDetails(p.dexId)}
-      title={`${name} (${p.price ?? "?"}€)`}
-      style={imgBtn}
-    >
-      <img
-        src={dexIdToImageUrl(p.dexId)}
-        alt={name}
-        width={44}
-        height={44}
-        style={{ imageRendering: "pixelated", flex: "0 0 auto" }}
-      />
-    </button>
-  );
-})
-
+                          return (
+                            <button
+                              key={`${tid}-${p.dexId}-${idx}`}
+                              onClick={() => openPokemonDetails(p.dexId)}
+                              title={`${name} (${p.price ?? "?"}€)`}
+                              style={imgBtn}
+                            >
+                              <img
+                                src={dexIdToImageUrl(p.dexId)}
+                                alt={name}
+                                width={44}
+                                height={44}
+                                style={{ imageRendering: "pixelated", flex: "0 0 auto" }}
+                              />
+                            </button>
+                          );
+                        })
                       )}
                     </div>
 
@@ -1326,28 +1463,53 @@ if (settings.keepEvolvedForms) {
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 20, fontWeight: 900 }}>{draft.current.name}</div>
                   <div style={{ opacity: 0.8 }}>Dex #{draft.current.dexId}</div>
-                  {curTypes.length > 0 && (
-  <div style={typeIconRow}>
-  {curTypes.map((t) => (
-    <img
-      key={t}
-      src={`https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t.toLowerCase()}.svg`}
-      alt={t}
-      title={TYPE_LABELS_DE[t] ?? t}
+{(() => {
+  const tag = getSpecialTag(draft.current.dexId);
+  if (!tag) return null;
+
+  return (
+    <div
       style={{
-        ...typeIcon,
-        filter: "drop-shadow(0 0 4px rgba(0,0,0,0.6))",
+        marginTop: 8,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "6px 12px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 950,
+        color: tag.text,
+        background: tag.color,
+        boxShadow: "0 10px 20px rgba(0,0,0,0.35)",
+        border: "1px solid rgba(255,255,255,0.18)",
       }}
-      onError={(e) => {
-        // Fallback auf zweites CDN
-        e.currentTarget.src = `https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/${t.toLowerCase()}.svg`;
-      }}
-    />
-  ))}
-</div>
+      title="Besonderes Pokémon"
+    >
+      ⭐ {tag.label}
+    </div>
+  );
+})()}
 
-)}
-
+                  {curTypes.length > 0 && (
+                    <div style={typeIconRow}>
+                      {curTypes.map((t) => (
+                        <img
+                          key={t}
+                          src={`https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t.toLowerCase()}.svg`}
+                          alt={t}
+                          title={TYPE_LABELS_DE[t] ?? t}
+                          style={{
+                            ...typeIcon,
+                            filter: "drop-shadow(0 0 4px rgba(0,0,0,0.6))",
+                          }}
+                          onError={(e) => {
+                            // Fallback auf zweites CDN
+                            e.currentTarget.src = `https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/${t.toLowerCase()}.svg`;
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
 
                   <div style={{ marginTop: 6, opacity: 0.85 }}>
                     {draft.hasStarted ? (
@@ -1362,9 +1524,7 @@ if (settings.keepEvolvedForms) {
 
                 {/* ✅ Entwicklungsreihe größer + evo-method */}
                 <div style={{ width: "100%", marginTop: 6 }}>
-                  <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8, fontWeight: 900 }}>
-                    Entwicklungsreihe
-                  </div>
+                  <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8, fontWeight: 900 }}>Entwicklungsreihe</div>
 
                   {evoLoading ? (
                     <div style={{ fontSize: 12, opacity: 0.75 }}>lädt…</div>
@@ -1386,11 +1546,7 @@ if (settings.keepEvolvedForms) {
 
                           return (
                             <React.Fragment key={`evo-${p.dexId}-${idx}`}>
-                              <button
-                                style={evoCardBtn}
-                                onClick={() => openPokemonDetails(p.dexId)}
-                                title="Pokémon-Details öffnen"
-                              >
+                              <button style={evoCardBtn} onClick={() => openPokemonDetails(p.dexId)} title="Pokémon-Details öffnen">
                                 <img
                                   src={dexIdToImageUrl(p.dexId)}
                                   alt={name}
@@ -1403,9 +1559,7 @@ if (settings.keepEvolvedForms) {
                               {!isLast && (
                                 <div style={{ display: "grid", justifyItems: "center", minWidth: 90 }}>
                                   <div style={{ opacity: 0.7, fontWeight: 900 }}>→</div>
-                                  <div style={{ fontSize: 11, opacity: 0.85, textAlign: "center" }}>
-                                    {method || "—"}
-                                  </div>
+                                  <div style={{ fontSize: 11, opacity: 0.85, textAlign: "center" }}>{method || "—"}</div>
                                 </div>
                               )}
                             </React.Fragment>
@@ -1480,11 +1634,7 @@ if (settings.keepEvolvedForms) {
                   Aktuelles Gebot +100
                 </button>
 
-                <button
-                  style={btnGhost}
-                  onClick={() => setBidInput((v) => Math.max(100, (v || 0) - 100))}
-                  disabled={!myTeamId}
-                >
+                <button style={btnGhost} onClick={() => setBidInput((v) => Math.max(100, (v || 0) - 100))} disabled={!myTeamId}>
                   -100
                 </button>
 
@@ -1536,29 +1686,25 @@ if (settings.keepEvolvedForms) {
                 Fortfahren (+5s)
               </button>
             </div>
+
             {/* 📊 Durchschnittspreis */}
-<div
-  style={{
-    marginTop: 16,
-    paddingTop: 12,
-    borderTop: "1px solid rgba(255,255,255,0.12)",
-    display: "grid",
-    gap: 6,
-    justifyItems: "end",
-    textAlign: "right",
-  }}
->
-  <div style={{ fontSize: 12, opacity: 0.75 }}>Durchschnittspreis</div>
+            <div
+              style={{
+                marginTop: 16,
+                paddingTop: 12,
+                borderTop: "1px solid rgba(255,255,255,0.12)",
+                display: "grid",
+                gap: 6,
+                justifyItems: "end",
+                textAlign: "right",
+              }}
+            >
+              <div style={{ fontSize: 12, opacity: 0.75 }}>Durchschnittspreis</div>
 
-  <div style={{ fontSize: 22, fontWeight: 900 }}>
-    {avgPrice.toLocaleString("de-DE")}€
-  </div>
+              <div style={{ fontSize: 22, fontWeight: 900 }}>{avgPrice.toLocaleString("de-DE")}€</div>
 
-  <div style={{ fontSize: 11, opacity: 0.6 }}>
-    {draft?.auctionCountDone || 0} verkauft
-  </div>
-</div>
-
+              <div style={{ fontSize: 11, opacity: 0.6 }}>{draft?.auctionCountDone || 0} verkauft</div>
+            </div>
           </section>
         </div>
       )}
@@ -1639,6 +1785,14 @@ if (settings.keepEvolvedForms) {
           </div>
         </section>
       )}
+
+      {/* ✅ NEW: Type/Analysis modal (works in auction/results; safe everywhere) */}
+      <TypeModal
+        open={typeModalOpen}
+        onClose={() => setTypeModalOpen(false)}
+        myTeamPokemons={myTeamForAnalysis}
+        title="Typen & Team-Analyse"
+      />
     </div>
   );
 }
@@ -1789,6 +1943,7 @@ const typeBadge = {
   letterSpacing: 0.4,
   textShadow: "0 2px 10px rgba(0,0,0,0.6)",
 };
+
 const typeIconRow = {
   display: "flex",
   gap: 10,
@@ -1800,11 +1955,12 @@ const typeIconRow = {
 
 const typeIcon = {
   width: 42,
-  height:50,
+  height: 50,
   objectFit: "contain",
   imageRendering: "auto",
   filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.6))",
 };
+
 const btnDanger = {
   borderRadius: 10,
   border: "1px solid rgba(239,68,68,0.35)",
