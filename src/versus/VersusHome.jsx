@@ -4,7 +4,7 @@ import { createRoom, joinRoom } from "./versusService";
 
 export default function VersusHome() {
   const nav = useNavigate();
-  const [name, setName] = useState("Spieler");
+  const [name, setName] = useState(() => localStorage.getItem("versusPlayerName") || "Spieler");
   const [roomId, setRoomId] = useState("");
   const [err, setErr] = useState("");
 
@@ -84,7 +84,12 @@ export default function VersusHome() {
       <label style={{ display: "block", marginTop: 12 }}>Dein Name</label>
       <input
         value={name}
-        onChange={(e) => setName(e.target.value)}
+        onChange={(e) => {
+  const v = e.target.value;
+  setName(v);
+  localStorage.setItem("versusPlayerName", v);
+}}
+
         style={{ width: "100%", padding: 10 }}
       />
 
