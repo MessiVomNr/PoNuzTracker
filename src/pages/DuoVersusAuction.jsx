@@ -306,6 +306,25 @@ export default function DuoVersusAuction() {
 
     bannedDexIds: [],
   };
+// ===== Avg Preis (Summe / Anzahl gedrafteter Pokémon) =====
+const avgPrice = useMemo(() => {
+  const teams = draft?.teams || {};
+  let totalPrice = 0;
+  let count = 0;
+
+  for (const team of Object.values(teams)) {
+    if (!Array.isArray(team)) continue;
+    for (const p of team) {
+      if (typeof p?.price === "number") {
+        totalPrice += p.price;
+        count += 1;
+      }
+    }
+  }
+
+  if (count === 0) return 0;
+  return Math.round(totalPrice / count);
+}, [draft?.teams]);
 
   const timer = auction?.timer || { running: false, paused: false, remaining: settings.secondsPerBid };
 
@@ -506,36 +525,39 @@ useEffect(() => {
 
   // ===== Team join/leave (sync, transaction) =====
   async function claimTeam(tid) {
-    if (phase !== "lobby") return;
-    if (!myPlayerId) return;
+  // ✅ Join ist in Lobby UND Draft erlaubt
+  if (phase !== "lobby" && phase !== "auction") return;
+  if (!myPlayerId) return;
 
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(roomRef);
-      if (!snap.exists()) throw new Error("Room nicht gefunden.");
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef);
+    if (!snap.exists()) throw new Error("Room nicht gefunden.");
 
-      const data = snap.data();
-      const a = data?.versus?.auction;
-      if (!a) throw new Error("Auction nicht initialisiert.");
-      if (data.status !== "auction") throw new Error("Room nicht in Auction.");
+    const data = snap.data();
+    const a = data?.versus?.auction;
+    if (!a) throw new Error("Auction nicht initialisiert.");
+    if (data.status !== "auction") throw new Error("Room nicht in Auction.");
 
-      const s = a.settings || settings;
-      const count = Math.max(2, clampInt(s.participants, 2, 8));
-      const owners = ensureTeamOwners(count, a.teamOwners || {});
+    const s = a.settings || settings;
+    const count = Math.max(2, clampInt(s.participants, 2, 8));
+    const owners = ensureTeamOwners(count, a.teamOwners || {});
 
-      // already in a team?
-      if (Object.values(owners).some((pid) => pid === myPlayerId)) return;
-      // team taken?
-      if (owners[tid]) return;
+    // already in a team?
+    if (Object.values(owners).some((pid) => pid === myPlayerId)) return;
 
-      owners[tid] = myPlayerId;
+    // ✅ nur joinen wenn das Team frei ist
+    if (owners[tid]) return;
 
-      tx.update(roomRef, {
-        "versus.auction.teamOwners": owners,
-        "versus.auction.updatedAt": serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+    owners[tid] = myPlayerId;
+
+    tx.update(roomRef, {
+      "versus.auction.teamOwners": owners,
+      "versus.auction.updatedAt": serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
-  }
+  });
+}
+
 
   async function leaveMyTeam() {
     if (phase !== "lobby") return;
@@ -561,6 +583,30 @@ useEffect(() => {
       });
     });
   }
+async function hostKickFromTeam(tid) {
+  if (!meIsHost) return;
+  if (phase !== "lobby" && phase !== "auction") return;
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef);
+    if (!snap.exists()) throw new Error("Room nicht gefunden.");
+
+    const data = snap.data();
+    const a = data?.versus?.auction;
+    if (!a) throw new Error("Auction nicht initialisiert.");
+
+    const owners = { ...(a.teamOwners || {}) };
+    if (!owners[tid]) return; // schon frei
+
+    owners[tid] = null;
+
+    tx.update(roomRef, {
+      "versus.auction.teamOwners": owners,
+      "versus.auction.updatedAt": serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
 
   // ===== Start Draft (host) =====
   async function startDraft() {
@@ -616,6 +662,53 @@ useEffect(() => {
 
     setBidInput(100);
   }
+async function restartDraftToSetup() {
+  if (!meIsHost) return;
+
+  const participants = Math.max(2, clampInt(settings.participants, 2, 8));
+  const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
+
+  const resetAuction = {
+    phase: "lobby",
+    settings: {
+      generation: clampInt(settings.generation, 1, 7),
+      participants,
+      budgetPerTeam: Math.max(0, clampInt(settings.budgetPerTeam, 0, 9999999)),
+      totalPokemon: Math.max(1, clampInt(settings.totalPokemon, 1, 999)),
+      secondsPerBid,
+    },
+    teamOwners: ensureTeamOwners(participants, {}), // ✅ alle Teams wieder frei
+    draft: {
+      auctionCountDone: 0,
+      current: null,
+
+      teamIds: [],
+      budgets: {},
+      teams: {},
+
+      pool: [],
+      poolIndex: 0,
+      totalPokemon: Math.max(1, clampInt(settings.totalPokemon, 1, 999)),
+
+      highestBid: 0,
+      highestTeamId: null,
+      hasStarted: false,
+
+      bannedDexIds: [],
+    },
+    timer: { running: false, paused: false, remaining: secondsPerBid },
+    updatedAt: serverTimestamp(),
+  };
+
+  await updateDoc(roomRef, {
+    "versus.auction": resetAuction,
+    "versus.phase": "auction",
+    updatedAt: serverTimestamp(),
+  });
+
+  // Optional: direkt in die Lobby-Route zurück (UI wirkt “cleaner”)
+  // goLobby();
+}
 
   // ===== Bidding (transaction sync) =====
   function myBudget() {
@@ -845,6 +938,7 @@ useEffect(() => {
   function teamIsMine(tid) {
     return teamOwners?.[tid] === myPlayerId;
   }
+  
 
   // ===== Render Guards
   if (!roomId) return <div style={{ padding: 12 }}>Keine Room-ID in der URL.</div>;
@@ -860,10 +954,24 @@ useEffect(() => {
 
           {/* ✅ Zurück zur Lobby Button (immer sichtbar in auction/results) */}
           {(phase === "auction" || phase === "results") && (
-            <button style={btnGhostSmall} onClick={goLobby} title="Zur Versus-Lobby">
-              ← Zurück zur Lobby
-            </button>
-          )}
+  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <button type="button" style={btnGhostSmall} onClick={goLobby} title="Zur Versus-Lobby">
+      ← Zurück zur Lobby
+    </button>
+
+    {meIsHost && (
+      <button
+        type="button"
+        style={btnGhostSmall}
+        onClick={restartDraftToSetup}
+        title="Setzt den Draft zurück und bringt dich zurück zur Setup-Auswahl"
+      >
+        ↻ Restart Draft
+      </button>
+    )}
+  </div>
+)}
+
         </div>
 
         <div style={{ opacity: 0.8, fontSize: 12 }}>
@@ -973,26 +1081,40 @@ useEffect(() => {
 
                       <div style={{ marginTop: 6, fontWeight: 800 }}>{teamTitle(tid)}</div>
 
-                      <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                        {free ? (
-                          <button
-                            style={btnGhost}
-                            onClick={() => claimTeam(tid)}
-                            disabled={!myPlayerId || !!myTeamId}
-                            title={myTeamId ? "Du bist schon in einem Team" : "Team beitreten"}
-                          >
-                            Team beitreten
-                          </button>
-                        ) : mine ? (
-                          <button style={btnGhost} onClick={leaveMyTeam}>
-                            Team verlassen
-                          </button>
-                        ) : (
-                          <button style={{ ...btnGhost, opacity: 0.5 }} disabled>
-                            Belegt
-                          </button>
-                        )}
-                      </div>
+                      <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+  {free ? (
+    <button
+      type="button"
+      style={btnGhost}
+      onClick={() => claimTeam(tid)}
+      disabled={!myPlayerId || !!myTeamId}
+      title={myTeamId ? "Du bist schon in einem Team" : "Team beitreten"}
+    >
+      Team beitreten
+    </button>
+  ) : mine ? (
+    <button type="button" style={btnGhost} onClick={leaveMyTeam}>
+      Team verlassen
+    </button>
+  ) : (
+    <button type="button" style={{ ...btnGhost, opacity: 0.5 }} disabled>
+      Belegt
+    </button>
+  )}
+
+  {/* ✅ Host kann belegtes Team leeren */}
+  {!free && meIsHost && (
+    <button
+      type="button"
+      style={{ ...btnDanger, padding: "10px 12px" }}
+      onClick={() => hostKickFromTeam(tid)}
+      title="Entfernt den Spieler aus dem Team (Geld/Pokémon bleiben)"
+    >
+      Entfernen
+    </button>
+  )}
+</div>
+
                     </div>
                   );
                 })}
@@ -1039,12 +1161,47 @@ useEffect(() => {
                       background: free ? "rgba(239,68,68,0.05)" : "rgba(34,197,94,0.05)",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                      <div style={{ fontWeight: 900 }}>
-                        {teamTitle(tid)} {mine ? "(du)" : ""}
-                      </div>
-                      <div style={{ fontWeight: 900 }}>{money}€</div>
-                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+  <div style={{ fontWeight: 900 }}>
+    {teamTitle(tid)} {mine ? "(du)" : ""}
+  </div>
+
+  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <div style={{ fontWeight: 900 }}>{money}€</div>
+
+    {!free && meIsHost && (
+      <button
+        type="button"
+        style={{ ...btnDanger, padding: "6px 10px", fontSize: 12 }}
+        onClick={() => hostKickFromTeam(tid)}
+        title="Owner entfernen (Geld/Pokémon bleiben)"
+      >
+        Entfernen
+      </button>
+    )}
+  </div>
+</div>
+{/* ✅ Draft: Team beitreten, wenn Team frei */}
+{phase === "auction" && free && !myTeamId && (
+  <div style={{ marginTop: 8 }}>
+    <button
+      type="button"
+      style={btnGhost}
+      onClick={() => claimTeam(tid)}
+      title="Team beitreten (nur wenn frei)"
+    >
+      Team beitreten
+    </button>
+  </div>
+)}
+
+{/* Hinweis, falls man schon in einem Team ist */}
+{phase === "auction" && free && myTeamId && (
+  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+    Du bist bereits in einem Team.
+  </div>
+)}
+
 
                     <div
                       style={{
@@ -1211,9 +1368,6 @@ useEffect(() => {
           <section style={{ ...panel, gridColumn: "2 / 3", height: "min(59vh)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
               <div style={{ fontWeight: 900 }}>Timer</div>
-              <button style={btnGhostSmall} onClick={goLobby} title="Zur Versus-Lobby">
-                ← Lobby
-              </button>
             </div>
 
             <div style={timerBig}>{timer.running ? fmtSecs(timer.remaining) : "--"}</div>
@@ -1283,10 +1437,6 @@ useEffect(() => {
                   All-in
                 </button>
               </div>
-
-              <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-                Dein Team: <b>{myTeamId ? myTeamId.toUpperCase() : "—"}</b> · Budget: <b>{myBudget()}€</b> · 100er Schritte · Timer reset bei jedem Gebot
-              </div>
             </div>
 
             <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
@@ -1323,6 +1473,29 @@ useEffect(() => {
                 Fortfahren (+5s)
               </button>
             </div>
+            {/* 📊 Durchschnittspreis */}
+<div
+  style={{
+    marginTop: 16,
+    paddingTop: 12,
+    borderTop: "1px solid rgba(255,255,255,0.12)",
+    display: "grid",
+    gap: 6,
+    justifyItems: "end",
+    textAlign: "right",
+  }}
+>
+  <div style={{ fontSize: 12, opacity: 0.75 }}>Durchschnittspreis</div>
+
+  <div style={{ fontSize: 22, fontWeight: 900 }}>
+    {avgPrice.toLocaleString("de-DE")}€
+  </div>
+
+  <div style={{ fontSize: 11, opacity: 0.6 }}>
+    {draft?.auctionCountDone || 0} verkauft
+  </div>
+</div>
+
           </section>
         </div>
       )}
@@ -1568,4 +1741,12 @@ const typeIcon = {
   objectFit: "contain",
   imageRendering: "auto",
   filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.6))",
+};
+const btnDanger = {
+  borderRadius: 10,
+  border: "1px solid rgba(239,68,68,0.35)",
+  background: "rgba(239,68,68,0.12)",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 900,
 };
