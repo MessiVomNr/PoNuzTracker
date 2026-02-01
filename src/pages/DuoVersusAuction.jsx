@@ -67,6 +67,8 @@ const MEGA_FORMS = [
   { base: 362, form: "glalie-mega", label: "Mega" },
   { base: 373, form: "salamence-mega", label: "Mega" },
   { base: 376, form: "metagross-mega", label: "Mega" },
+  { base: 384, form: "rayquaza-mega", label: "Mega" },
+
 
   // Gen 4
   { base: 380, form: "latias-mega", label: "Mega" },
@@ -74,6 +76,9 @@ const MEGA_FORMS = [
   { base: 445, form: "garchomp-mega", label: "Mega" },
   { base: 448, form: "lucario-mega", label: "Mega" },
   { base: 460, form: "abomasnow-mega", label: "Mega" },
+  { base: 428, form: "lopunny-mega", label: "Mega" },
+  { base: 475, form: "gallade-mega", label: "Mega" },
+
 
   // Gen 5
   { base: 531, form: "audino-mega", label: "Mega" },
@@ -747,6 +752,19 @@ const evoLineWithMega = useMemo(() => {
 
   return evoLine;
 }, [evoLine, settings?.generation, draft?.current]);
+// ✅ Hide evo UI if there is no evolution before/after (e.g. legendaries, kecleon)
+const showEvoUI = useMemo(() => {
+  const baseLine = Array.isArray(evoLine) ? evoLine : [];
+
+  // normal evo chain exists (more than 1 stage)
+  const hasNormalEvo = baseLine.length > 1;
+
+  // mega appended counts as "something to show"
+  const hasMega = Array.isArray(evoLineWithMega) && evoLineWithMega.some((x) => !!x?.formKey);
+
+  return hasNormalEvo || hasMega;
+}, [evoLine, evoLineWithMega]);
+
 useEffect(() => {
   let alive = true;
 
@@ -1923,11 +1941,16 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
 
                   {/* ✅ Entwicklungsreihe größer + evo-method */}
                   <div style={{ width: "100%", marginTop: 6 }}>
-                    <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8, fontWeight: 800 }}>Entwicklungsreihe</div>
+                    {showEvoUI && (
+  <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8, fontWeight: 800 }}>
+    Entwicklungsreihe
+  </div>
+)}
 
                     {evoLoading ? (
                       <div style={{ fontSize: 12, opacity: 0.75 }}>lädt…</div>
-                    ) : evoLineWithMega.length ? (
+                    ) : showEvoUI ? (
+
                       <div style={{ display: "grid", gap: 10, justifyItems: "start", width: "100%" }}>
                         <div
                           style={{
@@ -2047,9 +2070,7 @@ paddingBottom: 6,
                           Tipp: Klick auf ein Pokémon → Detailseite (Attacken usw.)
                         </div>
                       </div>
-                    ) : (
-                      <div style={{ fontSize: 12, opacity: 0.75 }}>keine Daten</div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </div>
