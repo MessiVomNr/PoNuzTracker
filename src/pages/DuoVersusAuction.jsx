@@ -182,6 +182,27 @@ function getPokemonName(dexId) {
   return fullPokedex?.[key] ?? `#${dexId}`;
 }
 
+const TYPE_LABELS_DE = {
+  normal: "Normal",
+  fire: "Feuer",
+  water: "Wasser",
+  electric: "Elektro",
+  grass: "Pflanze",
+  ice: "Eis",
+  fighting: "Kampf",
+  poison: "Gift",
+  ground: "Boden",
+  flying: "Flug",
+  psychic: "Psycho",
+  bug: "Käfer",
+  rock: "Gestein",
+  ghost: "Geist",
+  dragon: "Drache",
+  dark: "Unlicht",
+  steel: "Stahl",
+  fairy: "Fee",
+};
+
 function labelPlayer(playerId, room) {
   const arr = room?.players || [];
   const p = arr.find((x) => x.id === playerId);
@@ -285,6 +306,8 @@ export default function DuoVersusAuction() {
     budgetPerTeam: 10000,
     totalPokemon: 12,
     secondsPerBid: 10,
+    keepEvolvedForms: false, // false = Basisform, true = so bleiben
+
   };
 
   const teamOwners = auction?.teamOwners || {};
@@ -477,6 +500,7 @@ useEffect(() => {
         budgetPerTeam: 10000,
         totalPokemon: 12,
         secondsPerBid: 10,
+        keepEvolvedForms: false,
       },
       teamOwners: ensureTeamOwners(2, {}),
       draft: {
@@ -639,7 +663,7 @@ async function hostKickFromTeam(tid) {
 
     await updateDoc(roomRef, {
       "versus.auction.phase": "auction",
-      "versus.auction.settings": { generation: gen, participants, budgetPerTeam, totalPokemon, secondsPerBid },
+      "versus.auction.settings": { generation: gen, participants, budgetPerTeam, totalPokemon, secondsPerBid, keepEvolvedForms: !!settings.keepEvolvedForms, },
       "versus.auction.teamOwners": owners,
       "versus.auction.draft": {
         auctionCountDone: 0,
@@ -858,7 +882,13 @@ async function restartDraftToSetup() {
 
           const teams = { ...(d2.teams || {}) };
           const teamArr = Array.isArray(teams[winnerTeam]) ? [...teams[winnerTeam]] : [];
-          teamArr.push({ dexId: poke.dexId, name: poke.name, price });
+          const draftedDexId = Number(poke.dexId);                 // gedraftete Form
+const baseDexId = Number(poke.baseDexId ?? poke.dexId);  // Basisform
+teamArr.push({
+  dexId: draftedDexId,
+  baseDexId,
+  price,
+});
           teams[winnerTeam] = teamArr;
 
           const prevBanned = Array.isArray(d2.bannedDexIds) ? d2.bannedDexIds : [];
@@ -1042,6 +1072,17 @@ async function restartDraftToSetup() {
                     />
                   </Row>
 
+                  <Row label="Pokémon-Form im Team">
+                    <select
+                      value={settings.keepEvolvedForms ? "keep" : "base"}
+                      onChange={(e) => updateSettings({ keepEvolvedForms: e.target.value === "keep" })}
+                      >
+                      <option value="base">Basisform only</option>
+                      <option value="keep">Bleibt wie gedraftet</option>
+                    </select>
+                  </Row>
+
+
                   <button onClick={startDraft} style={btnPrimary}>
                     Draft starten
                   </button>
@@ -1140,17 +1181,33 @@ async function restartDraftToSetup() {
                 const team = draft.teams?.[tid] ?? [];
                 const free = teamIsFree(tid);
                 const mine = teamIsMine(tid);
+// ================================
+// Anzeige-Team bestimmen
+// ================================
+let displayTeam = [];
 
-                // ✅ Anzeige nur Basisformen (dedupe pro Team)
-                const baseDisplay = [];
-                const seen = new Set();
-                for (const p of team) {
-                  const baseDex = baseDexIdOf(p.dexId);
-                  if (!seen.has(baseDex)) {
-                    seen.add(baseDex);
-                    baseDisplay.push({ baseDexId: baseDex, original: p });
-                  }
-                }
+if (settings.keepEvolvedForms) {
+  // ✅ Originalformen anzeigen (so wie gedraftet)
+  displayTeam = team.map((p) => ({
+    dexId: p.dexId,
+    price: p.price,
+  }));
+} else {
+  // ✅ Basisformen deduplizieren
+  const seen = new Set();
+  displayTeam = [];
+
+  for (const p of team) {
+    const baseDex = baseDexIdOf(p.dexId);
+    if (!seen.has(baseDex)) {
+      seen.add(baseDex);
+      displayTeam.push({
+        dexId: baseDex,
+        price: p.price,
+      });
+    }
+  }
+}
 
                 return (
                   <div
@@ -1217,25 +1274,27 @@ async function restartDraftToSetup() {
                       {team.length === 0 ? (
                         <span style={{ opacity: 0.7, fontSize: 12 }}>Noch keine Pokémon</span>
                       ) : (
-                        baseDisplay.map((x) => {
-                          const baseName = getPokemonName(x.baseDexId);
-                          return (
-                            <button
-                              key={`${tid}-base-${x.baseDexId}`}
-                              onClick={() => openPokemonDetails(x.baseDexId)}
-                              title={`${baseName} (Basisform) — gedraftet: ${x.original?.name ?? getPokemonName(x.original?.dexId)} (${x.original?.price ?? "?"}€)`}
-                              style={imgBtn}
-                            >
-                              <img
-                                src={dexIdToImageUrl(x.baseDexId)}
-                                alt={baseName}
-                                width={44}
-                                height={44}
-                                style={{ imageRendering: "pixelated", flex: "0 0 auto" }}
-                              />
-                            </button>
-                          );
-                        })
+                        displayTeam.map((p, idx) => {
+  const name = getPokemonName(p.dexId);
+
+  return (
+    <button
+      key={`${tid}-${p.dexId}-${idx}`}
+      onClick={() => openPokemonDetails(p.dexId)}
+      title={`${name} (${p.price ?? "?"}€)`}
+      style={imgBtn}
+    >
+      <img
+        src={dexIdToImageUrl(p.dexId)}
+        alt={name}
+        width={44}
+        height={44}
+        style={{ imageRendering: "pixelated", flex: "0 0 auto" }}
+      />
+    </button>
+  );
+})
+
                       )}
                     </div>
 
@@ -1269,20 +1328,24 @@ async function restartDraftToSetup() {
                   <div style={{ opacity: 0.8 }}>Dex #{draft.current.dexId}</div>
                   {curTypes.length > 0 && (
   <div style={typeIconRow}>
-    {curTypes.map((t) => (
-      <img
-        key={t}
-        src={`/type-icons/${t}.png`}
-        alt={t}
-        title={t}
-        style={typeIcon}
-        onError={(e) => {
-          // falls mal ein Typ nicht existiert -> verstecken statt kaputtes Icon
-          e.currentTarget.style.display = "none";
-        }}
-      />
-    ))}
-  </div>
+  {curTypes.map((t) => (
+    <img
+      key={t}
+      src={`https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t.toLowerCase()}.svg`}
+      alt={t}
+      title={TYPE_LABELS_DE[t] ?? t}
+      style={{
+        ...typeIcon,
+        filter: "drop-shadow(0 0 4px rgba(0,0,0,0.6))",
+      }}
+      onError={(e) => {
+        // Fallback auf zweites CDN
+        e.currentTarget.src = `https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/${t.toLowerCase()}.svg`;
+      }}
+    />
+  ))}
+</div>
+
 )}
 
 
@@ -1365,7 +1428,7 @@ async function restartDraftToSetup() {
           </section>
 
           {/* Timer + Bid */}
-          <section style={{ ...panel, gridColumn: "2 / 3", height: "min(59vh)" }}>
+          <section style={{ ...panel, gridColumn: "2 / 3", height: "min(61.5vh)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
               <div style={{ fontWeight: 900 }}>Timer</div>
             </div>
