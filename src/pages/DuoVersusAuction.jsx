@@ -16,6 +16,169 @@ import { pokedex as fullPokedex } from "../data/pokedex.js";
 const evoMemCache = new Map(); // dexId -> line[{dexId,nameKey,evolvesToText}]
 const evoInFlight = new Map(); // dexId -> Promise
 const typeCache = {}; // dexId -> ["water","flying",...]
+const statsCache = {}; // dexId -> { hp, atk, def, spa, spd, spe, total }
+
+/* =========================================================
+   Mega Forms (Gen 6+ only)
+   - Pool item format: "mega:<pokeapi-form-name>"
+   - We keep dexId = base form dex for bans/evo logic
+========================================================= */
+const MEGA_FORMS = [
+  // Gen 1
+  { base: 3, form: "venusaur-mega", label: "Mega" },
+  { base: 6, form: "charizard-mega-x", label: "Mega X" },
+  { base: 6, form: "charizard-mega-y", label: "Mega Y" },
+  { base: 9, form: "blastoise-mega", label: "Mega" },
+  { base: 15, form: "beedrill-mega", label: "Mega" },
+  { base: 18, form: "pidgeot-mega", label: "Mega" },
+  { base: 65, form: "alakazam-mega", label: "Mega" },
+  { base: 80, form: "slowbro-mega", label: "Mega" },
+  { base: 94, form: "gengar-mega", label: "Mega" },
+  { base: 115, form: "kangaskhan-mega", label: "Mega" },
+  { base: 127, form: "pinsir-mega", label: "Mega" },
+  { base: 130, form: "gyarados-mega", label: "Mega" },
+  { base: 142, form: "aerodactyl-mega", label: "Mega" },
+  { base: 150, form: "mewtwo-mega-x", label: "Mega X" },
+  { base: 150, form: "mewtwo-mega-y", label: "Mega Y" },
+
+  // Gen 2
+  { base: 181, form: "ampharos-mega", label: "Mega" },
+  { base: 208, form: "steelix-mega", label: "Mega" },
+  { base: 212, form: "scizor-mega", label: "Mega" },
+  { base: 214, form: "heracross-mega", label: "Mega" },
+  { base: 229, form: "houndoom-mega", label: "Mega" },
+  { base: 248, form: "tyranitar-mega", label: "Mega" },
+
+  // Gen 3
+  { base: 254, form: "sceptile-mega", label: "Mega" },
+  { base: 257, form: "blaziken-mega", label: "Mega" },
+  { base: 260, form: "swampert-mega", label: "Mega" },
+  { base: 282, form: "gardevoir-mega", label: "Mega" },
+  { base: 302, form: "sableye-mega", label: "Mega" },
+  { base: 303, form: "mawile-mega", label: "Mega" },
+  { base: 306, form: "aggron-mega", label: "Mega" },
+  { base: 308, form: "medicham-mega", label: "Mega" },
+  { base: 310, form: "manectric-mega", label: "Mega" },
+  { base: 319, form: "sharpedo-mega", label: "Mega" },
+  { base: 323, form: "camerupt-mega", label: "Mega" },
+  { base: 334, form: "altaria-mega", label: "Mega" },
+  { base: 354, form: "banette-mega", label: "Mega" },
+  { base: 359, form: "absol-mega", label: "Mega" },
+  { base: 362, form: "glalie-mega", label: "Mega" },
+  { base: 373, form: "salamence-mega", label: "Mega" },
+  { base: 376, form: "metagross-mega", label: "Mega" },
+
+  // Gen 4
+  { base: 380, form: "latias-mega", label: "Mega" },
+  { base: 381, form: "latios-mega", label: "Mega" },
+  { base: 445, form: "garchomp-mega", label: "Mega" },
+  { base: 448, form: "lucario-mega", label: "Mega" },
+  { base: 460, form: "abomasnow-mega", label: "Mega" },
+
+  // Gen 5
+  { base: 531, form: "audino-mega", label: "Mega" },
+
+  // Gen 6
+  { base: 719, form: "diancie-mega", label: "Mega" },
+];
+
+const MEGA_BY_FORM = Object.fromEntries(MEGA_FORMS.map((m) => [m.form, m]));
+
+// Cache for mega sprites fetched from PokeAPI
+const megaSpriteCache = new Map(); // form -> imageUrl
+
+function isMegaPoolItem(item) {
+  return typeof item === "string" && item.startsWith("mega:");
+}
+function megaFormFromItem(item) {
+  return String(item || "").slice(5);
+}
+function megaMetaFromItem(item) {
+  const form = megaFormFromItem(item);
+  return MEGA_BY_FORM[form] || null;
+}
+function appendMegaToEvoLine(evoLine, current) {
+  if (!Array.isArray(evoLine) || !current) return evoLine;
+
+  // nur wenn das aktuelle Pokémon eine Mega-Form ist
+  if (!current.formKey) return evoLine;
+
+  const baseDexId = Number(current.dexId);
+  if (!baseDexId) return evoLine;
+
+  // schon enthalten?
+  const already = evoLine.some((e) => e.formKey === current.formKey);
+  if (already) return evoLine;
+
+  return [
+    ...evoLine,
+    {
+      dexId: baseDexId,
+      formKey: current.formKey,
+      nameOverride: current.name,   // "Simsala (Mega)"
+      imageUrl: current.imageUrl,
+      evolvesToText: "Mega-Entwicklung",
+    },
+  ];
+}
+
+function shuffleArray(arr) {
+  const a = [...(arr || [])];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+async function getMegaImageUrl(form) {
+  if (!form) return null;
+  if (megaSpriteCache.has(form)) return megaSpriteCache.get(form);
+
+  try {
+    const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${form}`);
+    if (!res.ok) throw new Error("mega sprite fetch failed");
+    const data = await res.json();
+
+    // Prefer official artwork, fallback to default sprite
+    const url =
+      data?.sprites?.other?.["official-artwork"]?.front_default ||
+      data?.sprites?.front_default ||
+      null;
+
+    megaSpriteCache.set(form, url);
+    return url;
+  } catch {
+    megaSpriteCache.set(form, null);
+    return null;
+  }
+}
+
+async function poolItemToCurrent(item) {
+  // normal dexId
+  if (!isMegaPoolItem(item)) {
+    const dexId = Number(item);
+    if (!dexId) return null;
+    return { dexId, name: getPokemonName(dexId), imageUrl: dexIdToImageUrl(dexId) };
+  }
+
+  // mega item
+  const meta = megaMetaFromItem(item);
+  if (!meta) return null;
+
+  const form = meta.form;
+  const baseDexId = Number(meta.base);
+  const baseName = getPokemonName(baseDexId);
+  const img = (await getMegaImageUrl(form)) || dexIdToImageUrl(baseDexId);
+
+  return {
+    dexId: baseDexId,          // IMPORTANT: base dex id for bans/evo-line
+    baseDexId: baseDexId,
+    formKey: form,             // for display/team
+    name: `${baseName} (${meta.label})`,
+    imageUrl: img,
+  };
+}
 
 function safeLower(s) {
   return String(s || "").toLowerCase();
@@ -203,52 +366,53 @@ const TYPE_LABELS_DE = {
   steel: "Stahl",
   fairy: "Fee",
 };
+
 function getSpecialTag(dexIdRaw) {
   const dexId = Number(dexIdRaw);
 
   // ✅ Starter (komplette Reihen)
   const STARTERS = new Set([
     // Gen 1
-    1,2,3,4,5,6,7,8,9,
+    1, 2, 3, 4, 5, 6, 7, 8, 9,
     // Gen 2
-    152,153,154,155,156,157,158,159,160,
+    152, 153, 154, 155, 156, 157, 158, 159, 160,
     // Gen 3
-    252,253,254,255,256,257,258,259,260,
+    252, 253, 254, 255, 256, 257, 258, 259, 260,
     // Gen 4
-    387,388,389,390,391,392,393,394,395,
+    387, 388, 389, 390, 391, 392, 393, 394, 395,
     // Gen 5
-    495,496,497,498,499,500,501,502,503,
+    495, 496, 497, 498, 499, 500, 501, 502, 503,
     // Gen 6
-    650,651,652,653,654,655,656,657,658,
+    650, 651, 652, 653, 654, 655, 656, 657, 658,
   ]);
 
   // ✅ Pseudo-Legis (Endstufen)
-  const PSEUDO = new Set([149,248,373,376,445,635,706]);
+  const PSEUDO = new Set([149, 248, 373, 376, 445, 635, 706]);
 
   // ✅ Legendär (grobe Auswahl, kannst du später easy erweitern)
   const LEGENDARY = new Set([
-    144,145,146,150, // Kanto
-    243,244,245,249,250, // Johto
-    377,378,379,380,381,382,383,384, // Hoenn
-    480,481,482,483,484,485,486,487,488, // Sinnoh
+    144, 145, 146, 150, // Kanto
+    243, 244, 245, 249, 250, // Johto
+    377, 378, 379, 380, 381, 382, 383, 384, // Hoenn
+    480, 481, 482, 483, 484, 485, 486, 487, 488, // Sinnoh
     494, // Unova
-    716,717,718, // Kalos
+    716, 717, 718, // Kalos
   ]);
 
   // ✅ Mythisch
   const MYTHICAL = new Set([
-    151,251,385,386,489,490,491,492,493,494,
-    647,648,649,
-    719,720,
+    151, 251, 385, 386, 489, 490, 491, 492, 493, 494,
+    647, 648, 649,
+    719, 720,
   ]);
 
   // ✅ Sub-Legendär (hier “Legendary-like”, aber nicht Boxart)
   const SUB_LEGENDARY = new Set([
-    144,145,146,150,
-    243,244,245,
-    377,378,379,380,381,
-    480,481,482,
-    647,648,
+    144, 145, 146, 150,
+    243, 244, 245,
+    377, 378, 379, 380, 381,
+    480, 481, 482,
+    647, 648,
   ]);
 
   if (MYTHICAL.has(dexId)) return { label: "Mythisch", color: "#facc15", text: "#111827" };
@@ -298,20 +462,39 @@ function ensureTeamOwners(count, prev = {}) {
 function findNextAllowedFromPool(pool, startIndex, bannedSet) {
   let idx = startIndex;
   while (idx < (pool?.length || 0)) {
-    const dex = pool[idx];
-    if (dex && !bannedSet.has(Number(dex))) {
-      return { nextDex: Number(dex), nextIndex: idx };
+    const item = pool[idx];
+
+    // Normaler Dex
+    if (!isMegaPoolItem(item)) {
+      const dex = Number(item);
+      if (dex && !bannedSet.has(dex)) {
+        return { nextDex: item, nextIndex: idx }; // NOTE: can be number
+      }
+      idx += 1;
+      continue;
     }
+
+    // Mega: skip if its base is banned
+    const meta = megaMetaFromItem(item);
+    const baseDex = Number(meta?.base);
+    if (baseDex && !bannedSet.has(baseDex)) {
+      return { nextDex: item, nextIndex: idx }; // NOTE: can be "mega:..."
+    }
+
     idx += 1;
   }
   return { nextDex: null, nextIndex: idx };
 }
 
+
 export default function DuoVersusAuction() {
   const nav = useNavigate();
   const { roomId: roomIdParam } = useParams();
   const roomId = String(roomIdParam || "").toUpperCase();
+
+  const [bidFlash, setBidFlash] = useState(false);
   const [curTypes, setCurTypes] = useState([]);
+  const [curStats, setCurStats] = useState(null); // ✅ NEW: current pokemon stats
   const [room, setRoom] = useState(null);
   const [err, setErr] = useState("");
   const [typeModalOpen, setTypeModalOpen] = useState(false);
@@ -410,7 +593,6 @@ export default function DuoVersusAuction() {
   }, [draft?.teams]);
 
   const timer = auction?.timer || { running: false, paused: false, remaining: settings.secondsPerBid };
-
   const teamIds = useMemo(() => {
     const count = Math.max(2, clampInt(settings.participants, 2, 8));
     return Array.from({ length: count }, (_, i) => teamIdFor(i));
@@ -440,6 +622,30 @@ export default function DuoVersusAuction() {
     const r = Math.ceil(x / 100) * 100;
     return Math.max(100, r);
   }
+
+  const lastBidRef = useRef(null);
+
+  useEffect(() => {
+    const bid = Number(auction?.draft?.highestBid ?? 0);
+
+    // nur in auction-phase
+    if ((auction?.phase || "lobby") !== "auction") return;
+
+    // beim ersten Render nicht flashen
+    if (lastBidRef.current === null) {
+      lastBidRef.current = bid;
+      return;
+    }
+
+    // nur flashen wenn bid wirklich steigt/ändert
+    if (bid !== lastBidRef.current) {
+      lastBidRef.current = bid;
+
+      setBidFlash(true);
+      const t = setTimeout(() => setBidFlash(false), 300);
+      return () => clearTimeout(t);
+    }
+  }, [auction?.phase, auction?.draft?.highestBid]);
 
   // ===== Current Pokemon types (already in your UI) =====
   useEffect(() => {
@@ -475,9 +681,137 @@ export default function DuoVersusAuction() {
     };
   }, [draft?.current?.dexId]);
 
+  // ✅ NEW: Current Pokemon base stats (PokeAPI)
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      const dexId = Number(draft?.current?.dexId || 0);
+      if (!dexId) {
+        setCurStats(null);
+        return;
+      }
+
+      if (statsCache[dexId]) {
+        if (alive) setCurStats(statsCache[dexId]);
+        return;
+      }
+
+      try {
+        const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${dexId}`);
+        if (!res.ok) throw new Error("stats fetch failed");
+        const data = await res.json();
+
+        const map = {};
+        for (const s of (data?.stats || [])) {
+          const key = s?.stat?.name;
+          const val = Number(s?.base_stat ?? 0);
+          if (key) map[key] = val;
+        }
+
+        const stats = {
+          hp: map.hp ?? 0,
+          atk: map.attack ?? 0,
+          def: map.defense ?? 0,
+          spa: map["special-attack"] ?? 0,
+          spd: map["special-defense"] ?? 0,
+          spe: map.speed ?? 0,
+        };
+        stats.total = stats.hp + stats.atk + stats.def + stats.spa + stats.spd + stats.spe;
+
+        statsCache[dexId] = stats;
+        if (alive) setCurStats(stats);
+      } catch {
+        if (alive) setCurStats(null);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [draft?.current?.dexId]);
+
   // ===== Evolution UI state (current Pokémon) =====
   const [evoLine, setEvoLine] = useState([]);
   const [evoLoading, setEvoLoading] = useState(false);
+  const [evoStatsMap, setEvoStatsMap] = useState({}); // { [dexId]: {hp,atk,def,spa,spd,spe,total} }
+
+  // ✅ Evo-Line für Anzeige (ab Gen 6 inkl. Mega, falls passend)
+const evoLineWithMega = useMemo(() => {
+  if (!Array.isArray(evoLine)) return [];
+
+  // Nur wenn Gen >= 6: Mega in die Reihe integrieren
+  if (Number(settings?.generation) >= 6) {
+    return appendMegaToEvoLine(evoLine, draft?.current);
+  }
+
+  return evoLine;
+}, [evoLine, settings?.generation, draft?.current]);
+useEffect(() => {
+  let alive = true;
+
+  (async () => {
+    const line = Array.isArray(evoLineWithMega) ? evoLineWithMega : [];
+    if (!line.length) {
+      if (alive) setEvoStatsMap({});
+      return;
+    }
+
+    // key: dex:<id> oder mega:<formKey> damit Mega eigene Stats bekommt
+    const keys = line.map((p) => (p?.formKey ? `mega:${p.formKey}` : `dex:${Number(p?.dexId)}`));
+    const uniqKeys = Array.from(new Set(keys)).filter(Boolean);
+
+    const next = { ...(evoStatsMap || {}) };
+
+    for (let i = 0; i < line.length; i++) {
+      const p = line[i];
+      const key = p?.formKey ? `mega:${p.formKey}` : `dex:${Number(p?.dexId)}`;
+      if (!key) continue;
+
+      if (next[key]) continue;
+
+      // Cache hit?
+      if (statsCache[key]) {
+        next[key] = statsCache[key];
+        continue;
+      }
+
+      try {
+        const url = p?.formKey
+          ? `https://pokeapi.co/api/v2/pokemon/${p.formKey}`
+          : `https://pokeapi.co/api/v2/pokemon/${Number(p?.dexId)}`;
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("stats fetch failed");
+        const data = await res.json();
+
+        const statsArr = Array.isArray(data?.stats) ? data.stats : [];
+        const get = (k) => Number(statsArr.find((s) => s?.stat?.name === k)?.base_stat ?? 0);
+
+        const pack = {
+          hp: get("hp"),
+          atk: get("attack"),
+          def: get("defense"),
+          spa: get("special-attack"),
+          spd: get("special-defense"),
+          spe: get("speed"),
+        };
+        pack.total = pack.hp + pack.atk + pack.def + pack.spa + pack.spd + pack.spe;
+
+        statsCache[key] = pack;
+        next[key] = pack;
+      } catch {
+        next[key] = null;
+      }
+    }
+
+    if (alive) setEvoStatsMap(next);
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [JSON.stringify((evoLineWithMega || []).map((p) => (p?.formKey ? `mega:${p.formKey}` : `dex:${p?.dexId}`)))]);
 
   useEffect(() => {
     let alive = true;
@@ -560,7 +894,6 @@ export default function DuoVersusAuction() {
         types: teamTypesMap?.[effectiveDex] || [],
       };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(myTeamPokemons), settings.keepEvolvedForms, JSON.stringify(teamTypesMap), JSON.stringify(baseDexMap)]);
 
   // ✅ NEW: Load types for my team (for TypeModal analysis)
@@ -607,7 +940,6 @@ export default function DuoVersusAuction() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify((myTeamForAnalysis || []).map((p) => p.dexId))]);
 
   // ===== Init auction state once (host) =====
@@ -775,13 +1107,19 @@ export default function DuoVersusAuction() {
     const totalPokemon = Math.max(1, clampInt(settings.totalPokemon, 1, 999));
     const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
 
-    const pool = makeShuffledPool(gen);
-    const poolIndex = 0;
-    const firstDex = pool[poolIndex] ?? null;
+    let pool = makeShuffledPool(gen);
 
-    const current = firstDex
-      ? { dexId: firstDex, name: getPokemonName(firstDex), imageUrl: dexIdToImageUrl(firstDex) }
-      : null;
+// ✅ Gen 6+ → Mega Formen zusätzlich in den Pool
+if (gen >= 6) {
+  const megaItems = MEGA_FORMS.map((m) => `mega:${m.form}`);
+  pool = shuffleArray([...pool, ...megaItems]);
+}
+
+const poolIndex = 0;
+const firstItem = pool[poolIndex] ?? null;
+
+const current = firstItem ? await poolItemToCurrent(firstItem) : null;
+
 
     const budgets = {};
     const teams = {};
@@ -1023,10 +1361,14 @@ export default function DuoVersusAuction() {
           const draftedDexId = Number(poke.dexId); // gedraftete Form
           const baseDexId = Number(poke.baseDexId ?? poke.dexId); // Basisform
           teamArr.push({
-            dexId: draftedDexId,
-            baseDexId,
-            price,
-          });
+  dexId: draftedDexId,                 // base dex for logic
+  baseDexId,
+  price,
+  formKey: poke.formKey || null,       // ✅ mega info
+  name: poke.name || getPokemonName(draftedDexId),
+  imageUrl: poke.imageUrl || dexIdToImageUrl(draftedDexId),
+});
+
           teams[winnerTeam] = teamArr;
 
           const prevBanned = Array.isArray(d2.bannedDexIds) ? d2.bannedDexIds : [];
@@ -1042,10 +1384,8 @@ export default function DuoVersusAuction() {
           const startIdx = (d2.poolIndex ?? 0) + 1;
 
           const { nextDex, nextIndex } = findNextAllowedFromPool(pool, startIdx, bannedSet);
+          const nextCurrent = nextDex ? await poolItemToCurrent(nextDex) : null;
 
-          const nextCurrent = nextDex
-            ? { dexId: nextDex, name: getPokemonName(nextDex), imageUrl: dexIdToImageUrl(nextDex) }
-            : null;
 
           if (done || !nextCurrent) {
             tx.update(roomRef, {
@@ -1423,12 +1763,13 @@ export default function DuoVersusAuction() {
                               style={imgBtn}
                             >
                               <img
-                                src={dexIdToImageUrl(p.dexId)}
-                                alt={name}
-                                width={44}
-                                height={44}
-                                style={{ imageRendering: "pixelated", flex: "0 0 auto" }}
-                              />
+  src={p.imageUrl || dexIdToImageUrl(p.dexId)}
+  alt={p.name || name}
+  width={44}
+  height={44}
+  style={{ imageRendering: "pixelated", flex: "0 0 auto" }}
+/>
+
                             </button>
                           );
                         })
@@ -1449,131 +1790,267 @@ export default function DuoVersusAuction() {
             </div>
 
             {draft.current ? (
-              <div style={{ display: "grid", gap: 10, justifyItems: "center" }}>
-                <button style={imgBtnBig} onClick={() => openPokemonDetails(draft.current.dexId)} title="Pokémon-Details öffnen">
-                  <img
-                    src={draft.current.imageUrl}
-                    alt={draft.current.name}
-                    width={180}
-                    height={180}
-                    style={{ imageRendering: "pixelated", filter: "drop-shadow(0 10px 18px rgba(0,0,0,0.6))" }}
-                  />
-                </button>
+              // ✅ NEW: Left stats + right centered pokemon
+              <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16, alignItems: "start" }}>
+                {/* LEFT: Stats */}
+                <div style={statPanel}>
+                  <div style={{ fontWeight: 950, marginBottom: 10 }}>Basiswerte</div>
 
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 20, fontWeight: 900 }}>{draft.current.name}</div>
-                  <div style={{ opacity: 0.8 }}>Dex #{draft.current.dexId}</div>
-{(() => {
-  const tag = getSpecialTag(draft.current.dexId);
-  if (!tag) return null;
+                  {!curStats ? (
+                    <div style={{ fontSize: 12, opacity: 0.75 }}>lädt…</div>
+                  ) : (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <StatBar label="KP" value={curStats.hp} max={255} />
+                      <StatBar label="ATK" value={curStats.atk} max={190} />
+                      <StatBar label="DEF" value={curStats.def} max={230} />
+                      <StatBar label="SP.ATK" value={curStats.spa} max={194} />
+                      <StatBar label="SP.DEF" value={curStats.spd} max={230} />
+                      <StatBar label="INIT" value={curStats.spe} max={200} />
 
-  return (
-    <div
-      style={{
-        marginTop: 8,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 12px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 950,
-        color: tag.text,
-        background: tag.color,
-        boxShadow: "0 10px 20px rgba(0,0,0,0.35)",
-        border: "1px solid rgba(255,255,255,0.18)",
-      }}
-      title="Besonderes Pokémon"
-    >
-      ⭐ {tag.label}
-    </div>
-  );
-})()}
-
-                  {curTypes.length > 0 && (
-                    <div style={typeIconRow}>
-                      {curTypes.map((t) => (
-                        <img
-                          key={t}
-                          src={`https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t.toLowerCase()}.svg`}
-                          alt={t}
-                          title={TYPE_LABELS_DE[t] ?? t}
-                          style={{
-                            ...typeIcon,
-                            filter: "drop-shadow(0 0 4px rgba(0,0,0,0.6))",
-                          }}
-                          onError={(e) => {
-                            // Fallback auf zweites CDN
-                            e.currentTarget.src = `https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/${t.toLowerCase()}.svg`;
-                          }}
-                        />
-                      ))}
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+                        <div style={{ fontSize: 12, opacity: 0.75 }}>Total</div>
+                        <div style={{ fontSize: 22, fontWeight: 950 }}>{curStats.total}</div>
+                      </div>
                     </div>
                   )}
-
-                  <div style={{ marginTop: 6, opacity: 0.85 }}>
-                    {draft.hasStarted ? (
-                      <>
-                        Höchstgebot: <b>{draft.highestBid}€</b> von <b>{teamTitle(draft.highestTeamId)}</b>
-                      </>
-                    ) : (
-                      "Warte auf erstes Gebot (min. 100)"
-                    )}
-                  </div>
                 </div>
 
-                {/* ✅ Entwicklungsreihe größer + evo-method */}
-                <div style={{ width: "100%", marginTop: 6 }}>
-                  <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8, fontWeight: 900 }}>Entwicklungsreihe</div>
+                {/* RIGHT: Pokémon + info (centered) */}
+                <div style={{ display: "grid", gap: 10, justifyItems: "center" }}>
+                  <div style={pokeHeroWrap}>
+                    <button
+                      style={pokeHeroBtn}
+                      onClick={() => openPokemonDetails(draft.current.dexId)}
+                      title="Pokémon-Details öffnen"
+                    >
+                      <img
+                        src={draft.current.imageUrl}
+                        alt={draft.current.name}
+                        style={pokeHeroImg}
+                      />
+                    </button>
 
-                  {evoLoading ? (
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>lädt…</div>
-                  ) : evoLine.length ? (
-                    <div style={{ display: "grid", gap: 10, justifyItems: "center" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 12,
-                          alignItems: "center",
-                          flexWrap: "wrap",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {evoLine.map((p, idx) => {
-                          const name = getPokemonName(p.dexId);
-                          const method = p.evolvesToText; // method from THIS stage to next
-                          const isLast = idx === evoLine.length - 1;
+                    {/* 🔥 OVERLAY: Timer + Höchstgebot + Team */}
+                    <div
+                      style={{
+                        ...pokeHeroOverlay,
+                        ...(bidFlash ? pokeHeroOverlayFlash : null),
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-end" }}>
+                        <div>
+                          <div style={{ fontSize: 12, opacity: 0.85, marginTop: 6 }}>
+                            Höchstgebot
+                          </div>
 
-                          return (
-                            <React.Fragment key={`evo-${p.dexId}-${idx}`}>
-                              <button style={evoCardBtn} onClick={() => openPokemonDetails(p.dexId)} title="Pokémon-Details öffnen">
-                                <img
-                                  src={dexIdToImageUrl(p.dexId)}
-                                  alt={name}
-                                  style={{ width: 56, height: 56, imageRendering: "pixelated" }}
-                                />
-                                <div style={{ fontSize: 13, fontWeight: 900 }}>{name}</div>
-                                <div style={{ fontSize: 11, opacity: 0.75 }}>#{p.dexId}</div>
-                              </button>
+                          <div
+                            style={{
+                              fontSize: 38,
+                              fontWeight: 950,
+                              lineHeight: 1,
+                              transform: bidFlash ? "scale(1.06)" : "scale(1)",
+                              transition: "transform 160ms ease",
+                            }}
+                          >
+                            {draft.highestBid || 0}€
+                          </div>
 
-                              {!isLast && (
-                                <div style={{ display: "grid", justifyItems: "center", minWidth: 90 }}>
-                                  <div style={{ opacity: 0.7, fontWeight: 900 }}>→</div>
-                                  <div style={{ fontSize: 11, opacity: 0.85, textAlign: "center" }}>{method || "—"}</div>
-                                </div>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </div>
+                          <div style={{ fontSize: 12, opacity: 0.9, marginTop: 2 }}>
+                            von <b>{draft.highestTeamId ? teamTitle(draft.highestTeamId) : "—"}</b>
+                          </div>
+                        </div>
 
-                      <div style={{ fontSize: 12, opacity: 0.75, textAlign: "center" }}>
-                        Tipp: Klick auf ein Pokémon → Detailseite (Attacken usw.)
+                        <div style={pokeHeroRightBadge}>
+                          <div style={{ fontSize: 11, opacity: 0.8, fontWeight: 900 }}>Dex</div>
+                          <div style={{ fontWeight: 900 }}>#{draft.current.dexId}</div>
+                        </div>
                       </div>
                     </div>
-                  ) : (
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>keine Daten</div>
-                  )}
+                  </div>
+
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 20, fontWeight: 900 }}>{draft.current.name}</div>
+                    <div style={{ opacity: 0.8 }}>Dex #{draft.current.dexId}</div>
+
+                    {(() => {
+                      const tag = getSpecialTag(draft.current.dexId);
+                      if (!tag) return null;
+
+                      return (
+                        <div
+                          style={{
+                            marginTop: 8,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "6px 12px",
+                            borderRadius: 999,
+                            fontSize: 12,
+                            fontWeight: 950,
+                            color: tag.text,
+                            background: tag.color,
+                            boxShadow: "0 10px 20px rgba(0,0,0,0.35)",
+                            border: "1px solid rgba(255,255,255,0.18)",
+                          }}
+                          title="Besonderes Pokémon"
+                        >
+                          ⭐ {tag.label}
+                        </div>
+                      );
+                    })()}
+
+                    {curTypes.length > 0 && (
+                      <div style={typeIconRow}>
+                        {curTypes.map((t) => (
+                          <img
+                            key={t}
+                            src={`https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t.toLowerCase()}.svg`}
+                            alt={t}
+                            title={TYPE_LABELS_DE[t] ?? t}
+                            style={{
+                              ...typeIcon,
+                              filter: "drop-shadow(0 0 4px rgba(0,0,0,0.6))",
+                            }}
+                            onError={(e) => {
+                              // Fallback auf zweites CDN
+                              e.currentTarget.src = `https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/${t.toLowerCase()}.svg`;
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ✅ Entwicklungsreihe größer + evo-method */}
+                  <div style={{ width: "100%", marginTop: 6 }}>
+                    <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8, fontWeight: 800 }}>Entwicklungsreihe</div>
+
+                    {evoLoading ? (
+                      <div style={{ fontSize: 12, opacity: 0.75 }}>lädt…</div>
+                    ) : evoLineWithMega.length ? (
+                      <div style={{ display: "grid", gap: 10, justifyItems: "start", width: "100%" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 12,
+                            alignItems: "center",
+                            flexWrap: "nowrap",
+justifyContent: "flex-start",
+overflowX: "auto",
+overflowY: "hidden",
+paddingBottom: 6,
+
+                          }}
+                        >
+                         {evoLineWithMega.map((p, idx) => {
+  const name = p.nameOverride || getPokemonName(p.dexId);
+  const method = p.evolvesToText;
+  const isLast = idx === evoLineWithMega.length - 1;
+
+  // Mega erkennen (du hast formKey ja schon am Mega-Entry gesetzt)
+  const isMega = !!p.formKey;
+
+  const Arrow = ({ label }) => (
+    <div style={{ display: "grid", justifyItems: "center", minWidth: 90 }}>
+      <div style={{ opacity: 0.7, fontWeight: 900 }}>→</div>
+      <div style={{ fontSize: 11, opacity: 0.85, textAlign: "center" }}>{label}</div>
+    </div>
+  );
+
+  return (
+    <React.Fragment key={`evo-${p.dexId}-${idx}`}>
+      {/* Pfeil + Text VOR Mega */}
+      {isMega && <Arrow label="Mega-Entwicklung" />}
+
+      {/* genau 1 Karte pro Item */}
+      <button style={evoCardBtn} onClick={() => openPokemonDetails(p.dexId)} title="Pokémon-Details öffnen">
+        <img
+          src={p.imageUrl || dexIdToImageUrl(p.dexId)}
+          alt={name}
+          style={{ width: 56, height: 56, imageRendering: "pixelated" }}
+        />
+        <div style={{ fontSize: 13, fontWeight: 900 }}>{name}</div>
+        <div style={{ fontSize: 11, opacity: 0.75 }}>#{p.dexId}</div>
+      </button>
+
+      {/* Pfeil + Text NACH normalen Pokémon */}
+      {!isMega && !isLast && !!method && <Arrow label={method} />}
+    </React.Fragment>
+  );
+})}
+
+                        </div>
+{/* ✅ Stats der ganzen Entwicklungsreihe */}
+<div style={{ width: "100%", marginTop: 10, maxWidth: 940 }}>
+  <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 950, marginBottom: 8, textAlign: "center" }}>
+    Basiswerte pro Stufe
+  </div>
+
+  <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: `repeat(${evoLineWithMega.length}, minmax(220px, 1fr))`,
+    gap: 10,
+    width: "100%",
+    justifyContent: "start",
+    overflowX: "auto",
+    paddingBottom: 6,
+  }}
+>
+
+    {evoLineWithMega.map((p, idx) => {
+      const name = p.nameOverride || getPokemonName(p.dexId);
+      const key = p?.formKey ? `mega:${p.formKey}` : `dex:${Number(p?.dexId)}`;
+      const st = evoStatsMap?.[key];
+
+      return (
+        <div
+          key={`evostats-${key}-${idx}`}
+          style={{
+            padding: "10px 10px",
+            borderRadius: 14,
+            border: "1px solid rgba(255,255,255,0.14)",
+            background: "rgba(0,0,0,0.22)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+            <div style={{ fontWeight: 950 }}>{name}</div>
+            <div style={{ opacity: 0.75, fontSize: 12 }}>
+              {p.formKey ? "Mega" : `#${p.dexId}`}
+            </div>
+          </div>
+
+          {!st ? (
+            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 8 }}>lädt…</div>
+          ) : (
+            <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
+              <StatBar label="KP" value={st.hp} max={255} />
+              <StatBar label="ATK" value={st.atk} max={190} />
+              <StatBar label="DEF" value={st.def} max={230} />
+              <StatBar label="SP.ATK" value={st.spa} max={194} />
+              <StatBar label="SP.DEF" value={st.spd} max={230} />
+              <StatBar label="INIT" value={st.spe} max={200} />
+
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+                <div style={{ fontSize: 12, opacity: 0.75 }}>Total</div>
+                <div style={{ fontSize: 18, fontWeight: 950 }}>{st.total}</div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    })}
+  </div>
+</div>
+
+                        <div style={{ fontSize: 12, opacity: 0.75, textAlign: "center" }}>
+                          Tipp: Klick auf ein Pokémon → Detailseite (Attacken usw.)
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 12, opacity: 0.75 }}>keine Daten</div>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1761,12 +2238,12 @@ export default function DuoVersusAuction() {
                           <div key={`${tid}-base-row-${x.baseDexId}-${idx}`} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <button style={imgBtn} onClick={() => openPokemonDetails(x.baseDexId)} title="Pokémon-Details öffnen">
                               <img
-                                src={dexIdToImageUrl(x.baseDexId)}
-                                alt={baseName}
-                                width={44}
-                                height={44}
-                                style={{ imageRendering: "pixelated" }}
-                              />
+  src={x.original?.imageUrl || dexIdToImageUrl(x.baseDexId)}
+  alt={x.original?.name || baseName}
+  width={44}
+  height={44}
+  style={{ imageRendering: "pixelated" }}
+/>
                             </button>
                             <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 900 }}>{baseName}</div>
@@ -1806,6 +2283,56 @@ function Row({ label, children }) {
   );
 }
 
+function StatBar({ label, value, max }) {
+  const v = Number(value ?? 0);
+  const m = Number(max ?? 200);
+  const pct = Math.max(0, Math.min(100, (v / m) * 100));
+
+  // 🎨 Farblogik
+  let color = "#ef4444"; // rot
+  if (v >= 50) color = "#f97316"; // orange
+  if (v >= 80) color = "#eab308"; // gelb
+  if (v >= 100) color = "#22c55e"; // grün
+  if (v >= 120) color = "#3b82f6"; // blau
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "64px 38px 1fr",
+        gap: 10,
+        alignItems: "center",
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.85 }}>
+        {label}
+      </div>
+
+      <div style={{ fontWeight: 900 }}>{v}</div>
+
+      <div
+        style={{
+          height: 10,
+          borderRadius: 999,
+          background: "rgba(255,255,255,0.12)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            background: color,
+            boxShadow: "0 0 6px rgba(0,0,0,0.35)",
+            transition: "width 220ms ease",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+
 const outer = {
   width: "100%",
   height: "100%",
@@ -1826,6 +2353,14 @@ const panel = {
   border: "1px solid rgba(255,255,255,0.12)",
   borderRadius: 12,
   background: "rgba(0,0,0,0.15)",
+};
+
+const statPanel = {
+  padding: 12,
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(0,0,0,0.22)",
+  boxShadow: "0 12px 28px rgba(0,0,0,0.35)",
 };
 
 const auctionGrid = {
@@ -1903,12 +2438,56 @@ const imgBtn = {
   cursor: "pointer",
 };
 
-const imgBtnBig = {
+const pokeHeroWrap = {
+  position: "relative",
+  width: 320,
+  height: 320,
+  borderRadius: 18,
+  overflow: "hidden",
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(0,0,0,0.18)",
+  boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
+};
+
+const pokeHeroBtn = {
   padding: 0,
   border: "none",
   background: "transparent",
   cursor: "pointer",
-  borderRadius: 16,
+  width: "100%",
+  height: "100%",
+  display: "grid",
+  placeItems: "center",
+};
+
+const pokeHeroImg = {
+  width: "100%",
+  height: "100%",
+  objectFit: "contain",
+  imageRendering: "pixelated",
+  filter: "drop-shadow(0 12px 22px rgba(0,0,0,0.65))",
+};
+
+const pokeHeroOverlay = {
+  position: "absolute",
+  left: 0,
+  right: 0,
+  bottom: 0,
+  padding: "14px 14px 12px",
+  background: "linear-gradient(to top, rgba(0,0,0,0.88), rgba(0,0,0,0.28), rgba(0,0,0,0))",
+  color: "white",
+};
+
+// ✅ absichtlich leer -> kein weißer Rahmen/Glow beim Bieten
+const pokeHeroOverlayFlash = {};
+
+const pokeHeroRightBadge = {
+  borderRadius: 12,
+  padding: "10px 10px",
+  background: "rgba(0,0,0,0.40)",
+  border: "1px solid rgba(255,255,255,0.14)",
+  minWidth: 70,
+  textAlign: "center",
 };
 
 const evoCardBtn = {
@@ -1921,27 +2500,6 @@ const evoCardBtn = {
   background: "rgba(0,0,0,0.28)",
   cursor: "pointer",
   color: "rgba(255,255,255,0.95)",
-};
-
-const typeRow = {
-  display: "flex",
-  gap: 8,
-  justifyContent: "center",
-  flexWrap: "wrap",
-  marginTop: 8,
-};
-
-const typeBadge = {
-  padding: "4px 10px",
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.22)",
-  background: "rgba(0,0,0,0.22)",
-  fontSize: 12,
-  fontWeight: 900,
-  color: "rgba(255,255,255,0.92)",
-  textTransform: "uppercase",
-  letterSpacing: 0.4,
-  textShadow: "0 2px 10px rgba(0,0,0,0.6)",
 };
 
 const typeIconRow = {

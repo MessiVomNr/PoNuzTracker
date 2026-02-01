@@ -24,7 +24,8 @@
   },
   "devDependencies": {
     "electron": "^37.2.0",
-    "electron-builder": "^24.11.0"
+    "electron-builder": "^24.11.0",
+    "eslint-plugin-react-hooks": "^7.0.1"
   },
   "browserslist": {
     "production": [
