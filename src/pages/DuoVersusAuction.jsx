@@ -102,30 +102,56 @@ function megaMetaFromItem(item) {
   const form = megaFormFromItem(item);
   return MEGA_BY_FORM[form] || null;
 }
-function appendMegaToEvoLine(evoLine, current) {
-  if (!Array.isArray(evoLine) || !current) return evoLine;
+function appendMegasToEvoLine(evoLine) {
+  if (!Array.isArray(evoLine) || evoLine.length === 0) return evoLine;
 
-  // nur wenn das aktuelle Pokémon eine Mega-Form ist
-  if (!current.formKey) return evoLine;
+  // Wir bauen eine Kopie, in die wir Megas "einfügen"
+  let out = [...evoLine];
 
-  const baseDexId = Number(current.dexId);
-  if (!baseDexId) return evoLine;
+  // Welche Bases sind in der Linie?
+  const baseDexIds = Array.from(
+    new Set(out.map((p) => Number(p?.dexId)).filter(Boolean))
+  );
 
-  // schon enthalten?
-  const already = evoLine.some((e) => e.formKey === current.formKey);
-  if (already) return evoLine;
+  // Alle Mega-Forms, die zu dieser Linie passen (z.B. Garados, Bisaflor, etc.)
+  const megasForLine = MEGA_FORMS.filter((m) => baseDexIds.includes(Number(m.base)));
 
-  return [
-    ...evoLine,
-    {
-      dexId: baseDexId,
-      formKey: current.formKey,
-      nameOverride: current.name,   // "Simsala (Mega)"
-      imageUrl: current.imageUrl,
-      evolvesToText: "Mega-Entwicklung",
-    },
-  ];
+  if (megasForLine.length === 0) return out;
+
+  // Für jede passende Mega: direkt NACH dem passenden Base-Pokémon einfügen
+  for (const mega of megasForLine) {
+    const baseDex = Number(mega.base);
+    const formKey = mega.form;
+
+    // schon drin?
+    if (out.some((e) => e?.formKey === formKey)) continue;
+
+    // wo steht das Base in der out-Liste?
+    const idxBase = out.findIndex((e) => Number(e?.dexId) === baseDex);
+    if (idxBase === -1) continue;
+
+    const baseName = getPokemonName(baseDex);
+
+    const megaEntry = {
+      dexId: baseDex,
+      formKey,
+      nameOverride: `${baseName} (${mega.label})`,
+      imageUrl: null, // Bild kommt später über getMegaImageUrl / Render-Fallback
+      evolvesToText: null, // Pfeil-Text machen wir im UI
+    };
+
+    // Einfügen direkt nach dem Base
+    out = [
+      ...out.slice(0, idxBase + 1),
+      megaEntry,
+      ...out.slice(idxBase + 1),
+    ];
+  }
+
+  return out;
 }
+
+
 
 function shuffleArray(arr) {
   const a = [...(arr || [])];
@@ -145,9 +171,10 @@ async function getMegaImageUrl(form) {
     if (!res.ok) throw new Error("mega sprite fetch failed");
     const data = await res.json();
 
-    // Prefer official artwork, fallback to default sprite
+    // 🔥 WICHTIG: richtige Priorität für Mega-Artworks
     const url =
       data?.sprites?.other?.["official-artwork"]?.front_default ||
+      data?.sprites?.other?.home?.front_default ||
       data?.sprites?.front_default ||
       null;
 
@@ -158,6 +185,7 @@ async function getMegaImageUrl(form) {
     return null;
   }
 }
+
 
 async function poolItemToCurrent(item) {
   // normal dexId
@@ -740,18 +768,18 @@ export default function DuoVersusAuction() {
   const [evoLine, setEvoLine] = useState([]);
   const [evoLoading, setEvoLoading] = useState(false);
   const [evoStatsMap, setEvoStatsMap] = useState({}); // { [dexId]: {hp,atk,def,spa,spd,spe,total} }
-
-  // ✅ Evo-Line für Anzeige (ab Gen 6 inkl. Mega, falls passend)
-const evoLineWithMega = useMemo(() => {
+  const [megaEvoImgMap, setMegaEvoImgMap] = useState({}); // { [formKey]: url }
+  const [megaImgMap, setMegaImgMap] = useState({}); // formKey -> imageUrl
+  const evoLineWithMega = useMemo(() => {
   if (!Array.isArray(evoLine)) return [];
 
-  // Nur wenn Gen >= 6: Mega in die Reihe integrieren
   if (Number(settings?.generation) >= 6) {
-    return appendMegaToEvoLine(evoLine, draft?.current);
+    return appendMegasToEvoLine(evoLine);
   }
 
   return evoLine;
-}, [evoLine, settings?.generation, draft?.current]);
+}, [evoLine, settings?.generation]);
+
 // ✅ Hide evo UI if there is no evolution before/after (e.g. legendaries, kecleon)
 const showEvoUI = useMemo(() => {
   const baseLine = Array.isArray(evoLine) ? evoLine : [];
@@ -764,7 +792,62 @@ const showEvoUI = useMemo(() => {
 
   return hasNormalEvo || hasMega;
 }, [evoLine, evoLineWithMega]);
+useEffect(() => {
+  let alive = true;
 
+  (async () => {
+    const line = Array.isArray(evoLineWithMega) ? evoLineWithMega : [];
+    const megaKeys = line.map((p) => p?.formKey).filter(Boolean);
+
+    if (!megaKeys.length) return;
+
+    const next = { ...(megaImgMap || {}) };
+
+    for (const fk of megaKeys) {
+      if (next[fk]) continue; // schon geladen
+      const url = await getMegaImageUrl(fk); // PokeAPI -> sprites -> png-id (z.B. 10041)
+      next[fk] = url || null;
+    }
+
+    if (alive) setMegaImgMap(next);
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [JSON.stringify((evoLineWithMega || []).map((p) => p?.formKey).filter(Boolean))]);
+
+useEffect(() => {
+  let alive = true;
+
+  (async () => {
+    const line = Array.isArray(evoLineWithMega) ? evoLineWithMega : [];
+    const megaForms = line.map((p) => p?.formKey).filter(Boolean);
+
+    if (!megaForms.length) {
+      if (alive) setMegaEvoImgMap({});
+      return;
+    }
+
+    const uniq = Array.from(new Set(megaForms));
+    const next = {};
+
+    for (const form of uniq) {
+      try {
+        const url = await getMegaImageUrl(form);
+        if (url) next[form] = url;
+      } catch {
+        // ignore
+      }
+    }
+
+    if (alive) setMegaEvoImgMap(next);
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [JSON.stringify((evoLineWithMega || []).map((p) => p?.formKey || ""))]);
 useEffect(() => {
   let alive = true;
 
@@ -1758,14 +1841,15 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
 
                     <div
                       style={{
-                        marginTop: 10,
-                        display: "flex",
-                        gap: 8,
-                        overflowX: "auto",
-                        overflowY: "hidden",
-                        paddingBottom: 6,
-                        whiteSpace: "nowrap",
-                      }}
+  marginTop: 10,
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",          // ✅ macht automatisch 2+ Reihen
+  overflow: "hidden",        // ✅ keine Scrollbar mehr
+  paddingBottom: 0,
+  whiteSpace: "normal",      // ✅ nowrap aus
+}}
+
                     >
                       {team.length === 0 ? (
                         <span style={{ opacity: 0.7, fontSize: 12 }}>Noch keine Pokémon</span>
@@ -1781,7 +1865,7 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
                               style={imgBtn}
                             >
                               <img
-  src={p.imageUrl || dexIdToImageUrl(p.dexId)}
+  src={(p.formKey && megaEvoImgMap?.[p.formKey]) || p.imageUrl || dexIdToImageUrl(p.dexId)}
   alt={p.name || name}
   width={44}
   height={44}
@@ -1988,7 +2072,12 @@ paddingBottom: 6,
       {/* genau 1 Karte pro Item */}
       <button style={evoCardBtn} onClick={() => openPokemonDetails(p.dexId)} title="Pokémon-Details öffnen">
         <img
-          src={p.imageUrl || dexIdToImageUrl(p.dexId)}
+          src={
+  p.formKey
+    ? (megaImgMap?.[p.formKey] || p.imageUrl || dexIdToImageUrl(p.dexId))
+    : (p.imageUrl || dexIdToImageUrl(p.dexId))
+}
+
           alt={name}
           style={{ width: 56, height: 56, imageRendering: "pixelated" }}
         />
