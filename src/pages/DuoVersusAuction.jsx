@@ -462,30 +462,100 @@ const STARTERS = new Set([
   650, 651, 652, 653, 654, 655, 656, 657, 658,
 ]);
 
-const PSEUDO = new Set([149, 248, 373, 376, 445, 635, 706]);
+const PSEUDO = new Set([
+  149, // Dragoran
+  248, // Despotar
+  373, // Brutalanda
+  376, // Metagross
+  445, // Knakrack
+  635, // Trikephalo
+  706, // Grandiras
+]);
+
 
 const LEGENDARY = new Set([
-  144, 145, 146, 150,
-  243, 244, 245, 249, 250,
-  377, 378, 379, 380, 381, 382, 383, 384,
-  480, 481, 482, 483, 484, 485, 486, 487, 488,
-  494,
-  716, 717, 718,
+  // Gen 1
+  150, // Mewtu
+
+  // Gen 2
+  249, // Lugia
+  250, // Ho-Oh
+
+  // Gen 3
+  382, // Kyogre
+  383, // Groudon
+  384, // Rayquaza
+
+  // Gen 4
+  483, // Dialga
+  484, // Palkia
+  487, // Giratina
+
+  // Gen 5
+  643, // Reshiram
+  644, // Zekrom
+  646, // Kyurem
+
+  // Gen 6
+  716, // Xerneas
+  717, // Yveltal
+  718, // Zygarde
 ]);
+
 
 const MYTHICAL = new Set([
-  151, 251, 385, 386, 489, 490, 491, 492, 493, 494,
-  647, 648, 649,
-  719, 720,
+  // Gen 1
+  151, // Mew
+
+  // Gen 2
+  251, // Celebi
+
+  // Gen 3
+  385, // Jirachi
+  386, // Deoxys
+
+  // Gen 4
+  489, // Phione
+  490, // Manaphy
+  491, // Darkrai
+  492, // Shaymin
+  493, // Arceus
+
+  // Gen 5
+  494, // Victini
+  647, // Keldeo
+  648, // Meloetta
+  649, // Genesect
+
+  // Gen 6
+  719, // Diancie
+  720, // Hoopa
 ]);
 
+
 const SUB_LEGENDARY = new Set([
-  144, 145, 146, 150,
-  243, 244, 245,
-  377, 378, 379, 380, 381,
-  480, 481, 482,
-  647, 648,
+  // Gen 1
+  144, 145, 146, // Arktos, Zapdos, Lavados
+
+  // Gen 2
+  243, 244, 245, // Raikou, Entei, Suicune
+
+  // Gen 3
+  377, 378, 379, // Regirock, Regice, Registeel
+  380, 381,      // Latias, Latios
+
+  // Gen 4
+  480, 481, 482, // Vesprit, Tobutz, Selfe
+  485, 486, 488, // Heatran, Regigigas, Cresselia
+
+  // Gen 5
+  638, 639, 640, // Cobalion, Terrakion, Virizion
+  641, 642, 645, // Boreos, Voltolos, Demeteros
+
+  // Gen 6
+  785, 786, 787, 788, // Kapu-Reihe (optional, falls du sie schon drin hast)
 ]);
+
 
 function getSpecialFlags(dexIdRaw) {
   const dexId = Number(dexIdRaw);
@@ -1008,15 +1078,21 @@ useEffect(() => {
   const [evoStatsMap, setEvoStatsMap] = useState({}); // { [dexId]: {hp,atk,def,spa,spd,spe,total} }
   const [megaEvoImgMap, setMegaEvoImgMap] = useState({}); // { [formKey]: url }
   const [megaImgMap, setMegaImgMap] = useState({}); // formKey -> imageUrl
+  const evoLineInGen = useMemo(() => {
+  const base = Array.isArray(evoLine) ? evoLine : [];
+  const cap = getDexCapForGen(genNum); // z.B. Gen1 -> 151
+  return base.filter((p) => Number(p?.dexId) > 0 && Number(p.dexId) <= cap);
+}, [evoLine, genNum]);
   const evoLineWithMega = useMemo(() => {
-  if (!Array.isArray(evoLine)) return [];
+if (!Array.isArray(evoLineInGen)) return [];
 
-  if (Number(settings?.generation) >= 6) {
-    return appendMegasToEvoLine(evoLine);
-  }
+if (Number(settings?.generation) >= 6) {
+  return appendMegasToEvoLine(evoLineInGen);
+}
 
-  return evoLine;
-}, [evoLine, settings?.generation]);
+return evoLineInGen;
+
+}, [evoLineInGen, settings?.generation]);
 const lastBeepSecondRef = useRef(null);
 const lastTickSecondRef = useRef(null);
 
@@ -1466,18 +1542,13 @@ function playWinSound() {
 
 
 
-// ✅ Hide evo UI if there is no evolution before/after (e.g. legendaries, kecleon)
 const showEvoUI = useMemo(() => {
-  const baseLine = Array.isArray(evoLine) ? evoLine : [];
-
-  // normal evo chain exists (more than 1 stage)
+  const baseLine = Array.isArray(evoLineInGen) ? evoLineInGen : [];
   const hasNormalEvo = baseLine.length > 1;
-
-  // mega appended counts as "something to show"
   const hasMega = Array.isArray(evoLineWithMega) && evoLineWithMega.some((x) => !!x?.formKey);
-
   return hasNormalEvo || hasMega;
-}, [evoLine, evoLineWithMega]);
+}, [evoLineInGen, evoLineWithMega]);
+
 useEffect(() => {
   let alive = true;
 
@@ -2850,8 +2921,8 @@ useEffect(() => {
                         </div>
 
                         <div style={pokeHeroRightBadge}>
-                          <div style={{ fontSize: 11, opacity: 0.8, fontWeight: 900 }}>Dex</div>
-                          <div style={{ fontWeight: 900 }}>#{draft.current.dexId}</div>
+                          <div style={{ fontSize: 11, opacity: 0.8, fontWeight: 600 }}>Dex</div>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>#{draft.current.dexId}</div>
                         </div>
                       </div>
                     </div>
@@ -2859,7 +2930,6 @@ useEffect(() => {
 
                   <div style={{ textAlign: "center", justifySelf: "center" }}>
                     <div style={{ fontSize: 20, fontWeight: 900 }}>{draft.current.name}</div>
-                    <div style={{ opacity: 0.8 }}>Dex #{draft.current.dexId}</div>
 
                     {(() => {
                       const tag = getSpecialTag(draft.current.dexId);
@@ -3206,19 +3276,23 @@ useEffect(() => {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
             {draft.teamIds.map((tid) => {
               const team = draft.teams?.[tid] ?? [];
+              const showDraftedAsIs = !!settings.keepEvolvedForms && !settings.baseFormsOnly;
               const money = draft.budgets?.[tid] ?? 0;
               const free = teamIsFree(tid);
 
-              // ✅ Anzeige nur Basisformen (dedupe)
-              const baseDisplay = [];
-              const seen = new Set();
-              for (const p of team) {
-                const baseDex = baseDexIdOf(p.dexId);
-                if (!seen.has(baseDex)) {
-                  seen.add(baseDex);
-                  baseDisplay.push({ baseDexId: baseDex, original: p });
-                }
-              }
+              // ✅ Anzeige nur Basisformen (dedupe) – aber nur wenn wir NICHT "as drafted" anzeigen
+let baseDisplay = [];
+if (!showDraftedAsIs) {
+  const seen = new Set();
+  for (const p of team) {
+    const baseDex = baseDexIdOf(p.dexId);
+    if (!seen.has(baseDex)) {
+      seen.add(baseDex);
+      baseDisplay.push({ baseDexId: baseDex, original: p });
+    }
+  }
+}
+
 
               return (
                 <div
@@ -3236,31 +3310,62 @@ useEffect(() => {
 
                   <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
                     {team.length === 0 ? (
-                      <div style={{ opacity: 0.7 }}>Keine Pokémon</div>
-                    ) : (
-                      baseDisplay.map((x, idx) => {
-                        const baseName = getPokemonName(x.baseDexId);
-                        return (
-                          <div key={`${tid}-base-row-${x.baseDexId}-${idx}`} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <button style={imgBtn} onClick={() => openPokemonDetails(x.baseDexId)} title="Pokémon-Details öffnen">
-                              <img
-  src={x.original?.imageUrl || dexIdToImageUrl(x.baseDexId)}
-  alt={x.original?.name || baseName}
-  width={44}
-  height={44}
-  style={{ imageRendering: "pixelated" }}
-/>
-                            </button>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: 900 }}>{baseName}</div>
-                              <div style={{ opacity: 0.8, fontSize: 12 }}>
-                                Basisform · (gedraftet: {x.original?.name ?? getPokemonName(x.original?.dexId)} · {x.original?.price ?? "?"}€)
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
+  <div style={{ opacity: 0.7 }}>Keine Pokémon</div>
+) : showDraftedAsIs ? (
+  // ✅ Modus: "Alle erlauben" → exakt so anzeigen wie gedraftet
+  team.map((p, idx) => {
+    const name = p?.name || getPokemonName(p?.dexId);
+    const price = p?.price ?? "?";
+    const img = p?.imageUrl || dexIdToImageUrl(p?.dexId);
+
+    return (
+      <div key={`${tid}-drafted-row-${p?.dexId}-${idx}`} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button style={imgBtn} onClick={() => openPokemonDetails(p?.dexId)} title="Pokémon-Details öffnen">
+          <img
+            src={img}
+            alt={name}
+            width={44}
+            height={44}
+            style={{ imageRendering: "pixelated" }}
+          />
+        </button>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 900 }}>{name}</div>
+          <div style={{ opacity: 0.8, fontSize: 12 }}>
+            Gedraftet · {price}€
+          </div>
+        </div>
+      </div>
+    );
+  })
+) : (
+  // ✅ Modus: "Basisform only" → Basisformen anzeigen (wie vorher)
+  baseDisplay.map((x, idx) => {
+    const baseName = getPokemonName(x.baseDexId);
+    return (
+      <div key={`${tid}-base-row-${x.baseDexId}-${idx}`} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button style={imgBtn} onClick={() => openPokemonDetails(x.baseDexId)} title="Pokémon-Details öffnen">
+          <img
+            src={x.original?.imageUrl || dexIdToImageUrl(x.baseDexId)}
+            alt={x.original?.name || baseName}
+            width={44}
+            height={44}
+            style={{ imageRendering: "pixelated" }}
+          />
+        </button>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 900 }}>{baseName}</div>
+          <div style={{ opacity: 0.8, fontSize: 12 }}>
+            Basisform · (gedraftet: {x.original?.name ?? getPokemonName(x.original?.dexId)} · {x.original?.price ?? "?"}€)
+          </div>
+        </div>
+      </div>
+    );
+  })
+)}
+
                   </div>
                 </div>
               );
@@ -3489,10 +3594,10 @@ const pokeHeroOverlayFlash = {};
 
 const pokeHeroRightBadge = {
   borderRadius: 12,
-  padding: "10px 10px",
+  padding: "7px 7px",
   background: "rgba(0,0,0,0.40)",
   border: "1px solid rgba(255,255,255,0.14)",
-  minWidth: 70,
+  minWidth: 7,
   textAlign: "center",
 };
 

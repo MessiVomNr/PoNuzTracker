@@ -14,7 +14,39 @@ import {
   runTransaction,
   arrayUnion,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
+// ===========================
+// PlayerId persist per room (localStorage)
+// ===========================
+const PLAYER_ID_LS_KEY = "ponuztracker_versus_player_ids_v1";
+
+export function getStoredPlayerId(roomId) {
+  try {
+    const rid = String(roomId || "").trim().toUpperCase();
+    if (!rid) return "";
+    const raw = localStorage.getItem(PLAYER_ID_LS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    return String(obj?.[rid] || "");
+  } catch {
+    return "";
+  }
+}
+
+export function storePlayerId(roomId, playerId) {
+  try {
+    const rid = String(roomId || "").trim().toUpperCase();
+    const pid = String(playerId || "");
+    if (!rid || !pid) return;
+
+    const raw = localStorage.getItem(PLAYER_ID_LS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    obj[rid] = pid;
+
+    localStorage.setItem(PLAYER_ID_LS_KEY, JSON.stringify(obj));
+  } catch {
+    // ignore
+  }
+}
 
 const COLLECTION = "versusRooms";
 
@@ -60,8 +92,11 @@ export async function createRoom(playerOrName) {
   }
 
   const playerId = genPlayerId();
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("Nicht eingeloggt (Auth UID fehlt).");
 
   const data = {
+    createdByUid: uid,
     id: rid,
     status: "lobby",
     createdAt: serverTimestamp(),
@@ -86,7 +121,7 @@ export async function createRoom(playerOrName) {
   };
 
   await setDoc(roomRef(rid), data);
-
+storePlayerId(rid, playerId);
   return { roomId: rid, playerId };
 }
 
@@ -128,7 +163,7 @@ export async function joinRoom(roomId, playerOrName) {
       updatedAt: serverTimestamp(),
     });
   });
-
+storePlayerId(rid, playerId);
   return { roomId: rid, playerId };
 }
 

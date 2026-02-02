@@ -1,6 +1,11 @@
-import React, { useState } from "react";
+// src/pages/VersusHome.jsx
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createRoom, joinRoom } from "./versusService";
+import { createRoom, joinRoom, getStoredPlayerId } from "./versusService";
+import RecentVersusRoomsPanel from "./recentVersusRoomsPanel";
+import { upsertRecentVersusRoom } from "./recentVersusRooms";
+import { db } from "../firebase";
+import { doc, deleteDoc, getDoc } from "firebase/firestore";
 
 export default function VersusHome() {
   const nav = useNavigate();
@@ -16,16 +21,41 @@ export default function VersusHome() {
     return String(v || "").trim().toUpperCase();
   }
 
+  // ✅ Helper: PlayerId für einen Room aus sessionStorage lesen
+  function getSessionPlayerIdForRoom(rid) {
+    const key = `versus_player_${rid}`;
+    return sessionStorage.getItem(key) || "";
+  }
+
+  // ✅ Nach Create/Join: recent speichern (inkl. Titel aus Firestore, falls vorhanden)
+  async function saveRecentRoom(rid) {
+    try {
+      const snap = await getDoc(doc(db, "versusRooms", rid));
+      const data = snap.exists() ? snap.data() : null;
+      const title = String(data?.title || data?.roomTitle || "").trim();
+      upsertRecentVersusRoom({ roomId: rid, title, lastSeenAt: Date.now() });
+    } catch {
+      // fallback ohne title
+      upsertRecentVersusRoom({ roomId: rid, title: "", lastSeenAt: Date.now() });
+    }
+  }
+
   async function onCreate() {
     setErr("");
     try {
       const displayName = normName(name);
 
-      // createRoom erwartet STRING (nicht {displayName: ...})
+      // createRoom erwartet STRING
       const res = await createRoom(displayName);
 
       const rid = normRoomId(res.roomId);
-      sessionStorage.setItem(`versus_player_${rid}`, res.playerId);
+      const pid = String(res.playerId || "");
+
+      // session storage (wie du es schon machst)
+      sessionStorage.setItem(`versus_player_${rid}`, pid);
+
+      // ✅ recent upsert
+      await saveRecentRoom(rid);
 
       nav(`/versus/${rid}`);
     } catch (e) {
@@ -48,12 +78,106 @@ export default function VersusHome() {
       const res = await joinRoom(rid, displayName);
 
       const finalRid = normRoomId(res.roomId);
-      sessionStorage.setItem(`versus_player_${finalRid}`, res.playerId);
+      const pid = String(res.playerId || "");
+
+      sessionStorage.setItem(`versus_player_${finalRid}`, pid);
+
+      // ✅ recent upsert
+      await saveRecentRoom(finalRid);
 
       nav(`/versus/${finalRid}`);
     } catch (e) {
       setErr(e?.message || String(e));
     }
+  }
+
+  // ✅ Reconnect aus Recent Panel
+  async function reconnectToRoom(roomIdFromList) {
+    setErr("");
+    const rid = normRoomId(roomIdFromList);
+    if (!rid) return;
+// ✅ Reconnect = alten Player wiederherstellen
+const oldPid = getStoredPlayerId(rid);
+if (oldPid) {
+  sessionStorage.setItem(`versus_player_${rid}`, oldPid);
+}
+
+    try {
+      const snap = await getDoc(doc(db, "versusRooms", rid));
+      if (!snap.exists()) {
+        setErr("Lobby nicht gefunden (evtl. gelöscht).");
+        return;
+      }
+
+      // ✅ recent wieder nach oben pushen
+      await saveRecentRoom(rid);
+
+      nav(`/versus/${rid}`);
+    } catch (e) {
+      setErr(e?.message || "Reconnect fehlgeschlagen.");
+    }
+  }
+
+  // ✅ Host-Check: nur Host darf löschen (UI + extra Safety)
+  async function isHostOfRoom(roomIdFromList) {
+    const rid = normRoomId(roomIdFromList);
+    if (!rid) return false;
+
+    // Unser playerId aus sessionStorage (wichtig: nur wenn du schonmal drin warst)
+    const myPid = getSessionPlayerIdForRoom(rid);
+    if (!myPid) return false;
+
+    try {
+      const snap = await getDoc(doc(db, "versusRooms", rid));
+      if (!snap.exists()) return false;
+
+      const data = snap.data() || {};
+      return String(data?.hostPlayerId || "") === String(myPid);
+    } catch {
+      return false;
+    }
+  }
+
+  // ✅ Lobby löschen (Firestore)
+  async function deleteLobby(roomIdFromList) {
+    setErr("");
+    const rid = normRoomId(roomIdFromList);
+    if (!rid) return;
+
+    // Safety: nur Host darf löschen
+    const okHost = await isHostOfRoom(rid);
+    if (!okHost) {
+      setErr("Du kannst diese Lobby nicht löschen (nicht Host / kein PlayerId gespeichert).");
+      return;
+    }
+
+    const ok = window.confirm(`Lobby ${rid} wirklich aus der Datenbank löschen?`);
+    if (!ok) return;
+
+    try {
+      await deleteDoc(doc(db, "versusRooms", rid));
+      removeRecentVersusRoom(rid);
+      // Panel entfernt das nicht automatisch aus localStorage; das machst du über “Aus Liste entfernen”
+      // (Optional könntest du hier zusätzlich removeRecentVersusRoom(rid) aufrufen)
+    } catch (e) {
+      setErr("Raum wurde gelöscht");
+    }
+  }
+
+  // ✅ canDeleteRoom für Panel (async -> wir lösen das so: sync cache pro render)
+  // Wir bauen eine kleine Map, die pro roomId cached, ob Host.
+  const [hostMap, setHostMap] = useState({}); // { [rid]: boolean }
+
+  async function ensureHostFlag(rid) {
+    const id = normRoomId(rid);
+    if (!id) return false;
+
+    // already cached?
+    if (Object.prototype.hasOwnProperty.call(hostMap, id)) return hostMap[id];
+
+    const ok = await isHostOfRoom(id);
+    setHostMap((prev) => ({ ...prev, [id]: ok }));
+    return ok;
   }
 
   return (
@@ -81,15 +205,33 @@ export default function VersusHome() {
       <h2>Versus</h2>
       <p>Erstelle einen Room oder tritt einem Room bei.</p>
 
+      {/* ✅ Recent Lobbys Panel */}
+      <div style={{ marginTop: 12, marginBottom: 16 }}>
+        <RecentVersusRoomsPanel
+          onReconnect={(rid) => reconnectToRoom(rid)}
+          onDeleteRoom={(rid) => deleteLobby(rid)}
+          canDeleteRoom={(rid) => {
+            const id = normRoomId(rid);
+            if (!id) return false;
+
+            // falls noch nicht geladen, async nachladen (fire-and-forget) und erstmal false
+            if (!Object.prototype.hasOwnProperty.call(hostMap, id)) {
+              ensureHostFlag(id);
+              return false;
+            }
+            return !!hostMap[id];
+          }}
+        />
+      </div>
+
       <label style={{ display: "block", marginTop: 12 }}>Dein Name</label>
       <input
         value={name}
         onChange={(e) => {
-  const v = e.target.value;
-  setName(v);
-  localStorage.setItem("versusPlayerName", v);
-}}
-
+          const v = e.target.value;
+          setName(v);
+          localStorage.setItem("versusPlayerName", v);
+        }}
         style={{ width: "100%", padding: 10 }}
       />
 
