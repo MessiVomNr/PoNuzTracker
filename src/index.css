@@ -561,3 +561,149 @@ body.dark-mode .poke-option.selected {
     align-items: center;
   }
 }
+/* =========================================================
+   Versus Background: dark + subtle contours
+========================================================= */
+
+/* =========================================================
+   Versus Background: global (whole screen) via body class
+========================================================= */
+body.versus-page {
+  background: #0b0c10; /* fallback */
+}
+
+/* Layer 1: Licht + Vignette */
+body.versus-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+
+  background:
+    radial-gradient(980px 560px at 14% 8%, rgba(255, 70, 90, 0.16), transparent 62%),
+    radial-gradient(820px 520px at 88% 10%, rgba(255, 200, 80, 0.13), transparent 64%),
+    radial-gradient(980px 720px at 55% 92%, rgba(90, 140, 255, 0.14), transparent 68%),
+    radial-gradient(900px 600px at 78% 70%, rgba(60, 220, 170, 0.08), transparent 62%),
+    radial-gradient(circle at 50% 30%, transparent 0%, rgba(0,0,0,0.35) 60%, rgba(0,0,0,0.82) 100%);
+}
+
+
+
+/* Layer 2: Konturen */
+body.versus-page::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+
+  background:
+    /* Vignette (macht die Ränder “cinematic”) */
+    radial-gradient(circle at 50% 35%,
+      rgba(0,0,0,0) 0%,
+      rgba(0,0,0,0.35) 60%,
+      rgba(0,0,0,0.78) 100%
+    ),
+
+    /* Subtile Noise/Grain ohne Bild-Download (nur CSS) */
+    repeating-linear-gradient(
+      0deg,
+      rgba(255,255,255,0.020) 0px,
+      rgba(255,255,255,0.020) 1px,
+      transparent 2px,
+      transparent 5px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0,0,0,0.020) 0px,
+      rgba(0,0,0,0.020) 1px,
+      transparent 2px,
+      transparent 6px
+    );
+
+  opacity: 0.55; /* Gesamtintensität vom Overlay */
+  mix-blend-mode: overlay;
+}
+
+
+
+/* Root muss über den Background-Layern liegen */
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/* Safety: body/html transparent lassen, damit pseudo-elemente sichtbar sind */
+html, body {
+  background: transparent;
+}
+/* Versus Timer: last seconds warning */
+.timer-urgent {
+  box-shadow: 0 0 0 1px rgba(255, 80, 80, 0.55), 0 0 18px rgba(255, 80, 80, 0.18);
+}
+
+.timer-urgent .timer-display {
+  color: rgba(255, 110, 110, 1);
+  text-shadow: 0 0 10px rgba(255, 80, 80, 0.25);
+  animation: timerPulse 0.9s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+  0%   { transform: scale(1);   opacity: 0.85; }
+  50%  { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1);   opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-urgent .timer-display { animation: none; }
+}
+/* ================================
+   CLEAN RANGE SLIDER (NO OFFSET)
+================================ */
+
+/* Grundreset */
+.vs-vol {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 6px;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+/* Track */
+.vs-vol::-webkit-slider-runnable-track {
+  height: 6px;
+  background: #ffffff;
+  border-radius: 999px;
+}
+
+/* Thumb */
+.vs-vol::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #a855f7;
+  border-radius: 50%;
+  margin-top: -4px; /* exakt zentrieren */
+  cursor: pointer;
+}
+
+/* Firefox */
+.vs-vol::-moz-range-track {
+  height: 6px;
+  background: #ffffff;
+  border-radius: 999px;
+}
+
+.vs-vol::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: #a855f7;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}

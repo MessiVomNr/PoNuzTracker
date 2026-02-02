@@ -399,63 +399,118 @@ const TYPE_LABELS_DE = {
   steel: "Stahl",
   fairy: "Fee",
 };
+// ===========================
+// Host Settings Persistence (localStorage)
+// ===========================
+const HOST_SETTINGS_KEY = "versus_host_settings_v1";
+
+const DEFAULT_HOST_SETTINGS = {
+  generation: 1,
+  participants: 2,
+  budgetPerTeam: 10000,
+  totalPokemon: 12,
+  secondsPerBid: 10,
+
+  // Draft-Modus Default: "Alle erlauben (bleibt wie gedraftet)"
+  baseFormsOnly: false,
+  keepEvolvedForms: true,
+
+  // Pool-Filter Defaults: alles erlaubt (Checkboxen nicht gesetzt)
+  allowLegendary: true,
+  allowSubLegendary: true,
+  allowMythical: true,
+  allowPseudo: true,
+};
+
+function loadHostSettingsFromLS() {
+  try {
+    const raw = localStorage.getItem(HOST_SETTINGS_KEY);
+    if (!raw) return { ...DEFAULT_HOST_SETTINGS };
+
+    const obj = JSON.parse(raw);
+    // Merge + Fallback, damit alte Versionen nicht crashen
+    return { ...DEFAULT_HOST_SETTINGS, ...(obj || {}) };
+  } catch {
+    return { ...DEFAULT_HOST_SETTINGS };
+  }
+}
+
+function saveHostSettingsToLS(nextSettings) {
+  try {
+    const payload = { ...DEFAULT_HOST_SETTINGS, ...(nextSettings || {}) };
+    localStorage.setItem(HOST_SETTINGS_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore
+  }
+}
+
+// ===========================
+// Special Sets (für Badges + Pool-Filter)
+// ===========================
+const STARTERS = new Set([
+  // Gen 1
+  1, 2, 3, 4, 5, 6, 7, 8, 9,
+  // Gen 2
+  152, 153, 154, 155, 156, 157, 158, 159, 160,
+  // Gen 3
+  252, 253, 254, 255, 256, 257, 258, 259, 260,
+  // Gen 4
+  387, 388, 389, 390, 391, 392, 393, 394, 395,
+  // Gen 5
+  495, 496, 497, 498, 499, 500, 501, 502, 503,
+  // Gen 6
+  650, 651, 652, 653, 654, 655, 656, 657, 658,
+]);
+
+const PSEUDO = new Set([149, 248, 373, 376, 445, 635, 706]);
+
+const LEGENDARY = new Set([
+  144, 145, 146, 150,
+  243, 244, 245, 249, 250,
+  377, 378, 379, 380, 381, 382, 383, 384,
+  480, 481, 482, 483, 484, 485, 486, 487, 488,
+  494,
+  716, 717, 718,
+]);
+
+const MYTHICAL = new Set([
+  151, 251, 385, 386, 489, 490, 491, 492, 493, 494,
+  647, 648, 649,
+  719, 720,
+]);
+
+const SUB_LEGENDARY = new Set([
+  144, 145, 146, 150,
+  243, 244, 245,
+  377, 378, 379, 380, 381,
+  480, 481, 482,
+  647, 648,
+]);
+
+function getSpecialFlags(dexIdRaw) {
+  const dexId = Number(dexIdRaw);
+  return {
+    starter: STARTERS.has(dexId),
+    pseudo: PSEUDO.has(dexId),
+    legendary: LEGENDARY.has(dexId),
+    mythical: MYTHICAL.has(dexId),
+    subLegendary: SUB_LEGENDARY.has(dexId),
+  };
+}
 
 function getSpecialTag(dexIdRaw) {
   const dexId = Number(dexIdRaw);
+  const f = getSpecialFlags(dexId);
 
-  // ✅ Starter (komplette Reihen)
-  const STARTERS = new Set([
-    // Gen 1
-    1, 2, 3, 4, 5, 6, 7, 8, 9,
-    // Gen 2
-    152, 153, 154, 155, 156, 157, 158, 159, 160,
-    // Gen 3
-    252, 253, 254, 255, 256, 257, 258, 259, 260,
-    // Gen 4
-    387, 388, 389, 390, 391, 392, 393, 394, 395,
-    // Gen 5
-    495, 496, 497, 498, 499, 500, 501, 502, 503,
-    // Gen 6
-    650, 651, 652, 653, 654, 655, 656, 657, 658,
-  ]);
-
-  // ✅ Pseudo-Legis (Endstufen)
-  const PSEUDO = new Set([149, 248, 373, 376, 445, 635, 706]);
-
-  // ✅ Legendär (grobe Auswahl, kannst du später easy erweitern)
-  const LEGENDARY = new Set([
-    144, 145, 146, 150, // Kanto
-    243, 244, 245, 249, 250, // Johto
-    377, 378, 379, 380, 381, 382, 383, 384, // Hoenn
-    480, 481, 482, 483, 484, 485, 486, 487, 488, // Sinnoh
-    494, // Unova
-    716, 717, 718, // Kalos
-  ]);
-
-  // ✅ Mythisch
-  const MYTHICAL = new Set([
-    151, 251, 385, 386, 489, 490, 491, 492, 493, 494,
-    647, 648, 649,
-    719, 720,
-  ]);
-
-  // ✅ Sub-Legendär (hier “Legendary-like”, aber nicht Boxart)
-  const SUB_LEGENDARY = new Set([
-    144, 145, 146, 150,
-    243, 244, 245,
-    377, 378, 379, 380, 381,
-    480, 481, 482,
-    647, 648,
-  ]);
-
-  if (MYTHICAL.has(dexId)) return { label: "Mythisch", color: "#facc15", text: "#111827" };
-  if (LEGENDARY.has(dexId)) return { label: "Legendär", color: "#a855f7", text: "white" };
-  if (SUB_LEGENDARY.has(dexId)) return { label: "Sub-Legendär", color: "#60a5fa", text: "#0b1220" };
-  if (PSEUDO.has(dexId)) return { label: "Pseudo-Legi", color: "#f97316", text: "#0b1220" };
-  if (STARTERS.has(dexId)) return { label: "Starter-Reihe", color: "#22c55e", text: "#06210f" };
+  if (f.mythical) return { label: "Mythisch", color: "#facc15", text: "#111827" };
+  if (f.legendary) return { label: "Legendär", color: "#a855f7", text: "white" };
+  if (f.subLegendary) return { label: "Sub-Legendär", color: "#60a5fa", text: "#0b1220" };
+  if (f.pseudo) return { label: "Pseudo-Legi", color: "#f97316", text: "#0b1220" };
+  if (f.starter) return { label: "Starter-Reihe", color: "#22c55e", text: "#06210f" };
 
   return null;
 }
+
 
 function labelPlayer(playerId, room) {
   const arr = room?.players || [];
@@ -519,6 +574,86 @@ function findNextAllowedFromPool(pool, startIndex, bannedSet) {
   return { nextDex: null, nextIndex: idx };
 }
 
+// ===========================
+// Pool Filter Helpers
+// ===========================
+
+// Cache: dexId -> true/false ob Basisform (über pokemon-species.evolves_from_species)
+const baseFormFlagCache = new Map();
+
+async function isBaseFormDexId(dexIdRaw) {
+  const dexId = Number(dexIdRaw);
+  if (!dexId) return false;
+
+  if (baseFormFlagCache.has(dexId)) return baseFormFlagCache.get(dexId);
+
+  try {
+    const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${dexId}`);
+    if (!res.ok) throw new Error("species fetch failed");
+    const data = await res.json();
+    const isBase = !data?.evolves_from_species; // null => Basisform
+    baseFormFlagCache.set(dexId, !!isBase);
+    return !!isBase;
+  } catch {
+    baseFormFlagCache.set(dexId, false);
+    return false;
+  }
+}
+
+async function buildFilteredPool(rawPool, settings, gen) {
+  let pool = Array.isArray(rawPool) ? [...rawPool] : [];
+
+  // 1) Kategorie-Filter (Legendär/Mythisch/etc.)
+  pool = pool.filter((item) => {
+    // Mega -> anhand base dex filtern
+    const dexId = isMegaPoolItem(item) ? Number(megaMetaFromItem(item)?.base) : Number(item);
+    if (!dexId) return false;
+
+    const f = getSpecialFlags(dexId);
+
+    if (!settings.allowLegendary && f.legendary) return false;
+    if (!settings.allowSubLegendary && f.subLegendary) return false;
+    if (!settings.allowMythical && f.mythical) return false;
+    if (!settings.allowPseudo && f.pseudo) return false;
+
+    return true;
+  });
+
+  // 2) Basisform only: nur Basisformen, und Megas raus
+  if (settings.baseFormsOnly) {
+    // Megas raus (weil keine Basisform)
+    pool = pool.filter((x) => !isMegaPoolItem(x));
+
+    // Basisform-Check nur für normale DexIds
+    const uniq = Array.from(new Set(pool.map((x) => Number(x)).filter(Boolean)));
+
+    // parallelisiert, aber simpel
+    const isBaseMap = new Map();
+    await Promise.all(
+      uniq.map(async (id) => {
+        const ok = await isBaseFormDexId(id);
+        isBaseMap.set(id, ok);
+      })
+    );
+
+    pool = pool.filter((x) => {
+      const id = Number(x);
+      return !!isBaseMap.get(id);
+    });
+  }
+
+  // Safety: falls durch Filter leer geworden
+  if (pool.length === 0) {
+    // fallback: wenigstens irgendwas
+    pool = Array.isArray(rawPool) ? [...rawPool] : [];
+    if (gen >= 6) {
+      const megaItems = MEGA_FORMS.map((m) => `mega:${m.form}`);
+      pool = shuffleArray([...pool, ...megaItems]);
+    }
+  }
+
+  return pool;
+}
 
 export default function DuoVersusAuction() {
   const nav = useNavigate();
@@ -531,6 +666,30 @@ export default function DuoVersusAuction() {
   const [room, setRoom] = useState(null);
   const [err, setErr] = useState("");
   const [typeModalOpen, setTypeModalOpen] = useState(false);
+// 🔊 Mute Toggle (persist in localStorage)
+const [soundMuted, setSoundMuted] = useState(() => {
+  return localStorage.getItem("versusSoundMuted") === "1";
+});
+// 🔊 Master Volume in Prozent (0..100)
+const [soundVolume, setSoundVolume] = useState(() => {
+  const v = Number(localStorage.getItem("versusSoundVolume") ?? "80");
+  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 80;
+});
+
+
+function setMasterVolume(nextRaw) {
+  const next = Math.max(0, Math.min(1, Number(nextRaw)));
+  setSoundVolume(next);
+  localStorage.setItem("versusSoundVolume", String(next));
+}
+
+function toggleSoundMuted() {
+  setSoundMuted((v) => {
+    const next = !v;
+    localStorage.setItem("versusSoundMuted", next ? "1" : "0");
+    return next;
+  });
+}
 
   // ✅ NEW: Team types map for analysis modal
   const [teamTypesMap, setTeamTypesMap] = useState({}); // { [dexId]: ["water","flying"] }
@@ -553,6 +712,7 @@ export default function DuoVersusAuction() {
   const meIsHost = myPlayerId && hostPlayerId ? myPlayerId === hostPlayerId : false;
 
   function goLobby() {
+    stopAllAudio();
     nav(`/versus/`);
   }
 
@@ -570,21 +730,20 @@ export default function DuoVersusAuction() {
     }
   }, [room, roomId, nav]);
 
+  //hier kann der hintergrund entfernt werden
+//useEffect(() => {
+//  document.body.classList.add("versus-page");
+//  return () => document.body.classList.remove("versus-page");
+//}, []);
+
   const roomRef = useMemo(() => doc(db, "versusRooms", roomId), [roomId]);
 
   // ===== Shared Auction State in Firestore =====
   const auction = room?.versus?.auction || null;
 
   const phase = auction?.phase || "lobby"; // lobby | auction | results
-  const settings = auction?.settings || {
-    generation: 1,
-    participants: 2,
-    budgetPerTeam: 10000,
-    totalPokemon: 12,
-    secondsPerBid: 10,
-    keepEvolvedForms: false, // false = Basisform, true = so bleiben
-  };
-
+ const settings = auction?.settings || loadHostSettingsFromLS();
+  const genNum = clampInt(settings?.generation ?? 1, 1, 7);
   const teamOwners = auction?.teamOwners || {};
   const draft = auction?.draft || {
     auctionCountDone: 0,
@@ -626,6 +785,84 @@ export default function DuoVersusAuction() {
   }, [draft?.teams]);
 
   const timer = auction?.timer || { running: false, paused: false, remaining: settings.secondsPerBid };
+  // ============================
+// Battle Music Control (Step 4)
+// ============================
+const lastBattleDexRef = useRef(null);
+const lastBattleRunningRef = useRef(false);
+const winAudioRef = useRef(null);
+const winStopTimeoutRef = useRef(null);
+const lastAuctionCountRef = useRef(null);
+const startAudioRef = useRef(null); // start1/start2 (ein Player reicht)
+const endAudioRef = useRef(null);   // ende.mp3
+const introKeyRef = useRef(null);   // damit intro nur 1x pro Draft läuft
+const endKeyRef = useRef(null);     // damit ende nur 1x pro Results läuft
+
+
+useEffect(() => {
+  // wenn wir nicht in der Auction sind -> battle sicher aus
+  if (phase !== "auction") {
+  lastBattleDexRef.current = null;
+  lastBattleRunningRef.current = false;
+  stopAllAudio();
+  return;
+}
+
+
+  // nur wenn countdown wirklich läuft
+  const runningNow = !!timer?.running && !timer?.paused;
+
+  // wenn nicht running oder muted -> battle aus
+  if (!runningNow || soundMuted) {
+    lastBattleRunningRef.current = false;
+    stopBattle();
+    return;
+  }
+
+  const curDex = Number(draft?.current?.dexId || 0);
+
+  // ✅ Start, wenn running gerade erst true geworden ist
+  if (!lastBattleRunningRef.current && runningNow) {
+    lastBattleRunningRef.current = true;
+    lastBattleDexRef.current = curDex || null;
+    playBattleRestart();
+    return;
+  }
+
+  // ✅ Restart, wenn ein neues Pokémon kommt während running
+  if (curDex && lastBattleDexRef.current !== curDex) {
+    lastBattleDexRef.current = curDex;
+    playBattleRestart();
+  }
+}, [phase, timer?.running, timer?.paused, draft?.current?.dexId, soundMuted, genNum]);
+
+  // ===== Timer Warning (last 3s) =====
+const remainingSec = timer?.running ? Number(timer?.remaining ?? NaN) : NaN;
+const isUrgent = Number.isFinite(remainingSec) && remainingSec > 0 && remainingSec <= 3;
+useEffect(() => {
+  if (soundMuted) return;
+  // kein Timer oder pausiert -> reset
+  if (!Number.isFinite(remainingSec) || !timer?.running || timer?.paused) {
+    lastBeepSecondRef.current = null;
+    return;
+  }
+
+  // ✅ Nur bei 3,2,1 (einmal pro Sekunde)
+  if (remainingSec <= 3 && remainingSec >= 1) {
+    if (lastBeepSecondRef.current !== remainingSec) {
+      lastBeepSecondRef.current = remainingSec;
+
+      // 3 -> 880Hz, 2 -> 980Hz, 1 -> 1100Hz
+      const freq = remainingSec === 1 ? 1100 : remainingSec === 2 ? 980 : 880;
+      playBeep(freq, 95, 0.004 * (soundVolume ?? 0.6));
+    }
+  } else {
+    lastBeepSecondRef.current = null;
+  }
+}, [remainingSec, timer?.running, timer?.paused]);
+
+
+
   const teamIds = useMemo(() => {
     const count = Math.max(2, clampInt(settings.participants, 2, 8));
     return Array.from({ length: count }, (_, i) => teamIdFor(i));
@@ -657,6 +894,7 @@ export default function DuoVersusAuction() {
   }
 
   const lastBidRef = useRef(null);
+  const lastAwardCountRef = useRef(null); // für Win-Sound beim Zuschlag
 
   useEffect(() => {
     const bid = Number(auction?.draft?.highestBid ?? 0);
@@ -779,6 +1017,454 @@ export default function DuoVersusAuction() {
 
   return evoLine;
 }, [evoLine, settings?.generation]);
+const lastBeepSecondRef = useRef(null);
+const lastTickSecondRef = useRef(null);
+
+// mini beep ohne Datei (WebAudio)
+function playBeep(freq = 880, durationMs = 90, volume = 0.06) {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+
+    const ctx = new AudioCtx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+
+    o.type = "sine";
+    o.frequency.value = freq;
+    g.gain.value = volume;
+
+    o.connect(g);
+    g.connect(ctx.destination);
+
+    o.start();
+    setTimeout(() => {
+      o.stop();
+      ctx.close().catch(() => {});
+    }, durationMs);
+  } catch {
+    // ignore (z.B. wenn browser blockt)
+  }
+}
+// ============================
+// MP3 Engine (Gen-spezifisch)
+// public/audio/genX/battle.mp3
+// public/audio/genX/auctionWin.mp3
+// ============================
+const battleAudioRef = useRef(null);
+
+
+function battleSrcForGen(gen) {
+  return `/audio/gen${gen}/battle.mp3`;
+}
+function winSrcForGen(gen) {
+  return `/audio/gen${gen}/auctionWin.mp3`;
+}
+function start1SrcForGen(gen) {
+  return `/audio/gen${gen}/start1.mp3`;
+}
+function start2SrcForGen(gen) {
+  return `/audio/gen${gen}/start2.mp3`;
+}
+function end1SrcForGen(gen) {
+  return `/audio/gen${gen}/ende1.mp3`;
+}
+function end2SrcForGen(gen) {
+  return `/audio/gen${gen}/ende2.mp3`;
+}
+
+function ensureBattleAudio() {
+  if (!battleAudioRef.current) battleAudioRef.current = new Audio();
+  const a = battleAudioRef.current;
+
+a.loop = true;
+applyAudioSettings(a, 0.35);
+
+  const want = battleSrcForGen(genNum);
+  const wantAbs = window.location.origin + want;
+  if (a.src !== wantAbs) a.src = want;
+
+  return a;
+}
+
+function ensureWinAudio() {
+  if (!winAudioRef.current) winAudioRef.current = new Audio();
+  const w = winAudioRef.current;
+
+w.loop = false;
+applyAudioSettings(w, 0.9); // win lauter
+
+
+  const want = winSrcForGen(genNum);
+  const wantAbs = window.location.origin + want;
+  if (w.src !== wantAbs) w.src = want;
+
+  return w;
+}
+function applyAudioSettings(a, baseVolume = 1) {
+  if (!a) return;
+
+  const percent = Math.max(0, Math.min(100, soundVolume));
+  const vol = (percent / 100) * baseVolume;
+
+  a.muted = !!soundMuted;
+  a.volume = Math.max(0, Math.min(1, vol));
+}
+
+
+
+function stopBattle() {
+  const a = battleAudioRef.current;
+  if (!a) return;
+  try {
+    a.pause();
+    a.currentTime = 0;
+  } catch {}
+}
+function stopAllAudio() {
+  stopBattle();
+  stopWin();
+  stopIntro();
+  stopEnd();
+}
+
+async function playBattleRestart() {
+  if (soundMuted) return;
+
+  // ✅ Battle soll IMMER alles andere überschreiben
+  stopIntro();
+  stopEnd();
+  stopWin();
+
+  const a = ensureBattleAudio();
+
+  try {
+    a.pause();
+    a.currentTime = 0;
+    await a.play();
+  } catch {
+    // Autoplay kann blocken bis User-Interaktion -> ok
+  }
+}
+
+function stopIntro() {
+  const a = startAudioRef.current;
+  if (!a) return;
+  try {
+    a.onended = null;
+    a.pause();
+    a.currentTime = 0;
+  } catch {}
+}
+
+function stopEnd() {
+  const a = endAudioRef.current;
+  if (!a) return;
+  try {
+    a.onended = null;     // ✅ wichtig: chain reset
+    a.pause();
+    a.currentTime = 0;
+  } catch {}
+}
+
+function ensureStartAudio() {
+  if (startAudioRef.current) return startAudioRef.current;
+  const a = new Audio();
+  a.preload = "auto";
+  applyAudioSettings(a, 0.9);
+  startAudioRef.current = a;
+  return a;
+}
+
+function ensureEndAudio() {
+  if (endAudioRef.current) return endAudioRef.current;
+  const a = new Audio();
+  a.preload = "auto";
+  applyAudioSettings(a, 0.9);
+  endAudioRef.current = a;
+  return a;
+}
+
+// start1 -> (onended) -> start2
+function playIntroOnce(gen) {
+  if (soundMuted) return;
+
+  // Sicherheit: nichts überlappen lassen
+  stopBattle?.();
+  stopWin?.();
+  stopEnd();
+  stopIntro();
+
+  const a = ensureStartAudio();
+
+  a.onended = null;
+  a.src = start1SrcForGen(gen);
+  a.currentTime = 0;
+
+  const playStart2 = () => {
+    if (soundMuted) return;
+    a.onended = null;
+    a.src = start2SrcForGen(gen);
+    a.currentTime = 0;
+    a.play().catch(() => {});
+  };
+
+  a.onended = playStart2;
+  a.play().catch(() => {});
+}
+
+function playEndOnce(gen) {
+  if (soundMuted) return;
+
+  // Sicherheit: alles andere aus
+  stopBattle?.();
+  stopWin?.();
+  stopIntro();
+  stopEnd();
+
+  const a = ensureEndAudio();
+
+  a.onended = null;
+  a.src = end1SrcForGen(gen);
+  a.currentTime = 0;
+
+  const playEnd2 = () => {
+    if (soundMuted) return; // falls währenddessen gemutet wurde, starten wir Teil 2 nicht neu
+    a.onended = null;
+    a.src = end2SrcForGen(gen);
+    a.currentTime = 0;
+    a.play().catch(() => {});
+  };
+
+  a.onended = playEnd2;
+  a.play().catch(() => {});
+}
+
+
+
+
+function stopWin() {
+  if (winStopTimeoutRef.current) {
+    clearTimeout(winStopTimeoutRef.current);
+    winStopTimeoutRef.current = null;
+  }
+
+  const a = winAudioRef.current;
+  if (!a) return;
+
+  try {
+    a.pause();
+    a.currentTime = 0;
+  } catch {}
+}
+
+
+function playWinOnce() {
+  if (soundMuted) return;
+
+  const a = ensureWinAudio();
+
+  // falls Gen gewechselt hat, Quelle updaten
+  const want = winSrcForGen(genNum);
+  if (a.src && !a.src.endsWith(want)) {
+    a.src = want;
+  }
+
+  try {
+    a.pause();
+    a.currentTime = 0;
+    a.play().catch(() => {});
+  } catch {}
+    // nach 6 Sekunden automatisch stoppen
+  if (winStopTimeoutRef.current) clearTimeout(winStopTimeoutRef.current);
+  winStopTimeoutRef.current = setTimeout(() => {
+    stopWin();
+  }, 10000);
+
+}
+
+async function playAuctionWin() {
+  if (soundMuted) return;
+
+  // battle aus
+  stopBattle();
+
+  const w = ensureWinAudio();
+  try {
+    w.pause();
+    w.currentTime = 0;
+    await w.play();
+  } catch {
+    // Autoplay kann blocken -> ok
+  }
+}
+
+// Cleanup beim Unmount
+useEffect(() => {
+  return () => {
+    try { battleAudioRef.current?.pause(); } catch {}
+    try { winAudioRef.current?.pause(); } catch {}
+    battleAudioRef.current = null;
+    winAudioRef.current = null;
+  };
+}, []);
+useEffect(() => {
+  applyAudioSettings(battleAudioRef.current, 0.35);
+  applyAudioSettings(winAudioRef.current, 0.9);
+  applyAudioSettings(startAudioRef.current, 0.9);
+  applyAudioSettings(endAudioRef.current, 0.9);
+}, [soundMuted, soundVolume]);
+
+
+
+
+
+useEffect(() => {
+  // nur während der Auction relevant
+  if (phase !== "auction") {
+    lastAuctionCountRef.current = null;
+    stopWin();
+    return;
+  }
+
+  const count = Number(draft?.auctionCountDone ?? 0);
+
+  // erster Render -> nur merken, nicht abspielen
+  if (lastAuctionCountRef.current === null) {
+    lastAuctionCountRef.current = count;
+    return;
+  }
+
+  // wenn count hochgeht -> Pokémon wurde vergeben -> Win-Sound
+  if (count > lastAuctionCountRef.current) {
+    lastAuctionCountRef.current = count;
+
+    // battle stoppt sowieso, weil timer danach running:false ist,
+    // aber wir machen es hier "hart", damit es clean ist:
+    stopBattle?.();
+    playWinOnce();
+    return;
+  }
+
+  lastAuctionCountRef.current = count;
+}, [phase, draft?.auctionCountDone, soundMuted, genNum]);
+
+// ===== WebAudio Engine (re-use, no spam) =====
+const audioCtxRef = useRef(null);
+
+function getAudioCtx() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!audioCtxRef.current) audioCtxRef.current = new AudioCtx();
+  // manche Browser starten suspended -> versuchen zu aktivieren
+  if (audioCtxRef.current.state === "suspended") {
+    audioCtxRef.current.resume().catch(() => {});
+  }
+  return audioCtxRef.current;
+}
+
+// Leiser Tick (jede Sekunde während Timer läuft)
+function playTick() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+
+  try {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+
+    const t0 = ctx.currentTime;
+    o.type = "square";
+    o.frequency.setValueAtTime(220, t0);
+
+    // kurzes "clicky" envelope
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.035, t0 + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.06);
+
+    o.connect(g);
+    g.connect(ctx.destination);
+
+    o.start(t0);
+    o.stop(t0 + 0.07);
+  } catch {
+    // ignore
+  }
+}
+
+// Cooler Beep für die letzten 5 Sekunden (kleine 2-Ton Kombi)
+function playFinalBeep(secLeft) {
+  if (soundMuted) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+
+  try {
+    // 🔊 Lautstärke & Tonhöhe je nach Sekunde
+    let baseFreq = 700;
+    let volume = 0.04;
+
+    if (secLeft === 5) { baseFreq = 620; volume = 0.035; }
+    if (secLeft === 4) { baseFreq = 680; volume = 0.045; }
+
+    if (secLeft === 3) { baseFreq = 820; volume = 0.07; }
+    if (secLeft === 2) { baseFreq = 960; volume = 0.085; }
+    if (secLeft === 1) { baseFreq = 1100; volume = 0.11; }
+
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+
+    const t0 = ctx.currentTime;
+    o.type = "sine";
+
+    // kleiner "chirp"
+    o.frequency.setValueAtTime(baseFreq, t0);
+    o.frequency.exponentialRampToValueAtTime(baseFreq * 1.25, t0 + 0.1);
+
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(volume, t0 + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+
+    o.connect(g);
+    g.connect(ctx.destination);
+
+    o.start(t0);
+    o.stop(t0 + 0.15);
+  } catch {
+    // ignore
+  }
+}
+// 🎉 Fröhlicher Win-Sound (Pokemon-Style)
+function playWinSound() {
+  if (soundMuted) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+
+  try {
+    const t0 = ctx.currentTime;
+
+    const notes = [660, 880, 1100]; // fröhliche Dreiklang-Steigerung
+    notes.forEach((freq, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+
+      o.type = "triangle";
+      o.frequency.setValueAtTime(freq, t0 + i * 0.08);
+
+      g.gain.setValueAtTime(0.0001, t0 + i * 0.08);
+      g.gain.exponentialRampToValueAtTime(0.12, t0 + i * 0.08 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.08 + 0.18);
+
+      o.connect(g);
+      g.connect(ctx.destination);
+
+      o.start(t0 + i * 0.08);
+      o.stop(t0 + i * 0.08 + 0.2);
+    });
+  } catch {
+    // ignore
+  }
+}
+
+
 
 // ✅ Hide evo UI if there is no evolution before/after (e.g. legendaries, kecleon)
 const showEvoUI = useMemo(() => {
@@ -997,6 +1683,61 @@ useEffect(() => {
     });
   }, [JSON.stringify(myTeamPokemons), settings.keepEvolvedForms, JSON.stringify(teamTypesMap), JSON.stringify(baseDexMap)]);
 
+useEffect(() => {
+  // Intro soll laufen wenn Draft läuft, aber noch niemand geboten hat
+  if (phase !== "auction") return;
+  if (!draft?.current) return;
+
+  // sobald timer läuft (also Gebot kam), intro nicht (mehr) spielen
+  if (timer?.running) return;
+
+  // nur ganz am Anfang (0 verkauft)
+  if ((draft?.auctionCountDone ?? 0) !== 0) return;
+
+  // Key, damit es nur 1x pro Draft feuert
+  const key = `${roomId}|gen${genNum}|start|cur${draft.current.dexId}|tp${draft.totalPokemon}|pool${(draft.pool || []).length}`;
+
+  if (introKeyRef.current === key) return;
+  introKeyRef.current = key;
+
+  playIntroOnce(genNum);
+}, [
+  phase,
+  timer?.running,
+  draft?.auctionCountDone,
+  draft?.current?.dexId,
+  draft?.totalPokemon,
+  (draft?.pool || []).length,
+  genNum,
+  roomId,
+  soundMuted,
+]);
+useEffect(() => {
+  // ✅ sobald das erste Gebot kommt -> timer läuft -> Intro sofort aus
+  if (phase !== "auction") return;
+  if (!timer?.running || timer?.paused) return;
+
+  stopIntro();
+}, [phase, timer?.running, timer?.paused]);
+
+useEffect(() => {
+  if (phase !== "results") return;
+
+  const key = `${roomId}|gen${genNum}|end|done${draft?.auctionCountDone ?? 0}|tp${draft?.totalPokemon ?? 0}`;
+
+  if (endKeyRef.current === key) return;
+  endKeyRef.current = key;
+
+  playEndOnce(genNum);
+}, [
+  phase,
+  draft?.auctionCountDone,
+  draft?.totalPokemon,
+  genNum,
+  roomId,
+  soundMuted,
+]);
+
   // ✅ NEW: Load types for my team (for TypeModal analysis)
   useEffect(() => {
     let alive = true;
@@ -1060,14 +1801,7 @@ useEffect(() => {
 
     const initial = {
       phase: "lobby",
-      settings: {
-        generation: 1,
-        participants: 2,
-        budgetPerTeam: 10000,
-        totalPokemon: 12,
-        secondsPerBid: 10,
-        keepEvolvedForms: false,
-      },
+      settings: loadHostSettingsFromLS(),
       teamOwners: ensureTeamOwners(2, {}),
       draft: {
         auctionCountDone: 0,
@@ -1103,6 +1837,8 @@ useEffect(() => {
     if (!meIsHost) return;
 
     const nextSettings = { ...settings, ...partial };
+      // ✅ merken wie bei Namen (nur lokal, pro Gerät)
+  saveHostSettingsToLS(nextSettings);
     const count = Math.max(2, clampInt(nextSettings.participants, 2, 8));
 
     await updateDoc(roomRef, {
@@ -1216,6 +1952,11 @@ if (gen >= 6) {
   pool = shuffleArray([...pool, ...megaItems]);
 }
 
+// ✅ NEU: Pool-Filter anwenden (Basisform only + Legi/Mythisch/etc.)
+pool = await buildFilteredPool(pool, settings, gen);
+pool = shuffleArray(pool);
+
+
 const poolIndex = 0;
 const firstItem = pool[poolIndex] ?? null;
 
@@ -1242,6 +1983,11 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
         totalPokemon,
         secondsPerBid,
         keepEvolvedForms: !!settings.keepEvolvedForms,
+        baseFormsOnly: !!settings.baseFormsOnly,
+        allowLegendary: !!settings.allowLegendary,
+        allowSubLegendary: !!settings.allowSubLegendary,
+        allowMythical: !!settings.allowMythical,
+        allowPseudo: !!settings.allowPseudo,
       },
       "versus.auction.teamOwners": owners,
       "versus.auction.draft": {
@@ -1268,6 +2014,7 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
 
   async function restartDraftToSetup() {
     if (!meIsHost) return;
+    stopAllAudio();
 
     const participants = Math.max(2, clampInt(settings.participants, 2, 8));
     const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
@@ -1280,6 +2027,12 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
         budgetPerTeam: Math.max(0, clampInt(settings.budgetPerTeam, 0, 9999999)),
         totalPokemon: Math.max(1, clampInt(settings.totalPokemon, 1, 999)),
         secondsPerBid,
+        keepEvolvedForms: !!settings.keepEvolvedForms,
+        baseFormsOnly: !!settings.baseFormsOnly,
+        allowLegendary: !!settings.allowLegendary,
+        allowSubLegendary: !!settings.allowSubLegendary,
+        allowMythical: !!settings.allowMythical,
+        allowPseudo: !!settings.allowPseudo,
       },
       teamOwners: ensureTeamOwners(participants, {}), // ✅ alle Teams wieder frei
       draft: {
@@ -1400,6 +2153,29 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
 
     return () => clearInterval(iv);
   }, [meIsHost, phase, timer?.running, timer?.paused, roomRef]);
+// 🎉 Win-Sound genau dann, wenn ein Pokémon "zugeschlagen" wurde
+useEffect(() => {
+  // wir nehmen auctionCountDone als "sold counter"
+  const count = Number(draft?.auctionCountDone ?? 0);
+
+  // beim ersten Mount nur initialisieren (kein Sound beim Laden/Rejoin)
+  if (lastAwardCountRef.current === null) {
+    lastAwardCountRef.current = count;
+    return;
+  }
+
+  // wenn Count steigt -> genau ein Pokémon wurde vergeben
+  if (count > lastAwardCountRef.current) {
+    lastAwardCountRef.current = count;
+    playWinSound();
+    return;
+  }
+
+  // wenn Draft reset/restart -> Counter zurücksetzen
+  if (count < lastAwardCountRef.current) {
+    lastAwardCountRef.current = count;
+  }
+}, [draft?.auctionCountDone]);
 
   // When timer hits 0 -> host awards (with evo-line banning)
   useEffect(() => {
@@ -1576,6 +2352,46 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
               >
                 Typen / Analyse
               </button>
+<button
+  type="button"
+  style={btnGhostSmall}
+  onClick={toggleSoundMuted}
+  title={soundMuted ? "Sound aktivieren" : "Sound stummschalten"}
+>
+  {soundMuted ? "🔇 Sound" : "🔊 Sound"}
+</button>
+<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+  <span style={{ minWidth: 28 }}>Vol</span>
+
+  <input
+  type="range"
+  min={0}
+  max={100}
+  step={1}
+  value={soundVolume}
+  onChange={(e) => {
+    const v = Number(e.target.value);
+    setSoundVolume(v);
+    localStorage.setItem("versusSoundVolume", String(v));
+  }}
+  className="vs-vol"
+  style={{ width: 120 }}
+/>
+
+
+  <span
+    style={{
+      fontSize: 12,
+      opacity: 0.85,
+      width: 36,
+      textAlign: "right",
+      fontVariantNumeric: "tabular-nums",
+    }}
+  >
+    {soundVolume}%
+  </span>
+</div>
+
 
               {meIsHost && (
                 <button
@@ -1659,15 +2475,86 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
                     />
                   </Row>
 
-                  <Row label="Pokémon-Form im Team">
-                    <select
-                      value={settings.keepEvolvedForms ? "keep" : "base"}
-                      onChange={(e) => updateSettings({ keepEvolvedForms: e.target.value === "keep" })}
-                    >
-                      <option value="base">Basisform only</option>
-                      <option value="keep">Bleibt wie gedraftet</option>
-                    </select>
-                  </Row>
+                  <Row label="Draft-Modus">
+  <select
+    value={settings.baseFormsOnly ? "baseOnly" : "allKeep"}
+    onChange={(e) => {
+      const v = e.target.value;
+
+      // Modus A: Nur Basisformen im Pool + Team bleibt Basis
+      if (v === "baseOnly") {
+        updateSettings({
+          baseFormsOnly: true,
+          keepEvolvedForms: false,
+        });
+        return;
+      }
+
+      // Modus B: Alles erlaubt + bleibt wie gedraftet
+      updateSettings({
+        baseFormsOnly: false,
+        keepEvolvedForms: true,
+      });
+    }}
+  >
+    <option value="baseOnly">Basisform only</option>
+    <option value="allKeep">Alle erlauben</option>
+  </select>
+</Row>
+<div
+  style={{
+    marginTop: 6,
+    padding: 10,
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(0,0,0,0.18)",
+  }}
+>
+  <div style={{ fontWeight: 900, marginBottom: 8 }}>Pool-Filter</div>
+
+  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <input
+      type="checkbox"
+      checked={!settings.allowLegendary}
+      onChange={(e) => updateSettings({ allowLegendary: !e.target.checked })}
+    />
+    <span>Legendäre deaktivieren</span>
+  </label>
+
+  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <input
+      type="checkbox"
+      checked={!settings.allowSubLegendary}
+      onChange={(e) => updateSettings({ allowSubLegendary: !e.target.checked })}
+    />
+    <span>Sub-Legendäre deaktivieren</span>
+  </label>
+
+  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <input
+      type="checkbox"
+      checked={!settings.allowMythical}
+      onChange={(e) => updateSettings({ allowMythical: !e.target.checked })}
+    />
+    <span>Mythische deaktivieren</span>
+  </label>
+
+  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <input
+      type="checkbox"
+      checked={!settings.allowPseudo}
+      onChange={(e) => updateSettings({ allowPseudo: !e.target.checked })}
+    />
+    <span>Pseudo-Legendäre deaktivieren</span>
+  </label>
+
+  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>
+    Standardmäßig sind alle Kategorien erlaubt.  
+    Häkchen = diese Kategorie wird aus dem Draft-Pool entfernt.
+  </div>
+</div>
+
+
 
                   <button onClick={startDraft} style={btnPrimary}>
                     Draft starten
@@ -1918,8 +2805,8 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
                 </div>
 
                 {/* RIGHT: Pokémon + info (centered) */}
-                <div style={{ display: "grid", gap: 10, justifyItems: "center" }}>
-                  <div style={pokeHeroWrap}>
+                <div style={{ display: "grid", gap: 10, justifyItems: "stretch", width: "100%" }}>
+                  <div style={{ ...pokeHeroWrap, justifySelf: "center" }}>
                     <button
                       style={pokeHeroBtn}
                       onClick={() => openPokemonDetails(draft.current.dexId)}
@@ -1970,7 +2857,7 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
                     </div>
                   </div>
 
-                  <div style={{ textAlign: "center" }}>
+                  <div style={{ textAlign: "center", justifySelf: "center" }}>
                     <div style={{ fontSize: 20, fontWeight: 900 }}>{draft.current.name}</div>
                     <div style={{ opacity: 0.8 }}>Dex #{draft.current.dexId}</div>
 
@@ -2037,18 +2924,20 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
 
                       <div style={{ display: "grid", gap: 10, justifyItems: "start", width: "100%" }}>
                         <div
-                          style={{
-                            display: "flex",
-                            gap: 12,
-                            alignItems: "center",
-                            flexWrap: "nowrap",
-justifyContent: "flex-start",
-overflowX: "auto",
-overflowY: "hidden",
-paddingBottom: 6,
+  style={{
+    display: "flex",
+    gap: 1,
+    rowGap: 1,
+    alignItems: "center",
+    flexWrap: "wrap",          
+    justifyContent: "flex-start",
+    alignContent: "flex-start",
+    width: "100%",             
+    overflow: "hidden",        
+    paddingBottom: 6,
+  }}
+>
 
-                          }}
-                        >
                          {evoLineWithMega.map((p, idx) => {
   const name = p.nameOverride || getPokemonName(p.dexId);
   const method = p.evolvesToText;
@@ -2169,12 +3058,19 @@ paddingBottom: 6,
           </section>
 
           {/* Timer + Bid */}
-          <section style={{ ...panel, gridColumn: "2 / 3", height: "min(61.5vh)" }}>
+          <section
+  className={isUrgent ? "timer-urgent" : ""}
+  style={{ ...panel, gridColumn: "2 / 3", height: "min(61.5vh)" }}
+>
+
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
               <div style={{ fontWeight: 900 }}>Timer</div>
             </div>
 
-            <div style={timerBig}>{timer.running ? fmtSecs(timer.remaining) : "--"}</div>
+            <div className="timer-display" style={timerBig}>
+  {timer.running ? fmtSecs(timer.remaining) : "--"}
+</div>
+
             <div style={{ opacity: 0.8, marginBottom: 12 }}>
               {timer.running ? (timer.paused ? "Pausiert" : "Läuft") : "Startet bei erstem Gebot (≥ 100)"}
             </div>
