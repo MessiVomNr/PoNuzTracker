@@ -3886,11 +3886,15 @@ function StatBar({ label, value, max }) {
 
 const outer = {
   width: "100%",
-  height: "100%",
+  minHeight: "100vh",          // ✅ statt height:100%
   display: "grid",
   gap: 10,
-  overflow: "hidden",
+
+  overflowX: "auto",           // ✅ Finger nach rechts
+  overflowY: "auto",           // ✅ Finger nach unten
+  WebkitOverflowScrolling: "touch", // ✅ iOS Momentum-Scroll
 };
+
 
 const topLine = {
   display: "flex",
