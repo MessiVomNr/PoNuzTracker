@@ -7,6 +7,7 @@ import { doc, runTransaction, updateDoc, serverTimestamp, getDoc } from "firebas
 import TypeModal from "../versus/TypeModal";
 import { makeShuffledPool, dexIdToImageUrl, getDexCapForGen } from "../utils/pokemonPool";
 import { pokedex as fullPokedex } from "../data/pokedex.js";
+import { buildBots, decideBotBid, generateBotConfigs } from "../versus/botEngine";
 
 /* =========================================================
    Evolution Line (PokeAPI) + Cache (in-memory)
@@ -406,10 +407,12 @@ const HOST_SETTINGS_KEY = "versus_host_settings_v1";
 
 const DEFAULT_HOST_SETTINGS = {
   generation: 1,
-  participants: 2,
+  participants: 1,
   budgetPerTeam: 10000,
   totalPokemon: 12,
   secondsPerBid: 10,
+  botCount: 0,
+  botsConfig: [],
 
   // Draft-Modus Default: "Alle erlauben (bleibt wie gedraftet)"
   baseFormsOnly: false,
@@ -583,9 +586,54 @@ function getSpecialTag(dexIdRaw) {
 
 
 function labelPlayer(playerId, room) {
+  const id = String(playerId || "");
+
+  // ✅ Bot-Owner (reserviert/AI)
+  if (id.startsWith("bot:")) {
+    const idx = Number(id.slice(4)); // bot:1, bot:2, ...
+    const rid = String(room?.id || room?.roomId || room?.code || room?.versus?.roomId || "") || ""; // fallback
+    // roomId haben wir in deiner Komponente sowieso als const roomId
+    // aber hier sind wir außerhalb – darum notfalls rid leer lassen:
+    return botNameFor(rid || "room", idx || 1);
+  }
+
+  // ✅ echte Spieler
   const arr = room?.players || [];
-  const p = arr.find((x) => x.id === playerId);
-  return p?.displayName || playerId?.slice?.(0, 6) || String(playerId);
+  const p = arr.find((x) => x.id === id);
+  return p?.displayName || id?.slice?.(0, 6) || id || "—";
+}
+
+function stableHashInt(str) {
+  const s = String(str || "");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h >>> 0;
+}
+
+const BOT_NAMES = [
+  "Bid-Basti",
+  "Sparfuchs-Susi",
+  "Overbid-Olli",
+  "Flex-Fiona",
+  "AllIn-Andi",
+  "Knauser-Klaus",
+  "Hochbieter-Hugo",
+  "Sniper-Sabine",
+  "Tilt-Timo",
+  "Gönn-Dir-Gabi",
+  "Auktions-Achim",
+  "Münzen-Mario",
+  "Panic-Petra",
+  "Rage-Ronny",
+  "Budget-Betty",
+];
+
+function botNameFor(roomId, botIndex1Based) {
+  const base = stableHashInt(`${roomId}|bot|${botIndex1Based}`);
+  const name = BOT_NAMES[base % BOT_NAMES.length];
+  // kleines “Suffix”, damit sich Namen nicht doppeln
+  const tag = String((base % 90) + 10);
+  return `${name} #${tag}`;
 }
 
 function clampInt(v, min, max) {
@@ -933,10 +981,14 @@ useEffect(() => {
 
 
 
-  const teamIds = useMemo(() => {
-    const count = Math.max(2, clampInt(settings.participants, 2, 8));
-    return Array.from({ length: count }, (_, i) => teamIdFor(i));
-  }, [settings.participants]);
+const teamIds = useMemo(() => {
+  const humans = clampInt(settings.participants ?? 1, 1, 20);
+  const bots = clampInt(settings.botCount ?? 0, 0, 9);
+  const total = Math.min(20, humans + bots);   // ✅ max 20 Teams
+  return Array.from({ length: total }, (_, i) => teamIdFor(i));
+}, [settings.participants, settings.botCount]);
+
+
 
   const myTeamId = useMemo(() => {
     if (!myPlayerId) return null;
@@ -1910,14 +1962,54 @@ useEffect(() => {
     const nextSettings = { ...settings, ...partial };
       // ✅ merken wie bei Namen (nur lokal, pro Gerät)
   saveHostSettingsToLS(nextSettings);
-    const count = Math.max(2, clampInt(nextSettings.participants, 2, 8));
+  // ✅ wenn botCount verändert wurde: botsConfig passend machen
+const cnt = clampInt(nextSettings.botCount ?? 0, 0, 9);
+let cfg = Array.isArray(nextSettings.botsConfig) ? [...nextSettings.botsConfig] : [];
 
-    await updateDoc(roomRef, {
-      "versus.auction.settings": nextSettings,
-      "versus.auction.teamOwners": ensureTeamOwners(count, teamOwners),
-      "versus.auction.updatedAt": serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+if (cfg.length !== cnt) {
+  cfg = generateBotConfigs(cnt, Date.now());
+  nextSettings.botsConfig = cfg;
+}
+
+      // ✅ Spieler + Bots → totalTeams (max 10)
+  const playersCount = clampInt(nextSettings.participants ?? 1, 1, 10);
+  const botCount = clampInt(nextSettings.botCount ?? 0, 0, 9);
+  const totalTeams = Math.min(10, playersCount + botCount);
+
+  // falls zu viele Spieler eingestellt wurden, runter clampen
+  const finalPlayers = Math.min(playersCount, totalTeams);
+  const finalBots = Math.max(0, totalTeams - finalPlayers);
+
+  const normalizedSettings = {
+    ...nextSettings,
+    participants: finalPlayers,
+    botCount: finalBots,
+  };
+
+  saveHostSettingsToLS(normalizedSettings);
+
+  // ✅ TeamOwners auf totalTeams erweitern
+  const owners = ensureTeamOwners(totalTeams, teamOwners);
+
+  // ✅ Bot-Teams reservieren: team (index >= finalPlayers) bekommt owner "bot:X"
+  for (let i = 0; i < finalBots; i++) {
+    const teamIndex = finalPlayers + i; // 0-based
+    const tid = teamIdFor(teamIndex);   // team2, team3, ...
+    if (!owners[tid]) owners[tid] = `bot:${i + 1}`;
+  }
+
+  // ✅ Sicherheit: falls BotCount kleiner gemacht wurde -> alte bot:... owners entfernen
+  for (let i = totalTeams; i < 20; i++) {
+    const tid = teamIdFor(i);
+    if (owners[tid] && String(owners[tid]).startsWith("bot:")) delete owners[tid];
+  }
+
+  await updateDoc(roomRef, {
+    "versus.auction.settings": normalizedSettings,
+    "versus.auction.teamOwners": owners,
+    "versus.auction.updatedAt": serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
   }
 
   // ===== Team join/leave (sync, transaction) =====
@@ -2010,48 +2102,52 @@ useEffect(() => {
     if (!meIsHost) return;
 
     const gen = clampInt(settings.generation, 1, 7);
-    const participants = Math.max(2, clampInt(settings.participants, 2, 8));
-    const budgetPerTeam = Math.max(0, clampInt(settings.budgetPerTeam, 0, 9999999));
-    const totalPokemon = Math.max(1, clampInt(settings.totalPokemon, 1, 999));
-    const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
+   const participants = clampInt(settings.participants ?? 1, 1, 20);
+const botCount = clampInt(settings.botCount ?? 0, 0, 9);
 
-    let pool = makeShuffledPool(gen);
+const totalTeams = Math.min(20, participants + botCount);
+const finalParticipants = Math.min(participants, totalTeams);
+const finalBotCount = Math.max(0, totalTeams - finalParticipants);
 
-// ✅ Gen 6+ → Mega Formen zusätzlich in den Pool
-if (gen >= 6) {
-  const megaItems = MEGA_FORMS.map((m) => `mega:${m.form}`);
-  pool = shuffleArray([...pool, ...megaItems]);
+// ✅ bot configs (aus Lobby), falls leer -> generieren
+let botConfigs = Array.isArray(settings.botsConfig) ? [...settings.botsConfig] : [];
+if (botConfigs.length !== finalBotCount) {
+  botConfigs = generateBotConfigs(finalBotCount, Date.now());
 }
 
-// ✅ NEU: Pool-Filter anwenden (Basisform only + Legi/Mythisch/etc.)
-pool = await buildFilteredPool(pool, settings, gen);
-pool = shuffleArray(pool);
+// ✅ Bots erstellen: botTeams starten direkt nach den Human-Teams
+const bots = buildBots({
+  botConfigs,
+  startTeamIndex: finalParticipants + 1,
+});
 
+// ✅ TeamIds für alle Teams
+const localTeamIds = Array.from({ length: totalTeams }, (_, i) => teamIdFor(i));
 
-const poolIndex = 0;
-const firstItem = pool[poolIndex] ?? null;
+// ✅ owners für ALLE Teams (humans + bots)
+const owners = ensureTeamOwners(totalTeams, teamOwners);
 
-const current = firstItem ? await poolItemToCurrent(firstItem) : null;
+// ✅ Bot-Teams als belegt setzen
+for (const b of bots) {
+  owners[b.teamId] = b.id; // ownerId = bot.id
+}
 
+// bot teams sicher setzen (wie in lobby)
+for (let i = 0; i < finalBotCount; i++) {
+  const tid = teamIdFor(finalParticipants + i);
+  owners[tid] = `bot:${i + 1}`;
+}
 
-    const budgets = {};
-    const teams = {};
-    const localTeamIds = Array.from({ length: participants }, (_, i) => teamIdFor(i));
-    for (const tid of localTeamIds) {
-      budgets[tid] = budgetPerTeam;
-      teams[tid] = [];
-    }
-
-    // ensure owners exist
-    const owners = ensureTeamOwners(participants, teamOwners);
 
     await updateDoc(roomRef, {
       "versus.auction.phase": "auction",
       "versus.auction.settings": {
         generation: gen,
-        participants,
+        participants: finalParticipants,
+        botCount: finalBotCount,
         budgetPerTeam,
         totalPokemon,
+        botsConfig: botConfigs,
         secondsPerBid,
         keepEvolvedForms: !!settings.keepEvolvedForms,
         baseFormsOnly: !!settings.baseFormsOnly,
@@ -2067,6 +2163,7 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
         teamIds: localTeamIds,
         budgets,
         teams,
+        bots,
         pool,
         poolIndex,
         totalPokemon,
@@ -2188,6 +2285,124 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
       });
     });
   }
+async function placeBotBid(botTeamId, amountRaw) {
+  if (!meIsHost) return;
+  if (phase !== "auction") return;
+  if (!draft.current) return;
+  if (!botTeamId) return;
+
+  const amt = clampInt(amountRaw, 0, 999999999);
+  if (amt < 100) return;
+  if (amt % 100 !== 0) return;
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef);
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+    const a = data?.versus?.auction;
+    if (!a || a.phase !== "auction") return;
+
+    const d = a.draft || {};
+    const s = a.settings || settings;
+
+    const budgetsHere = d.budgets || {};
+    const budget = budgetsHere[botTeamId] ?? 0;
+
+    const highestBid = d.highestBid ?? 0;
+    const highestTeamId = d.highestTeamId ?? null;
+
+    // bot bietet nicht wenn er schon führt
+    if (highestTeamId === botTeamId) return;
+    if (amt <= highestBid) return;
+    if (amt > budget) return;
+
+    tx.update(roomRef, {
+      "versus.auction.draft.highestBid": amt,
+      "versus.auction.draft.highestTeamId": botTeamId,
+      "versus.auction.draft.hasStarted": true,
+      "versus.auction.timer.paused": false,
+      "versus.auction.timer.running": true,
+      "versus.auction.timer.remaining": clampInt(s.secondsPerBid ?? 10, 5, 60),
+      "versus.auction.updatedAt": serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+const lastBotReactKeyRef = useRef("");
+
+useEffect(() => {
+  if (!meIsHost) return;
+  if (phase !== "auction") return;
+  if (!draft?.current) return;
+
+  const bots = Array.isArray(draft?.bots) ? draft.bots : [];
+  if (bots.length === 0) return;
+
+  // nur reagieren wenn jemand anderes gerade führt
+  const hb = Number(draft.highestBid ?? 0);
+  const ht = draft.highestTeamId ?? null;
+
+  // key verhindert “spam” bei gleichen states
+  const picksLeft = Math.max(0, Number(draft.totalPokemon ?? 0) - Number(draft.auctionCountDone ?? 0));
+  const key = `${draft.current.dexId}|hb${hb}|ht${ht}|left${picksLeft}`;
+  if (lastBotReactKeyRef.current === key) return;
+  lastBotReactKeyRef.current = key;
+
+  // wenn noch niemand geboten hat, lassen wir Bots NICHT sofort eröffnen (optional)
+  // -> du kannst das später ändern, wenn Bots auch “open bid” machen sollen.
+  if (!draft.hasStarted) return;
+
+  // Bot soll nur bieten, wenn er nicht selbst führt
+  // Wir lassen “1 Bot pro Änderung” reagieren (sonst eskaliert es zu hart).
+  const currentDex = Number(draft.current.dexId);
+  const flags = getSpecialFlags(currentDex);
+
+  // welche bot bids sind möglich?
+  const candidates = [];
+  for (const b of bots) {
+    const myBudget = Number(draft.budgets?.[b.teamId] ?? 0);
+    const bid = decideBotBid({
+      bot: b,
+      myBudget,
+      highestBid: hb,
+      highestTeamId: ht,
+      minBidIncrement: 100,
+      specialFlags: flags,
+      picksLeft,
+      avgPrice,
+    });
+    if (bid && bid > hb) {
+      candidates.push({ teamId: b.teamId, bid });
+    }
+  }
+
+  if (candidates.length === 0) return;
+
+  // “best bid” nehmen (macht Bots gefährlicher). Alternativ random.
+  candidates.sort((a, b) => b.bid - a.bid);
+  const chosen = candidates[0];
+
+  // kleine menschliche Verzögerung
+  const delay = 250 + Math.floor(Math.random() * 850);
+  const t = setTimeout(() => {
+    placeBotBid(chosen.teamId, chosen.bid).catch(() => {});
+  }, delay);
+
+  return () => clearTimeout(t);
+}, [
+  meIsHost,
+  phase,
+  draft?.current?.dexId,
+  draft?.highestBid,
+  draft?.highestTeamId,
+  draft?.hasStarted,
+  draft?.auctionCountDone,
+  draft?.totalPokemon,
+  JSON.stringify(draft?.bots || []),
+  JSON.stringify(draft?.budgets || {}),
+  avgPrice,
+]);
 
   // ===== Host-only timer tick + award =====
   useEffect(() => {
@@ -2224,6 +2439,128 @@ const current = firstItem ? await poolItemToCurrent(firstItem) : null;
 
     return () => clearInterval(iv);
   }, [meIsHost, phase, timer?.running, timer?.paused, roomRef]);
+  // ==========================
+// Bot bidding (host only) — Step 5
+// ==========================
+useEffect(() => {
+  if (!meIsHost) return;
+  if (phase !== "auction") return;
+  // Bots dürfen auch Opening-Bids machen, wenn noch keiner geboten hat
+if (timer?.paused) return;
+
+const highestBidNow = Number(draft?.highestBid || 0);
+const hasStartedNow = !!draft?.hasStarted;
+
+// wenn Timer noch nicht läuft: nur dann aktiv werden, wenn noch kein Bid existiert
+if (!timer?.running && (hasStartedNow || highestBidNow > 0)) return;
+
+
+  const cur = draft?.current;
+  if (!cur?.dexId) return;
+
+  const botsObj = draft?.bots || {};
+  const botTeamIds = Object.keys(botsObj);
+  if (botTeamIds.length === 0) return;
+
+  // Bots sollen nicht "spammen" -> kleine zufällige Verzögerung
+  const t = setTimeout(async () => {
+    try {
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(roomRef);
+        if (!snap.exists()) return;
+
+        const data = snap.data();
+        const a = data?.versus?.auction;
+        if (!a || a.phase !== "auction") return;
+
+        const d = a.draft || {};
+        const s = a.settings || settings;
+
+        const cur2 = d.current;
+        if (!cur2?.dexId) return;
+
+        const highestBid = Number(d.highestBid || 0);
+        const highestTeamId = d.highestTeamId || null;
+
+        // wenn kein Bot existiert -> raus
+        const botsHere = d.bots || {};
+        const botIds = Object.keys(botsHere);
+        if (botIds.length === 0) return;
+
+        // Bot zufällig picken (du kannst später smarter picken)
+        const pick = botIds[Math.floor(Math.random() * botIds.length)];
+        const bot = botsHere[pick];
+        if (!bot) return;
+
+        // Bots überbieten sich NICHT selbst
+        if (highestTeamId === pick) return;
+
+        const budgets = d.budgets || {};
+        const moneyLeft = Number(budgets[pick] || 0);
+        if (moneyLeft < 100) return;
+
+        const remainingCount = Math.max(
+          0,
+          Number(d.totalPokemon || 0) - Number(d.auctionCountDone || 0)
+        );
+
+        const specialFlags = getSpecialFlags(Number(cur2.dexId));
+        const statsTotal = curStats?.total ?? null;
+
+        const decision = decideBotBid({
+          botTeamId: pick,
+          bot,
+          currentDexId: Number(cur2.dexId),
+          highestBid,
+          highestTeamId,
+          moneyLeft,
+          remainingCount,
+          specialFlags,
+          statsTotal,
+        });
+
+        if (!decision) return;
+
+        const amt = Number(decision.amount || 0);
+        if (!amt || amt < 100) return;
+        if (amt % 100 !== 0) return;
+        if (amt > moneyLeft) return;
+        if (amt <= highestBid) return;
+
+        tx.update(roomRef, {
+          "versus.auction.draft.highestBid": amt,
+          "versus.auction.draft.highestTeamId": decision.teamId,
+          "versus.auction.draft.hasStarted": true,
+          "versus.auction.timer.paused": false,
+          "versus.auction.timer.running": true,
+          "versus.auction.timer.remaining": clampInt(s.secondsPerBid ?? 10, 5, 60),
+          "versus.auction.updatedAt": serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      });
+    } catch {
+      // absichtlich still
+    }
+  }, 350 + Math.random() * 650);
+
+  return () => clearTimeout(t);
+}, [
+  meIsHost,
+  phase,
+  timer?.running,
+  timer?.paused,
+  draft?.current?.dexId,
+  draft?.highestBid,
+  draft?.highestTeamId,
+  // bots-obj + budgets ändern -> bots können reagieren
+  JSON.stringify(draft?.bots || {}),
+  JSON.stringify(draft?.budgets || {}),
+  draft?.auctionCountDone,
+  draft?.totalPokemon,
+  curStats?.total,
+  roomRef,
+]);
+
 // 🎉 Win-Sound genau dann, wenn ein Pokémon "zugeschlagen" wurde
 useEffect(() => {
   // wir nehmen auctionCountDone als "sold counter"
@@ -2383,11 +2720,22 @@ useEffect(() => {
   }, [meIsHost, phase, timer?.running, timer?.paused, timer?.remaining, roomRef, settings]);
 
   // ===== UI helpers =====
-  function teamTitle(tid) {
-    const owner = teamOwners?.[tid] ?? null;
-    if (!owner) return "Frei";
-    return labelPlayer(owner, room);
-  }
+  function findBotByOwnerId(ownerId) {
+  const bots = draft?.bots || [];
+  return bots.find((b) => b?.id === ownerId) || null;
+}
+
+function teamTitle(tid) {
+  const owner = teamOwners?.[tid] ?? null;
+  if (!owner) return "Frei";
+
+  // ✅ wenn owner ein Bot ist -> Botname anzeigen
+  const b = findBotByOwnerId(owner);
+  if (b?.name) return b.name;
+
+  return labelPlayer(owner, room);
+}
+
   function teamIsFree(tid) {
     return !teamOwners?.[tid];
   }
@@ -2506,15 +2854,71 @@ useEffect(() => {
                     </select>
                   </Row>
 
-                  <Row label="Teams (Teilnehmer)">
+                  <Row label="Teilnehmer">
                     <input
                       type="number"
-                      min={2}
-                      max={8}
+                      min={1}
+                      max={10}
                       value={settings.participants}
                       onChange={(e) => updateSettings({ participants: Number(e.target.value) })}
                     />
                   </Row>
+<Row label="Bots">
+  <input
+    type="number"
+    min={0}
+    max={9}
+    value={settings.botCount ?? 0}
+    onChange={(e) => updateSettings({ botCount: Number(e.target.value) })}
+  />
+</Row>
+{meIsHost && (
+  <div style={{ marginTop: 10, padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.18)" }}>
+    <div style={{ fontWeight: 900, marginBottom: 8 }}>Bot-Teams</div>
+
+    <button
+      type="button"
+      style={{ ...btnGhost, padding: "8px 10px", fontSize: 12, marginBottom: 10 }}
+      onClick={() => {
+        const cnt = clampInt(settings.botCount ?? 0, 0, 9);
+        updateSettings({ botsConfig: generateBotConfigs(cnt, Date.now()) });
+      }}
+      title="Neue zufällige Bot-Namen + Defaults würfeln"
+    >
+      🔁 Bots neu würfeln
+    </button>
+
+    {(settings.botsConfig || []).length === 0 ? (
+      <div style={{ fontSize: 12, opacity: 0.7 }}>Keine Bots aktiviert.</div>
+    ) : (
+      <div style={{ display: "grid", gap: 8 }}>
+        {(settings.botsConfig || []).map((b, idx) => (
+          <div key={b.id || idx} style={{ display: "grid", gridTemplateColumns: "1fr 180px", gap: 10, alignItems: "center" }}>
+            <div style={{ fontWeight: 900 }}>{b.name}</div>
+
+            <select
+              value={b.difficulty || "normal"}
+              onChange={(e) => {
+                const next = [...(settings.botsConfig || [])];
+                next[idx] = { ...next[idx], difficulty: e.target.value };
+                updateSettings({ botsConfig: next });
+              }}
+            >
+              <option value="easy">Easy</option>
+              <option value="normal">Normal</option>
+              <option value="hard">Hard</option>
+              <option value="chaos">Chaos</option>
+            </select>
+          </div>
+        ))}
+      </div>
+    )}
+
+    <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+      Pro Bot-Team kannst du das Verhalten einstellen. Trotzdem bleibt immer etwas Zufall drin.
+    </div>
+  </div>
+)}
 
                   <Row label="Budget pro Team">
                     <input
@@ -2846,8 +3250,14 @@ useEffect(() => {
           {/* Current Pokémon */}
           <section style={{ ...panel, gridColumn: "1 / 2" }}>
             <div style={{ fontWeight: 900, marginBottom: 10 }}>
-              Aktuelles Pokémon ({draft.auctionCountDone}/{draft.totalPokemon})
-            </div>
+  {(() => {
+    const total = Number(draft.totalPokemon ?? 0);
+    const done = Number(draft.auctionCountDone ?? 0);
+    const cur = draft.current ? Math.min(total, done + 1) : Math.min(total, done);
+    return `Aktuelles Pokémon (${cur}/${total})`;
+  })()}
+</div>
+
 
             {draft.current ? (
               // ✅ NEW: Left stats + right centered pokemon
