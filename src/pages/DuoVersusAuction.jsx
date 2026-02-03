@@ -2138,6 +2138,36 @@ for (let i = 0; i < finalBotCount; i++) {
   owners[tid] = `bot:${i + 1}`;
 }
 
+// ✅ Settings-Werte sicher auslesen (verhindert "is not defined" + sorgt für Defaults)
+const budgetPerTeam = Number(settings?.budgetPerTeam ?? 1000);
+const totalPokemon = Number(settings?.totalPokemon ?? 10);
+const secondsPerBid = Number(settings?.secondsPerBid ?? 30);
+// ✅ Teams + Budgets initialisieren
+const budgets = {};
+const teams = {};
+for (const tid of localTeamIds) {
+  budgets[tid] = budgetPerTeam;
+  teams[tid] = [];
+}
+
+// ✅ Pool bauen (Gen + optional Megas)
+let rawPool = makeShuffledPool(gen);
+
+// Megas nur wenn Gen 6+ (werden bei baseFormsOnly später sowieso rausgefiltert)
+if (gen >= 6) {
+  const megaItems = MEGA_FORMS.map((m) => `mega:${m.form}`);
+  rawPool = shuffleArray([...rawPool, ...megaItems]);
+}
+
+// ✅ Pool-Filter anwenden (Legendär/Sublegi/Mythisch/Pseudo + baseFormsOnly)
+const pool = await buildFilteredPool(rawPool, settings, gen);
+
+// ✅ Start-Current bestimmen (erstes erlaubtes Item)
+const bannedSet = new Set(); // beim Start noch nichts gebannt
+const { nextDex, nextIndex } = findNextAllowedFromPool(pool, 0, bannedSet);
+
+const current = nextDex ? await poolItemToCurrent(nextDex) : null;
+const poolIndex = nextIndex ?? 0;
 
     await updateDoc(roomRef, {
       "versus.auction.phase": "auction",
