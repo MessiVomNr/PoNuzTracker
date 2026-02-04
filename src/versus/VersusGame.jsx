@@ -220,9 +220,13 @@ export default function VersusGame() {
   }, [room, uid]);
 
   const allReady = useMemo(() => {
-    if (players.length < 2) return false; // Duo-Minimum
-    return players.every((p) => p?.ready === true);
-  }, [players]);
+  if (!players || players.length === 0) return false;
+  if (players.length === 1) {
+    return players[0]?.ready === true;
+  }
+  return players.every((p) => p?.ready === true);
+}, [players]);
+
 
   useEffect(() => {
     if (!roomIdOrCode) {

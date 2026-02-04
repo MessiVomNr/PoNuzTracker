@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getRoom, subscribeRoom, setReady, setRoomStatus } from "./versusService";
+import { getRoom, subscribeRoom, setReady, setRoomStatus, transferHost, heartbeat  } from "./versusService";
 
 export default function VersusLobby() {
   const { roomId } = useParams();
@@ -9,8 +9,15 @@ export default function VersusLobby() {
   const roomKey = String(roomId || "").toUpperCase();
 
   const myPlayerId = useMemo(() => {
-    return sessionStorage.getItem(`versus_player_${roomKey}`) || "";
-  }, [roomKey]);
+  const k = `versus_player_${roomKey}`;
+  return (
+    sessionStorage.getItem(k) ||
+    localStorage.getItem(k) ||
+    localStorage.getItem("versus_device_id") ||
+    ""
+  );
+}, [roomKey]);
+
 
   const [room, setRoom] = useState(null);
   const [err, setErr] = useState("");
@@ -44,7 +51,30 @@ export default function VersusLobby() {
   const isHost = room?.hostPlayerId && myPlayerId && room.hostPlayerId === myPlayerId;
 
   const allReady = players.length >= 2 && players.every((p) => !!p.ready);
-  const canStart = isHost && room?.status === "lobby" && allReady;
+const canStart =
+  isHost &&
+  (
+    // Solo-Fall: nur 1 Spieler → dieser eine muss ready sein
+    (players.length === 1 && players[0]?.ready === true)
+
+    ||
+
+    // Multiplayer-Fall: 2+ Spieler → alle müssen ready sein
+    (players.length > 1 && allReady)
+  );
+useEffect(() => {
+  if (!roomId || !myPlayerId) return;
+
+  // sofort einmal "alive" senden
+  heartbeat(roomId, myPlayerId);
+
+  const t = setInterval(() => {
+    heartbeat(roomId, myPlayerId);
+  }, 12000);
+
+  return () => clearInterval(t);
+}, [roomId, myPlayerId]);
+
 
   async function toggleReady() {
     try {
@@ -58,6 +88,20 @@ export default function VersusLobby() {
       setErr(e?.message || String(e));
     }
   }
+async function makeAdmin(targetPlayerId, targetName) {
+  try {
+    setErr("");
+    if (!isHost) return;
+    if (!targetPlayerId || targetPlayerId === myPlayerId) return;
+
+    const ok = window.confirm(`Admin-Rechte an ${targetName || "Spieler"} übertragen?`);
+    if (!ok) return;
+
+    await transferHost(roomKey, myPlayerId, targetPlayerId);
+  } catch (e) {
+    setErr(e?.message || String(e));
+  }
+}
 
   async function startGame() {
     try {
@@ -117,22 +161,49 @@ export default function VersusLobby() {
               const readyIcon = p.ready ? "✅" : "⏳";
               const hostIcon = room.hostPlayerId === p.id ? " 👑" : "";
               return (
-                <li key={p.id}>
-                  {readyIcon} {p.displayName}
-                  {hostIcon}
-                  {isMe ? " (du)" : ""}
-                </li>
+                <li
+  key={p.id}
+  style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: "6px 0",
+  }}
+>
+  <div>
+    {readyIcon} {p.displayName}
+    {hostIcon}
+    {isMe ? " (du)" : ""}
+  </div>
+
+  {isHost && !isMe && (
+    <div style={{ display: "flex", gap: 8 }}>
+      <button
+        onClick={() => makeAdmin(p.id, p.displayName)}
+        style={{ padding: "6px 10px" }}
+        title="Überträgt die Admin/Host-Rechte an diesen Spieler"
+      >
+        Zum Admin machen
+      </button>
+    </div>
+  )}
+</li>
+
               );
             })}
           </ul>
 
           <p style={{ opacity: 0.85 }}>
-            {players.length < 2
-              ? "Warte auf mindestens 1 weiteren Spieler …"
-              : allReady
-              ? "Alle sind bereit ✅"
-              : "Warte, bis alle bereit sind …"}
-          </p>
+  {players.length === 1
+    ? (players[0]?.ready
+        ? "Solo-Start bereit ✅"
+        : "Drücke „Bereit“, um solo zu starten …")
+    : allReady
+    ? "Alle sind bereit ✅"
+    : "Warte, bis alle bereit sind …"}
+</p>
+
 
           <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
             <button onClick={toggleReady} style={{ padding: "10px 14px" }}>
@@ -148,14 +219,14 @@ export default function VersusLobby() {
                 cursor: canStart ? "pointer" : "not-allowed",
               }}
               title={
-                !isHost
-                  ? "Nur der Host kann starten."
-                  : players.length < 2
-                  ? "Mindestens 2 Spieler nötig."
-                  : !allReady
-                  ? "Alle müssen bereit sein."
-                  : ""
-              }
+  !isHost
+    ? "Nur der Host kann starten."
+    : players.length === 1 && !players[0]?.ready
+    ? "Drücke zuerst „Bereit“."
+    : players.length > 1 && !allReady
+    ? "Alle müssen bereit sein."
+    : ""
+}
             >
               Draft starten
             </button>

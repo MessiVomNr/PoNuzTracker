@@ -1,13 +1,37 @@
 // src/versus/DuoVersusAuction.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { subscribeRoom } from "../versus/versusService"; // System A: versusRooms
+import { subscribeRoom, transferHost, heartbeat, getStoredPlayerId  } from "../versus/versusService"; // System A: versusRooms
 import { db } from "../firebase";
 import { doc, runTransaction, updateDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import TypeModal from "../versus/TypeModal";
 import { makeShuffledPool, dexIdToImageUrl, getDexCapForGen } from "../utils/pokemonPool";
 import { pokedex as fullPokedex } from "../data/pokedex.js";
 import { buildBots, decideBotBid, generateBotConfigs } from "../versus/botEngine";
+import {
+  statPanel,
+  auctionGrid,
+  playerCard,
+  teamSlotCard,
+  timerBig,
+  input,
+  btnPrimary,
+  btnGhost,
+  btnSecondary,
+  btnGhostSmall,
+  imgBtn,
+  pokeHeroWrap,
+  pokeHeroBtn,
+  pokeHeroImg,
+  pokeHeroOverlay,
+  pokeHeroOverlayFlash,
+  pokeHeroRightBadge,
+  evoCardBtn,
+  typeIconRow,
+  typeIcon,
+  btnDanger,
+  pokeHeroOverlayFlashStrong,
+} from "./DuoVersusAuction.styles";
 
 /* =========================================================
    Evolution Line (PokeAPI) + Cache (in-memory)
@@ -161,6 +185,23 @@ function shuffleArray(arr) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function generateBotName(seed = "") {
+  // kurz, witzig, pokemon-ish – ohne Markenstress
+  const a = [
+    "Wilder", "Schlauer", "Frecher", "Zäher", "Listiger", "Rasender",
+    "Eisiger", "Glühender", "Nervöser", "Ruhiger", "Kühner", "Düsterer"
+  ];
+  const b = [
+    "Bidder", "Trainer", "Draftlord", "Snacker", "Sampler", "Sparfuchs",
+    "Knallkopf", "Taktiker", "Münzmeister", "Pokéhai", "Kaderplaner"
+  ];
+  const tag = seed ? String(seed).slice(-4) : String(Math.floor(Math.random() * 9999)).padStart(4, "0");
+  return `${pick(a)} ${pick(b)} #${tag}`;
 }
 
 async function getMegaImageUrl(form) {
@@ -407,7 +448,7 @@ const HOST_SETTINGS_KEY = "versus_host_settings_v1";
 
 const DEFAULT_HOST_SETTINGS = {
   generation: 1,
-  participants: 1,
+  participants: 0,
   budgetPerTeam: 10000,
   totalPokemon: 12,
   secondsPerBid: 10,
@@ -533,6 +574,7 @@ const MYTHICAL = new Set([
   // Gen 6
   719, // Diancie
   720, // Hoopa
+  721, //Volcanion
 ]);
 
 
@@ -559,22 +601,44 @@ const SUB_LEGENDARY = new Set([
   785, 786, 787, 788, // Kapu-Reihe (optional, falls du sie schon drin hast)
 ]);
 
+// Ultra Beasts (Gen 7)
+const ULTRA_BEASTS = new Set([
+  793, // Nihilego
+  794, // Buzzwole
+  795, // Pheromosa
+  796, // Xurkitree
+  797, // Celesteela
+  798, // Kartana
+  799, // Guzzlord
+  803, // Poipole
+  804, // Naganadel
+  805, // Stakataka
+  806, // Blacephalon
+]);
 
-function getSpecialFlags(dexIdRaw) {
+const MEGA_BASES = new Set(MEGA_FORMS.map((m) => Number(m.base)));
+
+function getSpecialFlags(dexIdRaw, opts = {}) {
   const dexId = Number(dexIdRaw);
+  const isMega = !!opts?.isMega;
+
   return {
     starter: STARTERS.has(dexId),
     pseudo: PSEUDO.has(dexId),
     legendary: LEGENDARY.has(dexId),
     mythical: MYTHICAL.has(dexId),
     subLegendary: SUB_LEGENDARY.has(dexId),
+    ultraBeast: ULTRA_BEASTS.has(dexId),
+    mega: isMega, // ✅ nur wenn wirklich Mega-Form angezeigt wird
   };
 }
 
-function getSpecialTag(dexIdRaw) {
-  const dexId = Number(dexIdRaw);
-  const f = getSpecialFlags(dexId);
 
+function getSpecialTag(dexIdRaw, opts = {}) {
+  const dexId = Number(dexIdRaw);
+  const f = getSpecialFlags(dexId, { isMega: !!opts?.isMega });
+  if (f.mega) return { label: "Mega", color: "#ff4fd8", text: "#3b0030" };
+  if (f.ultraBeast) return { label: "Ultra-Bestie", color: "#3b82f6", text: "#06210f" };
   if (f.mythical) return { label: "Mythisch", color: "#facc15", text: "#111827" };
   if (f.legendary) return { label: "Legendär", color: "#a855f7", text: "white" };
   if (f.subLegendary) return { label: "Sub-Legendär", color: "#60a5fa", text: "#0b1220" };
@@ -583,6 +647,7 @@ function getSpecialTag(dexIdRaw) {
 
   return null;
 }
+
 
 
 function labelPlayer(playerId, room) {
@@ -777,7 +842,7 @@ export default function DuoVersusAuction() {
   const nav = useNavigate();
   const { roomId: roomIdParam } = useParams();
   const roomId = String(roomIdParam || "").toUpperCase();
-
+  const myPlayerId = getStoredPlayerId(roomId) || "";
   const [bidFlash, setBidFlash] = useState(false);
   const [curTypes, setCurTypes] = useState([]);
   const [curStats, setCurStats] = useState(null); // ✅ NEW: current pokemon stats
@@ -796,7 +861,7 @@ const [soundVolume, setSoundVolume] = useState(() => {
 
 
 function setMasterVolume(nextRaw) {
-  const next = Math.max(0, Math.min(1, Number(nextRaw)));
+  const next = Math.max(0, Math.min(100, Number(nextRaw)));
   setSoundVolume(next);
   localStorage.setItem("versusSoundVolume", String(next));
 }
@@ -819,15 +884,71 @@ function toggleSoundMuted() {
     const unsub = subscribeRoom(roomId, (r) => setRoom(r));
     return () => unsub && unsub();
   }, [roomId]);
+useEffect(() => {
+  if (!roomId || !myPlayerId) return;
 
-  const players = room?.players || [];
-  const hostPlayerId = room?.hostPlayerId || "";
+  // einmal sofort
+  heartbeat(roomId, myPlayerId).catch(() => {});
 
-  const myPlayerId = useMemo(() => {
-    return sessionStorage.getItem(`versus_player_${roomId}`) || "";
-  }, [roomId]);
+  // dann regelmäßig
+  const t = setInterval(() => {
+    heartbeat(roomId, myPlayerId).catch(() => {});
+  }, 15000);
 
-  const meIsHost = myPlayerId && hostPlayerId ? myPlayerId === hostPlayerId : false;
+  return () => clearInterval(t);
+}, [roomId, myPlayerId]);
+
+const players = room?.players || [];
+const hostPlayerId = room?.hostPlayerId || "";
+// ============================
+// 4B: Offline-Markierung
+// ============================
+const OFFLINE_AFTER_MS = 45_000; // 45s (stell gern auf 30-90s)
+const playersRaw = room?.players;
+
+const playersList = useMemo(() => {
+  if (!playersRaw) return [];
+  if (Array.isArray(playersRaw)) return playersRaw;
+  if (typeof playersRaw === "object") return Object.values(playersRaw);
+  return [];
+}, [playersRaw]);
+
+const playersById = useMemo(() => {
+  const map = new Map();
+  (playersList || []).forEach((p) => {
+    if (p?.id) map.set(String(p.id), p);
+  });
+  return map;
+}, [playersList]);
+
+function isPlayerOffline(playerId) {
+  const pid = String(playerId || "").trim();
+  if (!pid) return true;
+  const p = playersById.get(pid);
+  if (!p) return true;
+
+  const last = Number(p?.lastSeenAt?.toMillis?.() ?? p?.lastSeenAt ?? 0);
+  if (!last) return false; // wenn du lastSeenAt noch nicht für alle hast, lieber nicht direkt rot
+
+  return Date.now() - last > OFFLINE_AFTER_MS;
+}
+
+const meIsHost = !!myPlayerId && !!hostPlayerId && myPlayerId === hostPlayerId;
+
+async function makeAdmin(targetPlayerId, targetName) {
+  try {
+    if (!meIsHost) return;
+    if (!targetPlayerId || targetPlayerId === myPlayerId) return;
+
+    const ok = window.confirm(`Admin-Rechte an ${targetName || "Spieler"} übertragen?`);
+    if (!ok) return;
+
+    await transferHost(roomId, myPlayerId, targetPlayerId);
+  } catch (e) {
+    console.error(e);
+    alert(e?.message || String(e));
+  }
+}
 
   function goLobby() {
     stopAllAudio();
@@ -863,6 +984,7 @@ function toggleSoundMuted() {
  const settings = auction?.settings || loadHostSettingsFromLS();
   const genNum = clampInt(settings?.generation ?? 1, 1, 7);
   const teamOwners = auction?.teamOwners || {};
+  
   const draft = auction?.draft || {
     auctionCountDone: 0,
     current: null,
@@ -881,6 +1003,11 @@ function toggleSoundMuted() {
 
     bannedDexIds: [],
   };
+  
+const activePlayers = useMemo(() => {
+  // wir nehmen "active" wenn vorhanden, sonst gilt jeder als aktiv
+  return playersList.filter((p) => p && p.active !== false);
+}, [playersList]);
 
   // ===== Avg Preis (Summe / Anzahl gedrafteter Pokémon) =====
   const avgPrice = useMemo(() => {
@@ -982,11 +1109,18 @@ useEffect(() => {
 
 
 const teamIds = useMemo(() => {
-  const humans = clampInt(settings.participants ?? 1, 1, 20);
-  const bots = clampInt(settings.botCount ?? 0, 0, 9);
-  const total = Math.min(20, humans + bots);   // ✅ max 20 Teams
-  return Array.from({ length: total }, (_, i) => teamIdFor(i));
+  const humans = clampInt(settings.participants ?? 0, 0, 20); // ✅ 0 erlaubt
+  let bots = clampInt(settings.botCount ?? 0, 0, 9);
+
+  // ✅ Bot-only: erzwinge mind. 1 Bot, sonst gäbe es 0 Teams
+  if (humans === 0 && bots === 0) bots = 1;
+
+  const total = Math.min(20, humans + bots);
+  const safeTotal = Math.max(1, total);
+
+  return Array.from({ length: safeTotal }, (_, i) => teamIdFor(i));
 }, [settings.participants, settings.botCount]);
+
 
 
 
@@ -1922,31 +2056,47 @@ useEffect(() => {
 
     didInitRef.current = true;
 
-    const initial = {
-      phase: "lobby",
-      settings: loadHostSettingsFromLS(),
-      teamOwners: ensureTeamOwners(2, {}),
-      draft: {
-        auctionCountDone: 0,
-        current: null,
+    const initSettings = loadHostSettingsFromLS();
 
-        teamIds: [],
-        budgets: {},
-        teams: {},
+const humans = clampInt(initSettings.participants ?? 0, 0, 20);
+let bots = clampInt(initSettings.botCount ?? 0, 0, 9);
+if (humans === 0 && bots === 0) bots = 1; // bot-only safety
 
-        pool: [],
-        poolIndex: 0,
-        totalPokemon: 12,
+const totalTeams = Math.min(20, humans + bots);
 
-        highestBid: 0,
-        highestTeamId: null,
-        hasStarted: false,
+// owners initialisieren + bots reservieren
+const initOwners = ensureTeamOwners(totalTeams, {});
+for (let i = 0; i < bots; i++) {
+  const tid = teamIdFor(humans + i); // bots hinten dran
+  initOwners[tid] = `bot:${i + 1}`;
+}
 
-        bannedDexIds: [],
-      },
-      timer: { running: false, paused: false, remaining: 10 },
-      updatedAt: serverTimestamp(),
-    };
+const initial = {
+  phase: "lobby",
+  settings: initSettings,
+  teamOwners: initOwners,
+  draft: {
+    auctionCountDone: 0,
+    current: null,
+
+    teamIds: [],
+    budgets: {},
+    teams: {},
+
+    pool: [],
+    poolIndex: 0,
+    totalPokemon: initSettings.totalPokemon ?? 12,
+
+    highestBid: 0,
+    highestTeamId: null,
+    hasStarted: false,
+
+    bannedDexIds: [],
+  },
+  timer: { running: false, paused: false, remaining: initSettings.secondsPerBid ?? 10 },
+  updatedAt: serverTimestamp(),
+};
+
 
     updateDoc(roomRef, {
       "versus.auction": initial,
@@ -1972,19 +2122,24 @@ if (cfg.length !== cnt) {
 }
 
       // ✅ Spieler + Bots → totalTeams (max 10)
-  const playersCount = clampInt(nextSettings.participants ?? 1, 1, 10);
-  const botCount = clampInt(nextSettings.botCount ?? 0, 0, 9);
-  const totalTeams = Math.min(10, playersCount + botCount);
+ const playersCount = clampInt(nextSettings.participants ?? 0, 0, 10); // ✅ 0 erlaubt
+let botCount = clampInt(nextSettings.botCount ?? 0, 0, 9);
 
-  // falls zu viele Spieler eingestellt wurden, runter clampen
-  const finalPlayers = Math.min(playersCount, totalTeams);
-  const finalBots = Math.max(0, totalTeams - finalPlayers);
+// ✅ Wenn Bot-only (0 Spieler), erzwinge mind. 1 Bot
+if (playersCount === 0 && botCount === 0) botCount = 1;
 
-  const normalizedSettings = {
-    ...nextSettings,
-    participants: finalPlayers,
-    botCount: finalBots,
-  };
+const totalTeams = Math.min(10, playersCount + botCount);
+
+// falls zu viele Spieler eingestellt wurden, runter clampen
+const finalPlayers = Math.min(playersCount, totalTeams);
+const finalBots = Math.max(0, totalTeams - finalPlayers);
+
+const normalizedSettings = {
+  ...nextSettings,
+  participants: finalPlayers,
+  botCount: finalBots,
+};
+
 
   saveHostSettingsToLS(normalizedSettings);
 
@@ -2014,96 +2169,132 @@ if (cfg.length !== cnt) {
 
   // ===== Team join/leave (sync, transaction) =====
   async function claimTeam(tid) {
-    // ✅ Join ist in Lobby UND Draft erlaubt
-    if (phase !== "lobby" && phase !== "auction") return;
-    if (!myPlayerId) return;
+  // ✅ Join ist in Lobby UND Draft erlaubt
+  if (phase !== "lobby" && phase !== "auction") return;
+  if (!myPlayerId) return;
+// ✅ Bot-only: keine Human-Teams joinbar
+  if (clampInt(settings.participants ?? 0, 0, 20) === 0) return;
 
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(roomRef);
-      if (!snap.exists()) throw new Error("Room nicht gefunden.");
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef);
+    if (!snap.exists()) throw new Error("Room nicht gefunden.");
 
-      const data = snap.data();
-      const a = data?.versus?.auction;
-      if (!a) throw new Error("Auction nicht initialisiert.");
-      if (data.status !== "auction") throw new Error("Room nicht in Auction.");
+    const data = snap.data();
+    const a = data?.versus?.auction;
+    if (!a) throw new Error("Auction nicht initialisiert.");
+    if (data.status !== "auction") throw new Error("Room nicht in Auction.");
 
-      const s = a.settings || settings;
-      const count = Math.max(2, clampInt(s.participants, 2, 8));
-      const owners = ensureTeamOwners(count, a.teamOwners || {});
+    const s = a.settings || settings;
 
-      // already in a team?
-      if (Object.values(owners).some((pid) => pid === myPlayerId)) return;
+    // ✅ WICHTIG: totalTeams = humans + bots (sonst “schneiden” wir Bot-Teams weg!)
+    const humans = clampInt(s.participants ?? 0, 0, 20);
+    const bots = clampInt(s.botCount ?? 0, 0, 9);
+    const totalTeams = Math.min(20, humans + bots);
 
-      // ✅ nur joinen wenn das Team frei ist
-      if (owners[tid]) return;
+    const owners = ensureTeamOwners(totalTeams, a.teamOwners || {});
 
-      owners[tid] = myPlayerId;
+    // already in a team?
+    if (Object.values(owners).some((pid) => pid === myPlayerId)) return;
 
-      tx.update(roomRef, {
-        "versus.auction.teamOwners": owners,
-        "versus.auction.updatedAt": serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+    // ✅ Bots dürfen nicht gejoint werden (falls mal frei/kaputt)
+    const curOwner = owners[tid];
+    if (curOwner && String(curOwner).startsWith("bot:")) return;
+
+    // ✅ nur joinen wenn das Team frei ist
+    if (owners[tid]) return;
+
+    owners[tid] = myPlayerId;
+
+    tx.update(roomRef, {
+      "versus.auction.teamOwners": owners,
+      "versus.auction.updatedAt": serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
-  }
+  });
+}
+
 
   async function leaveMyTeam() {
-    if (phase !== "lobby") return;
-    if (!myTeamId || !myPlayerId) return;
+  if (phase !== "lobby") return;
+  if (!myTeamId || !myPlayerId) return;
 
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(roomRef);
-      if (!snap.exists()) throw new Error("Room nicht gefunden.");
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef);
+    if (!snap.exists()) throw new Error("Room nicht gefunden.");
 
-      const data = snap.data();
-      const a = data?.versus?.auction;
-      if (!a) throw new Error("Auction nicht initialisiert.");
+    const data = snap.data();
+    const a = data?.versus?.auction;
+    if (!a) throw new Error("Auction nicht initialisiert.");
 
-      const owners = { ...(a.teamOwners || {}) };
-      if (owners[myTeamId] !== myPlayerId) return;
+    const s = a.settings || settings;
 
-      owners[myTeamId] = null;
+    const humans = clampInt(s.participants ?? 0, 0, 20);
+    const bots = clampInt(s.botCount ?? 0, 0, 9);
+    const totalTeams = Math.min(20, humans + bots);
 
-      tx.update(roomRef, {
-        "versus.auction.teamOwners": owners,
-        "versus.auction.updatedAt": serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+    const owners = ensureTeamOwners(totalTeams, a.teamOwners || {});
+
+    if (owners[myTeamId] !== myPlayerId) return;
+
+    owners[myTeamId] = null;
+
+    tx.update(roomRef, {
+      "versus.auction.teamOwners": owners,
+      "versus.auction.updatedAt": serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
-  }
+  });
+}
+
 
   async function hostKickFromTeam(tid) {
-    if (!meIsHost) return;
-    if (phase !== "lobby" && phase !== "auction") return;
+  if (!meIsHost) return;
+  if (phase !== "lobby" && phase !== "auction") return;
 
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(roomRef);
-      if (!snap.exists()) throw new Error("Room nicht gefunden.");
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef);
+    if (!snap.exists()) throw new Error("Room nicht gefunden.");
 
-      const data = snap.data();
-      const a = data?.versus?.auction;
-      if (!a) throw new Error("Auction nicht initialisiert.");
+    const data = snap.data();
+    const a = data?.versus?.auction;
+    if (!a) throw new Error("Auction nicht initialisiert.");
 
-      const owners = { ...(a.teamOwners || {}) };
-      if (!owners[tid]) return; // schon frei
+    const s = a.settings || settings;
 
-      owners[tid] = null;
+    const humans = clampInt(s.participants ?? 0, 0, 20);
+    const bots = clampInt(s.botCount ?? 0, 0, 9);
+    const totalTeams = Math.min(20, humans + bots);
 
-      tx.update(roomRef, {
-        "versus.auction.teamOwners": owners,
-        "versus.auction.updatedAt": serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+    const owners = ensureTeamOwners(totalTeams, a.teamOwners || {});
+
+    const owner = owners[tid];
+    if (!owner) return;
+
+    // ✅ Bots nicht rauskicken (passt auch zu deiner “Bots dürfen nicht rausfliegen”-Regel)
+    if (String(owner).startsWith("bot:")) return;
+
+    owners[tid] = null;
+
+    tx.update(roomRef, {
+      "versus.auction.teamOwners": owners,
+      "versus.auction.updatedAt": serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
-  }
+  });
+}
+
 
   // ===== Start Draft (host) =====
   async function startDraft() {
     if (!meIsHost) return;
 
     const gen = clampInt(settings.generation, 1, 7);
-   const participants = clampInt(settings.participants ?? 1, 1, 20);
-const botCount = clampInt(settings.botCount ?? 0, 0, 9);
+   const participants = clampInt(settings.participants ?? 0, 0, 20);
+let botCount = clampInt(settings.botCount ?? 0, 0, 9);
+
+// ✅ Bot-only: mindestens 1 Bot erzwingen
+if (participants === 0 && botCount === 0) botCount = 1;
+
 
 const totalTeams = Math.min(20, participants + botCount);
 const finalParticipants = Math.min(participants, totalTeams);
@@ -2115,28 +2306,24 @@ if (botConfigs.length !== finalBotCount) {
   botConfigs = generateBotConfigs(finalBotCount, Date.now());
 }
 
-// ✅ Bots erstellen: botTeams starten direkt nach den Human-Teams
-const bots = buildBots({
-  botConfigs,
-  startTeamIndex: finalParticipants + 1,
-});
-
 // ✅ TeamIds für alle Teams
 const localTeamIds = Array.from({ length: totalTeams }, (_, i) => teamIdFor(i));
 
 // ✅ owners für ALLE Teams (humans + bots)
 const owners = ensureTeamOwners(totalTeams, teamOwners);
 
-// ✅ Bot-Teams als belegt setzen
+// ✅ Bots erstellen (IDs MUSS "bot:X" sein, passend zu owners)
+//    startTeamIndex ist 0-based team index, also: humans starten bei 0..finalParticipants-1
+const bots = buildBots({
+  botConfigs,
+  startTeamIndex: finalParticipants, // <- 0-based Index, erstes Bot-Team ist team{finalParticipants+1}
+});
+
+// ✅ Bot-Teams als belegt setzen: ownerId exakt = bot.id ("bot:1", "bot:2", ...)
 for (const b of bots) {
-  owners[b.teamId] = b.id; // ownerId = bot.id
+  owners[b.teamId] = b.id;
 }
 
-// bot teams sicher setzen (wie in lobby)
-for (let i = 0; i < finalBotCount; i++) {
-  const tid = teamIdFor(finalParticipants + i);
-  owners[tid] = `bot:${i + 1}`;
-}
 
 // ✅ Settings-Werte sicher auslesen (verhindert "is not defined" + sorgt für Defaults)
 const budgetPerTeam = Number(settings?.budgetPerTeam ?? 1000);
@@ -2214,25 +2401,44 @@ const poolIndex = nextIndex ?? 0;
     if (!meIsHost) return;
     stopAllAudio();
 
-    const participants = Math.max(2, clampInt(settings.participants, 2, 8));
-    const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
+    const participants = clampInt(settings.participants ?? 0, 0, 20);
+let botCount = clampInt(settings.botCount ?? 0, 0, 9);
+
+// ✅ Bot-only: mindestens 1 Bot erzwingen
+if (participants === 0 && botCount === 0) botCount = 1;
+
+const totalTeams = Math.min(20, participants + botCount);
+const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
+
 
     const resetAuction = {
       phase: "lobby",
       settings: {
-        generation: clampInt(settings.generation, 1, 7),
-        participants,
-        budgetPerTeam: Math.max(0, clampInt(settings.budgetPerTeam, 0, 9999999)),
-        totalPokemon: Math.max(1, clampInt(settings.totalPokemon, 1, 999)),
-        secondsPerBid,
-        keepEvolvedForms: !!settings.keepEvolvedForms,
-        baseFormsOnly: !!settings.baseFormsOnly,
-        allowLegendary: !!settings.allowLegendary,
-        allowSubLegendary: !!settings.allowSubLegendary,
-        allowMythical: !!settings.allowMythical,
-        allowPseudo: !!settings.allowPseudo,
-      },
-      teamOwners: ensureTeamOwners(participants, {}), // ✅ alle Teams wieder frei
+  generation: clampInt(settings.generation, 1, 7),
+  participants,
+  botCount,
+  botsConfig: Array.isArray(settings.botsConfig) ? settings.botsConfig : generateBotConfigs(botCount, Date.now()),
+  budgetPerTeam: Math.max(0, clampInt(settings.budgetPerTeam, 0, 9999999)),
+  totalPokemon: Math.max(1, clampInt(settings.totalPokemon, 1, 999)),
+  secondsPerBid,
+  keepEvolvedForms: !!settings.keepEvolvedForms,
+  baseFormsOnly: !!settings.baseFormsOnly,
+  allowLegendary: !!settings.allowLegendary,
+  allowSubLegendary: !!settings.allowSubLegendary,
+  allowMythical: !!settings.allowMythical,
+  allowPseudo: !!settings.allowPseudo,
+},
+      teamOwners: (() => {
+  const owners = ensureTeamOwners(totalTeams, {});
+  // Bot-Teams reservieren: die letzten botCount Teams gehören bot:1..bot:N
+  for (let i = 0; i < botCount; i++) {
+    const teamIndex = participants + i; // 0-based
+    const tid = teamIdFor(teamIndex);
+    owners[tid] = `bot:${i + 1}`;
+  }
+  return owners;
+})(),
+
       draft: {
         auctionCountDone: 0,
         current: null,
@@ -2320,6 +2526,18 @@ async function placeBotBid(botTeamId, amountRaw) {
   if (phase !== "auction") return;
   if (!draft.current) return;
   if (!botTeamId) return;
+// ===== Optional: Only-Bots / Humans-in-Teams Erkennung (robust) =====
+// room.players kann Array oder Object sein -> nimm lieber playersList (hast du oben sauber gebaut)
+const ownersNow = teamOwners || {}; // <-- das ist das "auction teamOwners" aus dem Component Scope
+
+// echte (nicht-bot) Owner, die aktuell ein Team belegen
+const humansInTeams = Object.values(ownersNow).filter(
+  (oid) => oid && !String(oid).startsWith("bot:")
+);
+
+// Bot-only wenn niemand als echter Spieler ein Team belegt
+const onlyBotsMode = humansInTeams.length === 0;
+
 
   const amt = clampInt(amountRaw, 0, 999999999);
   if (amt < 100) return;
@@ -2359,7 +2577,77 @@ async function placeBotBid(botTeamId, amountRaw) {
     });
   });
 }
+async function forceBotStartFromSpectator() {
+  if (!meIsHost) return;
+  if (phase !== "auction") return;
+
+  const hb = Number(draft?.highestBid ?? 0);
+  const ht = draft?.highestTeamId ?? null;
+  const opening = !draft?.hasStarted && hb === 0 && !ht;
+
+  if (!opening) return;
+
+  const bots = Array.isArray(draft?.bots) ? draft.bots : [];
+  if (bots.length === 0) return;
+
+  // irgendein Bot-Team mit Budget >=100
+  const botTeamId = bots.find((b) => Number(draft?.budgets?.[b.teamId] ?? 0) >= 100)?.teamId;
+  if (!botTeamId) return;
+
+  await placeBotBid(botTeamId, 100);
+}
+
 const lastBotReactKeyRef = useRef("");
+const stuckGuardRef = useRef("");
+
+useEffect(() => {
+  if (!meIsHost) return;
+  if (phase !== "auction") return;
+  if (!draft?.current) return;
+
+  // nur wenn noch niemand geboten hat und timer nicht läuft
+  if (draft.hasStarted) return;
+  if (timer?.running) return;
+
+  const budgets = draft?.budgets || {};
+  const teamIdsHere = Array.isArray(draft?.teamIds) ? draft.teamIds : [];
+
+  // kann irgendwer noch mind. 100 bieten?
+  const anyoneCanBid = teamIdsHere.some((tid) => Number(budgets?.[tid] ?? 0) >= 100);
+
+  // Key pro Pokémon, damit wir nicht dauernd triggern
+  const key = `${draft.current.dexId}|done${draft.auctionCountDone}|can${anyoneCanBid ? 1 : 0}`;
+  if (stuckGuardRef.current === key) return;
+  stuckGuardRef.current = key;
+
+  if (anyoneCanBid) return;
+
+  // ✅ Niemand kann mehr bieten -> nach kurzer Zeit sauber beenden
+  const t = setTimeout(() => {
+    updateDoc(roomRef, {
+      "versus.auction.phase": "results",
+      "versus.auction.timer": { running: false, paused: false, remaining: 0 },
+      "versus.auction.draft.current": null,
+      "versus.auction.draft.hasStarted": false,
+      "versus.auction.draft.highestBid": 0,
+      "versus.auction.draft.highestTeamId": null,
+      "versus.auction.updatedAt": serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }).catch(() => {});
+  }, 1800);
+
+  return () => clearTimeout(t);
+}, [
+  meIsHost,
+  phase,
+  draft?.current?.dexId,
+  draft?.auctionCountDone,
+  draft?.hasStarted,
+  JSON.stringify(draft?.budgets || {}),
+  JSON.stringify(draft?.teamIds || []),
+  timer?.running,
+  roomRef,
+]);
 
 useEffect(() => {
   if (!meIsHost) return;
@@ -2369,52 +2657,154 @@ useEffect(() => {
   const bots = Array.isArray(draft?.bots) ? draft.bots : [];
   if (bots.length === 0) return;
 
-  // nur reagieren wenn jemand anderes gerade führt
   const hb = Number(draft.highestBid ?? 0);
   const ht = draft.highestTeamId ?? null;
 
-  // key verhindert “spam” bei gleichen states
-  const picksLeft = Math.max(0, Number(draft.totalPokemon ?? 0) - Number(draft.auctionCountDone ?? 0));
-  const key = `${draft.current.dexId}|hb${hb}|ht${ht}|left${picksLeft}`;
+  const picksLeft = Math.max(
+    0,
+    Number(draft.totalPokemon ?? 0) - Number(draft.auctionCountDone ?? 0)
+  );
+
+  // key verhindert Spam bei gleichen states
+  const key = `${draft.current.dexId}|hb${hb}|ht${ht}|left${picksLeft}|hs${draft.hasStarted ? 1 : 0}`;
   if (lastBotReactKeyRef.current === key) return;
   lastBotReactKeyRef.current = key;
 
-  // wenn noch niemand geboten hat, lassen wir Bots NICHT sofort eröffnen (optional)
-  // -> du kannst das später ändern, wenn Bots auch “open bid” machen sollen.
-  if (!draft.hasStarted) return;
+  // Opening = noch kein Bid, timer läuft nicht (bei dir läuft er erst nach erstem Bid)
+  const opening = !draft.hasStarted && hb === 0 && !ht;
+  // Wir erkennen das NICHT über room.players (da bist du als Mensch drin),
+  // sondern über "participants == 0" ODER "keine Human-Owner in teamOwners".
+  const onlyBotsMode =
+    clampInt(settings.participants ?? 0, 0, 20) === 0 ||
+    !Object.values(teamOwners || {}).some((oid) => oid && !String(oid).startsWith("bot:"));
 
-  // Bot soll nur bieten, wenn er nicht selbst führt
-  // Wir lassen “1 Bot pro Änderung” reagieren (sonst eskaliert es zu hart).
+
+  const baseDelay = opening ? 900 : 250;
+  const randDelay = opening ? 1200 : 850;
+
   const currentDex = Number(draft.current.dexId);
-  const flags = getSpecialFlags(currentDex);
+  const flags = getSpecialFlags(currentDex, { isMega: !!draft?.current?.formKey });
 
-  // welche bot bids sind möglich?
-  const candidates = [];
-  for (const b of bots) {
-    const myBudget = Number(draft.budgets?.[b.teamId] ?? 0);
-    const bid = decideBotBid({
-      bot: b,
-      myBudget,
-      highestBid: hb,
-      highestTeamId: ht,
-      minBidIncrement: 100,
-      specialFlags: flags,
-      picksLeft,
-      avgPrice,
-    });
-    if (bid && bid > hb) {
-      candidates.push({ teamId: b.teamId, bid });
-    }
+  // ✅ START-BID ZWINGEND, wenn KEIN Mensch in einem Team sitzt
+// (egal ob participants=0 oder humans>0 aber niemand ist gejoint)
+const hasHumanInAnyTeam = Object.values(teamOwners || {}).some(
+  (oid) => oid && !String(oid).startsWith("bot:")
+);
+
+if (opening && !hasHumanInAnyTeam) {
+  // Nimm den ersten Bot, der mind. 100€ hat
+  const startBot = bots
+    .map((b) => ({ teamId: b.teamId, budget: Number(draft.budgets?.[b.teamId] ?? 0) }))
+    .find((x) => x.budget >= 100);
+
+  if (!startBot) return;
+
+  const delay = baseDelay + Math.floor(Math.random() * randDelay);
+  const t = setTimeout(() => {
+    placeBotBid(startBot.teamId, 100).catch(() => {});
+  }, delay);
+
+  return () => clearTimeout(t);
+}
+
+// Kandidaten sammeln (normales Bot-Verhalten)
+const candidates = [];
+for (const b of bots) {
+  const myBudget = Number(draft.budgets?.[b.teamId] ?? 0);
+
+  const bid = decideBotBid({
+    bot: b,
+    myBudget,
+    highestBid: hb,
+    highestTeamId: ht,
+    minBidIncrement: 100,
+    specialFlags: flags,
+    picksLeft,
+    avgPrice,
+  });
+
+  if (bid && bid > hb) {
+    candidates.push({ teamId: b.teamId, bid, budget: myBudget });
   }
+}
+
+ // ✅ START-BID LOGIK:
+// - Only-Bots: erzwinge Startbid (wie bisher)
+// - Mit Humans: Bot darf (mit Chance nach difficulty) den ersten Bid setzen,
+//   falls kein Bot "freiwillig" bietet (candidates.length === 0)
+// ✅ START-BID (Opening) – Runde startet bei erstem Gebot
+// Regel:
+// - Wenn KEIN Human ein Team belegt -> Bot MUSS starten (100€)
+// - Wenn Humans Teams belegen -> Bot DARF starten (Chance nach Difficulty)
+if (opening && candidates.length === 0) {
+  const startBidAmount = 100;
+
+  const hasHumanOwnerInTeams = Object.values(teamOwners || {}).some(
+    (oid) => oid && !String(oid).startsWith("bot:")
+  );
+
+  const forceStart = !hasHumanOwnerInTeams; // <-- nur dann zwingend
+
+  const startBots = bots
+    .map((b) => ({
+      teamId: b.teamId,
+      budget: Number(draft.budgets?.[b.teamId] ?? 0),
+      difficulty: b.difficulty || "normal",
+    }))
+    .filter((x) => x.budget >= startBidAmount);
+
+  if (startBots.length === 0) {
+    // niemand kann 100€ -> kein Startbid möglich
+    // (dein "stuck" useEffect kümmert sich später ums Beenden)
+  } else {
+    function startBidChance(diff) {
+      const d = String(diff || "normal").toLowerCase();
+      if (d === "easy" || d === "leicht") return 0.15;
+      if (d === "normal" || d === "mittel") return 0.30;
+      if (d === "hard" || d === "schwer") return 0.50;
+      if (d === "veryhard" || d === "sehrhart") return 0.70;
+      if (d === "random" || d === "zufall") return 0.35;
+      if (d === "chaotic" || d === "chaotisch") return 0.55;
+      return 0.30;
+    }
+
+    // Weighted Auswahl (stärkere Difficulty eher)
+    const weighted = startBots.map((sb) => ({
+      ...sb,
+      w: Math.max(0.01, startBidChance(sb.difficulty)),
+    }));
+    const sumW = weighted.reduce((a, x) => a + x.w, 0);
+    let r = Math.random() * sumW;
+    let chosen = weighted[0];
+    for (const x of weighted) {
+      r -= x.w;
+      if (r <= 0) { chosen = x; break; }
+    }
+
+    const baseDelayStart = forceStart ? 900 : 2600;
+    const randDelayStart = forceStart ? 1200 : 2600;
+    const delay = baseDelayStart + Math.floor(Math.random() * randDelayStart);
+
+    const t = setTimeout(() => {
+      // Chance erst beim Ausführen würfeln (Human hat so Zeit zu starten)
+      const ok = forceStart || Math.random() < startBidChance(chosen.difficulty);
+      if (!ok) return;
+      placeBotBid(chosen.teamId, startBidAmount).catch(() => {});
+    }, delay);
+
+    return () => clearTimeout(t);
+  }
+}
+
+
 
   if (candidates.length === 0) return;
 
-  // “best bid” nehmen (macht Bots gefährlicher). Alternativ random.
+  // best bid nehmen (Bots gefährlicher)
   candidates.sort((a, b) => b.bid - a.bid);
   const chosen = candidates[0];
 
-  // kleine menschliche Verzögerung
-  const delay = 250 + Math.floor(Math.random() * 850);
+  const delay = baseDelay + Math.floor(Math.random() * randDelay);
   const t = setTimeout(() => {
     placeBotBid(chosen.teamId, chosen.bid).catch(() => {});
   }, delay);
@@ -2432,6 +2822,10 @@ useEffect(() => {
   JSON.stringify(draft?.bots || []),
   JSON.stringify(draft?.budgets || {}),
   avgPrice,
+  // ✅ wichtig, weil wir activePlayers nutzen
+  JSON.stringify(activePlayers || []),
+  JSON.stringify(teamOwners || {}),
+  settings?.participants,
 ]);
 
   // ===== Host-only timer tick + award =====
@@ -2469,151 +2863,6 @@ useEffect(() => {
 
     return () => clearInterval(iv);
   }, [meIsHost, phase, timer?.running, timer?.paused, roomRef]);
-  // ==========================
-// Bot bidding (host only) — Step 5
-// ==========================
-useEffect(() => {
-  if (!meIsHost) return;
-  if (phase !== "auction") return;
-  // Bots dürfen auch Opening-Bids machen, wenn noch keiner geboten hat
-if (timer?.paused) return;
-
-const highestBidNow = Number(draft?.highestBid || 0);
-const hasStartedNow = !!draft?.hasStarted;
-
-// wenn Timer noch nicht läuft: nur dann aktiv werden, wenn noch kein Bid existiert
-if (!timer?.running && (hasStartedNow || highestBidNow > 0)) return;
-
-
-  const cur = draft?.current;
-  if (!cur?.dexId) return;
-
-  const botsObj = draft?.bots || {};
-  const botTeamIds = Object.keys(botsObj);
-  if (botTeamIds.length === 0) return;
-
-  // Bots sollen nicht "spammen" -> kleine zufällige Verzögerung
-  const t = setTimeout(async () => {
-    try {
-      await runTransaction(db, async (tx) => {
-        const snap = await tx.get(roomRef);
-        if (!snap.exists()) return;
-
-        const data = snap.data();
-        const a = data?.versus?.auction;
-        if (!a || a.phase !== "auction") return;
-
-        const d = a.draft || {};
-        const s = a.settings || settings;
-
-        const cur2 = d.current;
-        if (!cur2?.dexId) return;
-
-        const highestBid = Number(d.highestBid || 0);
-        const highestTeamId = d.highestTeamId || null;
-
-        // wenn kein Bot existiert -> raus
-        const botsHere = d.bots || {};
-        const botIds = Object.keys(botsHere);
-        if (botIds.length === 0) return;
-
-        // Bot zufällig picken (du kannst später smarter picken)
-        const pick = botIds[Math.floor(Math.random() * botIds.length)];
-        const bot = botsHere[pick];
-        if (!bot) return;
-
-        // Bots überbieten sich NICHT selbst
-        if (highestTeamId === pick) return;
-
-        const budgets = d.budgets || {};
-        const moneyLeft = Number(budgets[pick] || 0);
-        if (moneyLeft < 100) return;
-
-        const remainingCount = Math.max(
-          0,
-          Number(d.totalPokemon || 0) - Number(d.auctionCountDone || 0)
-        );
-
-        const specialFlags = getSpecialFlags(Number(cur2.dexId));
-        const statsTotal = curStats?.total ?? null;
-
-        const decision = decideBotBid({
-          botTeamId: pick,
-          bot,
-          currentDexId: Number(cur2.dexId),
-          highestBid,
-          highestTeamId,
-          moneyLeft,
-          remainingCount,
-          specialFlags,
-          statsTotal,
-        });
-
-        if (!decision) return;
-
-        const amt = Number(decision.amount || 0);
-        if (!amt || amt < 100) return;
-        if (amt % 100 !== 0) return;
-        if (amt > moneyLeft) return;
-        if (amt <= highestBid) return;
-
-        tx.update(roomRef, {
-          "versus.auction.draft.highestBid": amt,
-          "versus.auction.draft.highestTeamId": decision.teamId,
-          "versus.auction.draft.hasStarted": true,
-          "versus.auction.timer.paused": false,
-          "versus.auction.timer.running": true,
-          "versus.auction.timer.remaining": clampInt(s.secondsPerBid ?? 10, 5, 60),
-          "versus.auction.updatedAt": serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      });
-    } catch {
-      // absichtlich still
-    }
-  }, 350 + Math.random() * 650);
-
-  return () => clearTimeout(t);
-}, [
-  meIsHost,
-  phase,
-  timer?.running,
-  timer?.paused,
-  draft?.current?.dexId,
-  draft?.highestBid,
-  draft?.highestTeamId,
-  // bots-obj + budgets ändern -> bots können reagieren
-  JSON.stringify(draft?.bots || {}),
-  JSON.stringify(draft?.budgets || {}),
-  draft?.auctionCountDone,
-  draft?.totalPokemon,
-  curStats?.total,
-  roomRef,
-]);
-
-// 🎉 Win-Sound genau dann, wenn ein Pokémon "zugeschlagen" wurde
-useEffect(() => {
-  // wir nehmen auctionCountDone als "sold counter"
-  const count = Number(draft?.auctionCountDone ?? 0);
-
-  // beim ersten Mount nur initialisieren (kein Sound beim Laden/Rejoin)
-  if (lastAwardCountRef.current === null) {
-    lastAwardCountRef.current = count;
-    return;
-  }
-
-  // wenn Count steigt -> genau ein Pokémon wurde vergeben
-  if (count > lastAwardCountRef.current) {
-    lastAwardCountRef.current = count;
-    playWinSound();
-    return;
-  }
-
-  // wenn Draft reset/restart -> Counter zurücksetzen
-  if (count < lastAwardCountRef.current) {
-    lastAwardCountRef.current = count;
-  }
-}, [draft?.auctionCountDone]);
 
   // When timer hits 0 -> host awards (with evo-line banning)
   useEffect(() => {
@@ -2887,7 +3136,7 @@ function teamTitle(tid) {
                   <Row label="Teilnehmer">
                     <input
                       type="number"
-                      min={1}
+                      min={0}
                       max={10}
                       value={settings.participants}
                       onChange={(e) => updateSettings({ participants: Number(e.target.value) })}
@@ -3072,23 +3321,33 @@ function teamTitle(tid) {
             <div>
               <div style={{ fontWeight: 900, marginBottom: 10 }}>Teams auswählen</div>
               <div style={{ opacity: 0.8, fontSize: 12, marginBottom: 10 }}>
-                Freie Teams sind <b>rot</b>. Belegte Teams <b>grün</b>. Klicke auf ein Team zum Joinen.
-              </div>
-
+  {clampInt(settings.participants ?? 0, 0, 20) === 0
+    ? <>Bot-only Raum: Du bist <b>Zuschauer</b>. Teams sind Bots, kein Join nötig.</>
+    : <>Freie Teams sind <b>rot</b>. Belegte Teams <b>grün</b>. Klicke auf ein Team zum Joinen.</>}
+</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
                 {teamIds.map((tid) => {
                   const free = teamIsFree(tid);
                   const mine = teamIsMine(tid);
                   const owner = teamOwners?.[tid] ?? null;
-
+                  const ownerIsBot = owner && String(owner).startsWith("bot:");
+                  const ownerOffline = !free && !ownerIsBot && isPlayerOffline(owner);
                   return (
                     <div
                       key={tid}
                       style={{
-                        ...teamSlotCard,
-                        borderColor: free ? "rgba(239,68,68,0.55)" : "rgba(34,197,94,0.55)",
-                        background: free ? "rgba(239,68,68,0.08)" : "rgba(34,197,94,0.08)",
-                      }}
+  ...teamSlotCard,
+  borderColor: free
+    ? "rgba(239,68,68,0.55)"
+    : ownerOffline
+      ? "rgba(239,68,68,0.85)"
+      : "rgba(34,197,94,0.55)",
+  background: free
+    ? "rgba(239,68,68,0.08)"
+    : ownerOffline
+      ? "rgba(239,68,68,0.14)"
+      : "rgba(34,197,94,0.08)",
+}}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                         <div style={{ fontWeight: 900 }}>
@@ -3099,6 +3358,11 @@ function teamTitle(tid) {
                       </div>
 
                       <div style={{ marginTop: 6, fontWeight: 800 }}>{teamTitle(tid)}</div>
+{ownerOffline && (
+  <div style={{ marginTop: 6, fontSize: 12, fontWeight: 900, color: "rgba(239,68,68,0.95)" }}>
+    OFFLINE
+  </div>
+)}
 
                       <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
                         {free ? (
@@ -3119,19 +3383,39 @@ function teamTitle(tid) {
                           <button type="button" style={{ ...btnGhost, opacity: 0.5 }} disabled>
                             Belegt
                           </button>
-                        )}
+                        )}        
+{/* ✅ Host kann belegtes Team leeren + Admin übertragen */}
+{!free && !mine && meIsHost && (() => {
+  const ownerId = teamOwners?.[tid] ?? null;
+  const ownerName = ownerId ? labelPlayer(ownerId, room) : "—";
+  const ownerIsBot = ownerId && String(ownerId).startsWith("bot:");
 
-                        {/* ✅ Host kann belegtes Team leeren */}
-                        {!free && meIsHost && (
-                          <button
-                            type="button"
-                            style={{ ...btnDanger, padding: "10px 12px" }}
-                            onClick={() => hostKickFromTeam(tid)}
-                            title="Entfernt den Spieler aus dem Team (Geld/Pokémon bleiben)"
-                          >
-                            Entfernen
-                          </button>
-                        )}
+  // 👉 Wenn Bot = gar nichts anzeigen
+if (ownerIsBot) return null;
+
+return (
+  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+    <button
+      type="button"
+      style={{ ...btnDanger, padding: "10px 12px" }}
+      onClick={() => hostKickFromTeam(tid)}
+      title="Entfernt den Spieler aus dem Team (Geld/Pokémon bleiben)"
+    >
+      Entfernen
+    </button>
+
+    <button
+      type="button"
+      style={{ ...btnGhost, padding: "10px 12px" }}
+      onClick={() => makeAdmin(ownerId, ownerName)}
+      title="Überträgt die Admin/Host-Rechte an den aktuellen Team-Besitzer"
+    >
+      Zum Admin machen
+    </button>
+  </div>
+);
+
+})()}
                       </div>
 
                       <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
@@ -3158,6 +3442,9 @@ function teamTitle(tid) {
                 const team = draft.teams?.[tid] ?? [];
                 const free = teamIsFree(tid);
                 const mine = teamIsMine(tid);
+                const ownerId = teamOwners?.[tid] ?? null;
+                const ownerIsBot = ownerId && String(ownerId).startsWith("bot:");
+                const ownerOffline = !free && !ownerIsBot && isPlayerOffline(ownerId);
 
                 // ================================
                 // Anzeige-Team bestimmen
@@ -3165,12 +3452,15 @@ function teamTitle(tid) {
                 let displayTeam = [];
 
                 if (settings.keepEvolvedForms) {
-                  // ✅ Originalformen anzeigen (so wie gedraftet)
-                  displayTeam = team.map((p) => ({
-                    dexId: p.dexId,
-                    price: p.price,
-                  }));
-                } else {
+  // ✅ Originalformen anzeigen (so wie gedraftet) — inkl. Mega-Metadaten
+  displayTeam = team.map((p) => ({
+    dexId: p.dexId,
+    price: p.price,
+    formKey: p.formKey || null,
+    imageUrl: p.imageUrl || null,
+    name: p.name || null,
+  }));
+} else {
                   // ✅ Basisformen deduplizieren
                   const seen = new Set();
                   displayTeam = [];
@@ -3180,9 +3470,14 @@ function teamTitle(tid) {
                     if (!seen.has(baseDex)) {
                       seen.add(baseDex);
                       displayTeam.push({
-                        dexId: baseDex,
-                        price: p.price,
-                      });
+  dexId: baseDex,
+  price: p.price,
+  // wir behalten trotzdem Bild/Name vom originalen Draft-Mon als nice-to-have
+  formKey: p.formKey || null,
+  imageUrl: p.imageUrl || null,
+  name: p.name || null,
+});
+
                     }
                   }
                 }
@@ -3191,29 +3486,50 @@ function teamTitle(tid) {
                   <div
                     key={tid}
                     style={{
-                      ...playerCard,
-                      borderColor: free ? "rgba(239,68,68,0.35)" : "rgba(34,197,94,0.35)",
-                      background: free ? "rgba(239,68,68,0.05)" : "rgba(34,197,94,0.05)",
-                    }}
+  ...playerCard,
+  borderColor: free
+    ? "rgba(239,68,68,0.35)"
+    : ownerOffline
+      ? "rgba(239,68,68,0.85)"
+      : "rgba(34,197,94,0.35)",
+  background: free
+    ? "rgba(239,68,68,0.05)"
+    : ownerOffline
+      ? "rgba(239,68,68,0.14)"
+      : "rgba(34,197,94,0.05)",
+}}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
                       <div style={{ fontWeight: 900 }}>
-                        {teamTitle(tid)} {mine ? "(du)" : ""}
-                      </div>
-
+  {teamTitle(tid)} {mine ? "(du)" : ""}
+  {String(teamOwners?.[tid] || "").startsWith("bot:") ? (
+    <span style={{ marginLeft: 8, fontSize: 11, opacity: 0.8 }}>(BOT)</span>
+  ) : null}
+</div>
                       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                         <div style={{ fontWeight: 900 }}>{money}€</div>
+{ownerOffline && (
+  <div style={{ fontSize: 11, fontWeight: 950, color: "rgba(239,68,68,0.95)" }}>
+    OFFLINE
+  </div>
+)}
 
-                        {!free && meIsHost && (
-                          <button
-                            type="button"
-                            style={{ ...btnDanger, padding: "6px 10px", fontSize: 12 }}
-                            onClick={() => hostKickFromTeam(tid)}
-                            title="Owner entfernen (Geld/Pokémon bleiben)"
-                          >
-                            Entfernen
-                          </button>
-                        )}
+                       {!free && meIsHost && (() => {
+  const ownerId = teamOwners?.[tid] ?? null;
+  const ownerIsBot = ownerId && String(ownerId).startsWith("bot:");
+  return (
+    <button
+      type="button"
+      style={{ ...btnDanger, padding: "6px 10px", fontSize: 12, opacity: ownerIsBot ? 0.45 : 1 }}
+      onClick={() => hostKickFromTeam(tid)}
+      disabled={ownerIsBot}
+      title={ownerIsBot ? "Bots dürfen nicht rausfliegen" : "Owner entfernen (Geld/Pokémon bleiben)"}
+    >
+      Entfernen
+    </button>
+  );
+})()}
+
                       </div>
                     </div>
 
@@ -3257,7 +3573,7 @@ function teamTitle(tid) {
                               style={imgBtn}
                             >
                               <img
-  src={(p.formKey && megaEvoImgMap?.[p.formKey]) || p.imageUrl || dexIdToImageUrl(p.dexId)}
+  src={(p.formKey && megaImgMap?.[p.formKey]) || p.imageUrl || dexIdToImageUrl(p.dexId)}
   alt={p.name || name}
   width={44}
   height={44}
@@ -3372,7 +3688,7 @@ function teamTitle(tid) {
                     <div style={{ fontSize: 20, fontWeight: 900 }}>{draft.current.name}</div>
 
                     {(() => {
-                      const tag = getSpecialTag(draft.current.dexId);
+                      const tag = getSpecialTag(draft.current.dexId, { isMega: !!draft.current?.formKey });
                       if (!tag) return null;
 
                       return (
@@ -3589,6 +3905,22 @@ function teamTitle(tid) {
               <div style={{ fontWeight: 900, marginBottom: 8 }}>Bieten</div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+                {/* ✅ Spectator-Host: Startbutton, wenn kein Team */}
+{meIsHost && !myTeamId && !draft.hasStarted && Number(draft.highestBid ?? 0) === 0 && !draft.highestTeamId ? (
+  <div style={{ marginBottom: 10 }}>
+    <button
+      onClick={forceBotStartFromSpectator}
+      style={btnPrimary}
+      title="Setzt das erste Gebot (100€) durch einen Bot, damit die Runde startet"
+    >
+      Bots starten (100€ Startgebot)
+    </button>
+    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+      Du bist Host ohne Team (Zuschauer). Dieser Button startet die Runde.
+    </div>
+  </div>
+) : null}
+
                 <input
                   type="number"
                   step={100}
@@ -3905,180 +4237,8 @@ const topLine = {
 
 const panel = {
   padding: 12,
-  border: "1px solid rgba(255,255,255,0.12)",
-  borderRadius: 12,
-  background: "rgba(0,0,0,0.15)",
-};
-
-const statPanel = {
-  padding: 12,
-  borderRadius: 14,
   border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 16,
   background: "rgba(0,0,0,0.22)",
-  boxShadow: "0 12px 28px rgba(0,0,0,0.35)",
-};
-
-const auctionGrid = {
-  display: "grid",
-  gridTemplateColumns: "1.6fr 1fr",
-  gap: 10,
-  alignItems: "start",
-};
-
-const playerCard = {
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.04)",
-};
-
-const teamSlotCard = {
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.04)",
-};
-
-const timerBig = {
-  fontSize: 40,
-  fontWeight: 900,
-  letterSpacing: 1,
-  marginBottom: 6,
-};
-
-const input = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
-  outline: "none",
-};
-
-const btnPrimary = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.28)",
-  background: "rgba(255,255,255,0.16)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 900,
-};
-
-const btnGhost = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 800,
-};
-
-const btnGhostSmall = {
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 800,
-  fontSize: 12,
-};
-
-const imgBtn = {
-  padding: 0,
-  border: "none",
-  background: "transparent",
-  cursor: "pointer",
-};
-
-const pokeHeroWrap = {
-  position: "relative",
-  width: 320,
-  height: 320,
-  borderRadius: 18,
-  overflow: "hidden",
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(0,0,0,0.18)",
-  boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
-};
-
-const pokeHeroBtn = {
-  padding: 0,
-  border: "none",
-  background: "transparent",
-  cursor: "pointer",
-  width: "100%",
-  height: "100%",
-  display: "grid",
-  placeItems: "center",
-};
-
-const pokeHeroImg = {
-  width: "100%",
-  height: "100%",
-  objectFit: "contain",
-  imageRendering: "pixelated",
-  filter: "drop-shadow(0 12px 22px rgba(0,0,0,0.65))",
-};
-
-const pokeHeroOverlay = {
-  position: "absolute",
-  left: 0,
-  right: 0,
-  bottom: 0,
-  padding: "14px 14px 12px",
-  background: "linear-gradient(to top, rgba(0,0,0,0.88), rgba(0,0,0,0.28), rgba(0,0,0,0))",
-  color: "white",
-};
-
-// ✅ absichtlich leer -> kein weißer Rahmen/Glow beim Bieten
-const pokeHeroOverlayFlash = {};
-
-const pokeHeroRightBadge = {
-  borderRadius: 12,
-  padding: "7px 7px",
-  background: "rgba(0,0,0,0.40)",
-  border: "1px solid rgba(255,255,255,0.14)",
-  minWidth: 7,
-  textAlign: "center",
-};
-
-const evoCardBtn = {
-  display: "grid",
-  justifyItems: "center",
-  gap: 4,
-  padding: "10px 12px",
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.22)",
-  background: "rgba(0,0,0,0.28)",
-  cursor: "pointer",
-  color: "rgba(255,255,255,0.95)",
-};
-
-const typeIconRow = {
-  display: "flex",
-  gap: 10,
-  justifyContent: "center",
-  alignItems: "center",
-  flexWrap: "wrap",
-  marginTop: 10,
-};
-
-const typeIcon = {
-  width: 42,
-  height: 50,
-  objectFit: "contain",
-  imageRendering: "auto",
-  filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.6))",
-};
-
-const btnDanger = {
-  borderRadius: 10,
-  border: "1px solid rgba(239,68,68,0.35)",
-  background: "rgba(239,68,68,0.12)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 900,
+  boxShadow: "0 10px 24px rgba(0,0,0,0.30)",
 };

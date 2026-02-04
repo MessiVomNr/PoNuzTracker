@@ -46,38 +46,48 @@ export function generateBotConfigs(botCount, seedBase = Date.now()) {
   const count = clamp(botCount, 0, 9);
   const picks = pickUniqueShuffled(BOT_NAME_POOL, Math.min(count, BOT_NAME_POOL.length));
 
-  // zufällige “Defaults” – aber noch editierbar in UI
   const out = [];
   for (let i = 0; i < count; i++) {
-    const name = picks[i] || `Bot-${i + 1}`;
+    const idx1 = i + 1;
+
+    const name = picks[i] || `Bot-${idx1}`;
     const diff = DIFFS[Math.floor(Math.random() * DIFFS.length)];
+
     out.push({
-      id: `bot_${seedBase}_${i}`,    // stabil für diesen Draft/Setup
+      id: `bot:${idx1}`, // ✅ STABIL & EINFACH zu matchen
+      // seedBase nur für Optik/Feeling
       name: `${name} #${Math.floor(10 + Math.random() * 90)}`,
       difficulty: diff,
-      // “Reserve”-Feeling: variiert (kann auch 0 sein)
       reserveBias: Math.random(), // 0..1
+      seedBase, // optional: falls du später reproduzierbare RNG willst
     });
   }
   return out;
 }
 
 // wird beim Draft-Start in den Room geschrieben (draft.bots)
-export function buildBots({ botConfigs = [], startTeamIndex = 1 }) {
+// wird beim Draft-Start in den Room geschrieben (draft.bots)
+export function buildBots({ botConfigs = [], startTeamIndex = 0 }) {
   const bots = [];
+  const startIdx = Math.max(0, Number(startTeamIndex) || 0);
+
   for (let i = 0; i < botConfigs.length; i++) {
-    const cfg = botConfigs[i];
-    const teamId = `team${startTeamIndex + i}`;
+    const cfg = botConfigs[i] || {};
+    const teamId = `team${startIdx + i + 1}`; // ✅ team ist 1-based
+
     bots.push({
-      id: cfg.id,
+      id: String(cfg.id || `bot:${i + 1}`),
       teamId,
-      name: cfg.name,
-      difficulty: cfg.difficulty || "normal",
+      name: String(cfg.name || `Bot #${i + 1}`),
+      difficulty: String(cfg.difficulty || "normal"),
       reserveBias: typeof cfg.reserveBias === "number" ? cfg.reserveBias : Math.random(),
+      seedBase: cfg.seedBase,
     });
   }
+
   return bots;
 }
+
 
 function bumpStep(difficulty) {
   // mind +100, aber manchmal größere Sprünge
