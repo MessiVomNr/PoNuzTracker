@@ -39,7 +39,24 @@ const BOT_NAME_POOL = [
   "Mies-Malte",
 ];
 
-const DIFFS = ["easy", "normal", "hard", "chaos"];
+export const BOT_DIFFICULTIES = ["easy", "normal", "hard", "veryhard", "chaos"];
+export const BOT_BEHAVIORS = [
+  "none",
+  "starterfreund",
+  "sparer",
+  "raushauer",
+  "sniper",
+  "sammler",
+  "minimalist",
+  "blockierer",
+  "endgame",
+  "chaos",
+  "meta",
+  "anti_meta",
+  // (weitere können später ergänzt werden; nicht implementierte verhalten = neutral)
+];
+
+const DIFFS = BOT_DIFFICULTIES;
 
 // wird in der Lobby als “Bot Teams” angezeigt & editierbar gemacht
 export function generateBotConfigs(botCount, seedBase = Date.now()) {
@@ -58,6 +75,8 @@ export function generateBotConfigs(botCount, seedBase = Date.now()) {
       // seedBase nur für Optik/Feeling
       name: `${name} #${Math.floor(10 + Math.random() * 90)}`,
       difficulty: diff,
+      behavior1: "none",
+      behavior2: "none",
       reserveBias: Math.random(), // 0..1
       seedBase, // optional: falls du später reproduzierbare RNG willst
     });
@@ -80,6 +99,8 @@ export function buildBots({ botConfigs = [], startTeamIndex = 0 }) {
       teamId,
       name: String(cfg.name || `Bot #${i + 1}`),
       difficulty: String(cfg.difficulty || "normal"),
+      behavior1: String(cfg.behavior1 || "none"),
+      behavior2: String(cfg.behavior2 || "none"),
       reserveBias: typeof cfg.reserveBias === "number" ? cfg.reserveBias : Math.random(),
       seedBase: cfg.seedBase,
     });
@@ -120,6 +141,91 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function bidFrequencyForDifficulty(difficulty) {
+  const d = String(difficulty || "normal").toLowerCase();
+  if (d === "easy" || d === "leicht") return 0.50;
+  if (d === "normal" || d === "mittel") return 0.66;
+  if (d === "hard" || d === "schwer") return 0.80;
+  if (d === "veryhard" || d === "sehrhart") return 0.95;
+  if (d === "chaos" || d === "chaotisch") return 0.75;
+  return 0.66;
+}
+
+function normalizeBehavior(v) {
+  const x = String(v || "none").toLowerCase().trim();
+  return x || "none";
+}
+
+function applyBehaviorTuning(state, behavior, ctx) {
+  const b = normalizeBehavior(behavior);
+  if (b === "none") return state;
+
+  // state: { desire, reserveMult, maxPayMult, incFloor, freqAdd }
+  const s = { ...state };
+
+  if (b === "starterfreund") {
+    if (ctx?.specialFlags?.starter) s.desire += 0.18;
+    else s.desire += 0.04;
+    s.freqAdd += 0.03;
+  }
+
+  if (b === "sparer" || b === "minimal_budget") {
+    s.reserveMult *= 1.45;
+    s.maxPayMult *= 0.92;
+    s.freqAdd -= 0.10;
+  }
+
+  if (b === "minimalist") {
+    s.reserveMult *= 1.60;
+    s.maxPayMult *= 0.88;
+    s.freqAdd -= 0.08;
+  }
+
+  if (b === "raushauer") {
+    s.reserveMult *= 0.70;
+    s.maxPayMult *= 1.10;
+    s.incFloor = Math.max(s.incFloor, 300);
+    s.freqAdd += 0.10;
+  }
+
+  if (b === "sniper") {
+    // bietet seltener, dafür größere Sprünge
+    s.freqAdd -= 0.18;
+    s.incFloor = Math.max(s.incFloor, 300);
+    s.maxPayMult *= 1.04;
+  }
+
+  if (b === "sammler") {
+    // leicht höhere desire generell; specials stärker
+    const anySpecial = !!(ctx?.specialFlags?.starter || ctx?.specialFlags?.pseudo || ctx?.specialFlags?.subLegendary || ctx?.specialFlags?.legendary || ctx?.specialFlags?.mythical);
+    s.desire += anySpecial ? 0.10 : 0.05;
+    s.freqAdd += 0.04;
+  }
+
+  if (b === "blockierer") {
+    // etwas aggressiver gegen hohe Gebote
+    if (Number(ctx?.highestBid || 0) >= 400) s.maxPayMult *= 1.08;
+    s.freqAdd += 0.05;
+  }
+
+  if (b === "endgame") {
+    if (Number(ctx?.picksLeft || 0) <= 2) {
+      s.freqAdd += 0.18;
+      s.maxPayMult *= 1.12;
+      s.reserveMult *= 0.75;
+    }
+  }
+
+  if (b === "chaos") {
+    s.freqAdd += 0.06;
+    s.incFloor = Math.max(s.incFloor, 200);
+    s.maxPayMult *= 1.06;
+  }
+
+  // meta / anti-meta aktuell neutral (placeholder)
+  return s;
+}
+
 /**
  * Entscheidet ein Bot-Gebot.
  * Regeln:
@@ -145,14 +251,40 @@ export function decideBotBid({
   if (budget < hb + minBidIncrement) return null;
 
   const diff = bot.difficulty || "normal";
+  const b1 = bot.behavior1 || "none";
+  const b2 = bot.behavior2 || "none";
+
+  // ✅ Bot-Bietfrequenz (Punkt 10)
+  // Grundfrequenz nach Difficulty + kleine Adjustments durch Verhalten
+  const baseFreq = bidFrequencyForDifficulty(diff);
+
+  // Verhalten-Tuning (Punkt 11) – nicht implementierte Verhalten = neutral
+  let tune = { desire: 0, reserveMult: 1, maxPayMult: 1, incFloor: 0, freqAdd: 0 };
+  tune = applyBehaviorTuning(tune, b1, { specialFlags, highestBid: hb, picksLeft });
+  // VeryHard darf 2 Verhalten haben (sonst behavior2 ignorieren)
+  if (String(diff).toLowerCase() === "veryhard" || String(diff).toLowerCase() === "sehrhart") {
+    tune = applyBehaviorTuning(tune, b2, { specialFlags, highestBid: hb, picksLeft });
+  }
+
+  // Final frequency
+  const isLastForFreq = Number(picksLeft || 0) <= 1;
+  let freq = clamp(baseFreq + tune.freqAdd + (isLastForFreq ? 0.10 : 0), 0.05, 0.98);
+
+  // Beim Opening (hb===0) lieber etwas öfter anbieten, sonst startet Runde oft nur durch Humans
+  if (hb === 0) freq = clamp(freq + 0.08, 0.05, 0.98);
+
+  if (Math.random() > freq) return null;
+
 
   // “Desire” = wie sehr will er dieses Pokémon
-  const desire = desireFromSpecial(specialFlags || {}, diff);
+  let desire = desireFromSpecial(specialFlags || {}, diff);
+  desire = clamp(desire + (tune.desire || 0), 0.05, 0.98);
 
   // Reserve-Gefühl (kann 0 sein) – aber variiert
   // reserveBias=0 => keine Reserve, reserveBias=1 => eher Reserve
   const reserveFactor = clamp(bot.reserveBias, 0, 1);
   let reserve = Math.round(budget * (0.05 + 0.18 * reserveFactor)); // ~5%..23%
+  reserve = Math.round(reserve * (tune.reserveMult || 1));
   if (diff === "hard") reserve = Math.round(reserve * 0.6);
   if (diff === "chaos") reserve = Math.round(reserve * 0.4);
 
@@ -164,6 +296,7 @@ export function decideBotBid({
   // Je specialer & je “last pick” desto näher ans All-in
   let maxPay = Math.round((budget - reserve) * (0.55 + 0.45 * desire));
   if (isLast) maxPay = Math.round(budget * (0.85 + 0.15 * desire)); // sehr nah ans all-in
+  maxPay = Math.round(maxPay * (tune.maxPayMult || 1));
   maxPay = clamp(maxPay, 0, budget);
 
   if (maxPay <= hb) return null;
@@ -171,6 +304,7 @@ export function decideBotBid({
   // Schritt wählen (mind. +100)
   const steps = bumpStep(diff);
   let inc = pick(steps);
+  if (tune.incFloor) inc = Math.max(inc, tune.incFloor);
 
   // “Randomness” – manchmal nur +100, manchmal dicke Sprünge
   if (diff === "easy" && Math.random() < 0.6) inc = 100;

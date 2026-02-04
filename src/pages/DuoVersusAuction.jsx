@@ -7,7 +7,7 @@ import { doc, runTransaction, updateDoc, serverTimestamp, getDoc } from "firebas
 import TypeModal from "../versus/TypeModal";
 import { makeShuffledPool, dexIdToImageUrl, getDexCapForGen } from "../utils/pokemonPool";
 import { pokedex as fullPokedex } from "../data/pokedex.js";
-import { buildBots, decideBotBid, generateBotConfigs } from "../versus/botEngine";
+import { buildBots, decideBotBid, generateBotConfigs, BOT_BEHAVIORS, BOT_DIFFICULTIES } from "../versus/botEngine";
 import {
   statPanel,
   auctionGrid,
@@ -3172,22 +3172,57 @@ function teamTitle(tid) {
     ) : (
       <div style={{ display: "grid", gap: 8 }}>
         {(settings.botsConfig || []).map((b, idx) => (
-          <div key={b.id || idx} style={{ display: "grid", gridTemplateColumns: "1fr 180px", gap: 10, alignItems: "center" }}>
+          <div key={b.id || idx} style={{ display: "grid", gridTemplateColumns: "1fr 140px 200px 200px", gap: 10, alignItems: "center" }}>
             <div style={{ fontWeight: 900 }}>{b.name}</div>
 
             <select
               value={b.difficulty || "normal"}
               onChange={(e) => {
                 const next = [...(settings.botsConfig || [])];
-                next[idx] = { ...next[idx], difficulty: e.target.value };
+                const d = e.target.value;
+                next[idx] = { ...next[idx], difficulty: d, behavior2: d === "veryhard" ? (next[idx].behavior2 || "none") : "none" };
                 updateSettings({ botsConfig: next });
               }}
             >
               <option value="easy">Easy</option>
               <option value="normal">Normal</option>
               <option value="hard">Hard</option>
+              <option value="veryhard">Sehr hart</option>
               <option value="chaos">Chaos</option>
+            
+            <select
+              value={b.behavior1 || "none"}
+              onChange={(e) => {
+                const next = [...(settings.botsConfig || [])];
+                next[idx] = { ...next[idx], behavior1: e.target.value };
+                updateSettings({ botsConfig: next });
+              }}
+              title="Verhalten (Punkt 11)"
+            >
+              {(BOT_BEHAVIORS || []).map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
             </select>
+
+            <select
+              value={b.behavior2 || "none"}
+              disabled={(b.difficulty || "normal") !== "veryhard"}
+              onChange={(e) => {
+                const next = [...(settings.botsConfig || [])];
+                next[idx] = { ...next[idx], behavior2: e.target.value };
+                updateSettings({ botsConfig: next });
+              }}
+              title="2. Verhalten (nur Sehr hart)"
+            >
+              {(BOT_BEHAVIORS || []).map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+</select>
           </div>
         ))}
       </div>
@@ -3332,6 +3367,8 @@ function teamTitle(tid) {
                   const owner = teamOwners?.[tid] ?? null;
                   const ownerIsBot = owner && String(owner).startsWith("bot:");
                   const ownerOffline = !free && !ownerIsBot && isPlayerOffline(owner);
+                  const botCfgIdx = ownerIsBot ? (settings.botsConfig || []).findIndex((x) => x && x.id === owner) : -1;
+                  const botCfg = botCfgIdx >= 0 ? (settings.botsConfig || [])[botCfgIdx] : null;
                   return (
                     <div
                       key={tid}
@@ -3358,6 +3395,73 @@ function teamTitle(tid) {
                       </div>
 
                       <div style={{ marginTop: 6, fontWeight: 800 }}>{teamTitle(tid)}</div>
+
+{ownerIsBot && meIsHost && botCfg && (
+  <div style={{ marginTop: 10, padding: 10, borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.18)" }}>
+    <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 900, marginBottom: 8 }}>Bot-Einstellungen</div>
+
+    <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8, alignItems: "center", marginBottom: 8 }}>
+      <div style={{ fontSize: 12, opacity: 0.8 }}>Schwierigkeit</div>
+      <select
+        value={botCfg.difficulty || "normal"}
+        onChange={(e) => {
+          const next = [...(settings.botsConfig || [])];
+          const d = e.target.value;
+          next[botCfgIdx] = { ...next[botCfgIdx], difficulty: d, behavior2: d === "veryhard" ? (next[botCfgIdx].behavior2 || "none") : "none" };
+          updateSettings({ botsConfig: next });
+        }}
+      >
+        <option value="easy">Easy</option>
+        <option value="normal">Normal</option>
+        <option value="hard">Hard</option>
+        <option value="veryhard">Sehr hart</option>
+        <option value="chaos">Chaos</option>
+      </select>
+    </div>
+
+    <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8, alignItems: "center", marginBottom: 8 }}>
+      <div style={{ fontSize: 12, opacity: 0.8 }}>Verhalten 1</div>
+      <select
+        value={botCfg.behavior1 || "none"}
+        onChange={(e) => {
+          const next = [...(settings.botsConfig || [])];
+          next[botCfgIdx] = { ...next[botCfgIdx], behavior1: e.target.value };
+          updateSettings({ botsConfig: next });
+        }}
+      >
+        {(BOT_BEHAVIORS || []).map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+    </div>
+
+    <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8, alignItems: "center" }}>
+      <div style={{ fontSize: 12, opacity: 0.8 }}>Verhalten 2</div>
+      <select
+        value={botCfg.behavior2 || "none"}
+        disabled={(botCfg.difficulty || "normal") !== "veryhard"}
+        onChange={(e) => {
+          const next = [...(settings.botsConfig || [])];
+          next[botCfgIdx] = { ...next[botCfgIdx], behavior2: e.target.value };
+          updateSettings({ botsConfig: next });
+        }}
+      >
+        {(BOT_BEHAVIORS || []).map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+    </div>
+
+    <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+      Punkt 10: Bietfrequenz hängt an Schwierigkeit. Punkt 11: Verhalten tunet Reserve/MaxPay/Jumps.
+    </div>
+  </div>
+)}
+
 {ownerOffline && (
   <div style={{ marginTop: 6, fontSize: 12, fontWeight: 900, color: "rgba(239,68,68,0.95)" }}>
     OFFLINE
