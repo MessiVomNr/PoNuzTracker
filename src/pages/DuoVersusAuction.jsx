@@ -2153,6 +2153,12 @@ const normalizedSettings = {
     if (!owners[tid]) owners[tid] = `bot:${i + 1}`;
   }
 
+  // ✅ Wenn Teilnehmer hochgestellt werden: Bot-Owner aus Human-Slots entfernen
+  for (let i = 0; i < finalPlayers; i++) {
+    const tid = teamIdFor(i);
+    if (owners[tid] && String(owners[tid]).startsWith("bot:")) delete owners[tid];
+  }
+
   // ✅ Sicherheit: falls BotCount kleiner gemacht wurde -> alte bot:... owners entfernen
   for (let i = totalTeams; i < 20; i++) {
     const tid = teamIdFor(i);
@@ -3142,97 +3148,24 @@ function teamTitle(tid) {
                       onChange={(e) => updateSettings({ participants: Number(e.target.value) })}
                     />
                   </Row>
-<Row label="Bots">
-  <input
-    type="number"
-    min={0}
-    max={9}
-    value={settings.botCount ?? 0}
-    onChange={(e) => updateSettings({ botCount: Number(e.target.value) })}
-  />
-</Row>
-{meIsHost && (
-  <div style={{ marginTop: 10, padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.18)" }}>
-    <div style={{ fontWeight: 900, marginBottom: 8 }}>Bot-Teams</div>
+	<Row label="Bots">
+	  <input
+	    type="number"
+	    min={0}
+	    max={7}
+	    value={settings.botCount ?? 0}
+	    onChange={(e) => {
+	      const v = Math.max(0, Math.min(7, parseInt(e.target.value || "0", 10)));
+	      updateSettings({ botCount: v });
+	    }}
+	    style={input}
+	  />
+	</Row>
 
-    <button
-      type="button"
-      style={{ ...btnGhost, padding: "8px 10px", fontSize: 12, marginBottom: 10 }}
-      onClick={() => {
-        const cnt = clampInt(settings.botCount ?? 0, 0, 9);
-        updateSettings({ botsConfig: generateBotConfigs(cnt, Date.now()) });
-      }}
-      title="Neue zufällige Bot-Namen + Defaults würfeln"
-    >
-      🔁 Bots neu würfeln
-    </button>
+<div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
+  Hinweis: Pro Bot-Team kannst du das Verhalten einstellen. Trotzdem bleibt immer etwas Zufall drin.
+</div>
 
-    {(settings.botsConfig || []).length === 0 ? (
-      <div style={{ fontSize: 12, opacity: 0.7 }}>Keine Bots aktiviert.</div>
-    ) : (
-      <div style={{ display: "grid", gap: 8 }}>
-        {(settings.botsConfig || []).map((b, idx) => (
-          <div key={b.id || idx} style={{ display: "grid", gridTemplateColumns: "1fr 140px 200px 200px", gap: 10, alignItems: "center" }}>
-            <div style={{ fontWeight: 900 }}>{b.name}</div>
-
-            <select
-              value={b.difficulty || "normal"}
-              onChange={(e) => {
-                const next = [...(settings.botsConfig || [])];
-                const d = e.target.value;
-                next[idx] = { ...next[idx], difficulty: d, behavior2: d === "veryhard" ? (next[idx].behavior2 || "none") : "none" };
-                updateSettings({ botsConfig: next });
-              }}
-            >
-              <option value="easy">Easy</option>
-              <option value="normal">Normal</option>
-              <option value="hard">Hard</option>
-              <option value="veryhard">Sehr hart</option>
-              <option value="chaos">Chaos</option>
-            
-            <select
-              value={b.behavior1 || "none"}
-              onChange={(e) => {
-                const next = [...(settings.botsConfig || [])];
-                next[idx] = { ...next[idx], behavior1: e.target.value };
-                updateSettings({ botsConfig: next });
-              }}
-              title="Verhalten (Punkt 11)"
-            >
-              {(BOT_BEHAVIORS || []).map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={b.behavior2 || "none"}
-              disabled={(b.difficulty || "normal") !== "veryhard"}
-              onChange={(e) => {
-                const next = [...(settings.botsConfig || [])];
-                next[idx] = { ...next[idx], behavior2: e.target.value };
-                updateSettings({ botsConfig: next });
-              }}
-              title="2. Verhalten (nur Sehr hart)"
-            >
-              {(BOT_BEHAVIORS || []).map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-</select>
-          </div>
-        ))}
-      </div>
-    )}
-
-    <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-      Pro Bot-Team kannst du das Verhalten einstellen. Trotzdem bleibt immer etwas Zufall drin.
-    </div>
-  </div>
-)}
 
                   <Row label="Budget pro Team">
                     <input
@@ -3356,9 +3289,13 @@ function teamTitle(tid) {
             <div>
               <div style={{ fontWeight: 900, marginBottom: 10 }}>Teams auswählen</div>
               <div style={{ opacity: 0.8, fontSize: 12, marginBottom: 10 }}>
-  {clampInt(settings.participants ?? 0, 0, 20) === 0
-    ? <>Bot-only Raum: Du bist <b>Zuschauer</b>. Teams sind Bots, kein Join nötig.</>
-    : <>Freie Teams sind <b>rot</b>. Belegte Teams <b>grün</b>. Klicke auf ein Team zum Joinen.</>}
+                {
+                  clampInt(settings.participants ?? 0, 0, 20) === 0 ? (
+                    <>Bot-only Raum: Du bist <b>Zuschauer</b>. Teams sind Bots, kein Join nötig.</>
+                  ) : (
+                    <>Freie Teams sind <b>rot</b>. Belegte Teams <b>grün</b>. Klicke auf ein Team zum Joinen.</>
+                  )
+                }
 </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
                 {teamIds.map((tid) => {
@@ -3422,7 +3359,7 @@ function teamTitle(tid) {
     <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8, alignItems: "center", marginBottom: 8 }}>
       <div style={{ fontSize: 12, opacity: 0.8 }}>Verhalten 1</div>
       <select
-        value={botCfg.behavior1 || "none"}
+        value={botCfg.behavior1 || "zufall"}
         onChange={(e) => {
           const next = [...(settings.botsConfig || [])];
           next[botCfgIdx] = { ...next[botCfgIdx], behavior1: e.target.value };
@@ -3440,7 +3377,7 @@ function teamTitle(tid) {
     <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8, alignItems: "center" }}>
       <div style={{ fontSize: 12, opacity: 0.8 }}>Verhalten 2</div>
       <select
-        value={botCfg.behavior2 || "none"}
+        value={botCfg.behavior2 || ((botCfg.difficulty || "normal") === "veryhard" ? "zufall" : "none")}
         disabled={(botCfg.difficulty || "normal") !== "veryhard"}
         onChange={(e) => {
           const next = [...(settings.botsConfig || [])];

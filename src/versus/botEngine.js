@@ -15,6 +15,30 @@ function pickUniqueShuffled(arr, n) {
   return a.slice(0, n);
 }
 
+function hashStr(s) {
+  let h = 2166136261;
+  const str = String(s || "");
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function mulberry32(a) {
+  return function () {
+    let t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function pickRng(arr, rng) {
+  const a = arr || [];
+  if (!a.length) return null;
+  return a[Math.floor(rng() * a.length)];
+}
+
+
 // extra nervig 😄
 const BOT_NAME_POOL = [
   "AllIn-Andi",
@@ -41,6 +65,7 @@ const BOT_NAME_POOL = [
 
 export const BOT_DIFFICULTIES = ["easy", "normal", "hard", "veryhard", "chaos"];
 export const BOT_BEHAVIORS = [
+  "zufall",
   "none",
   "starterfreund",
   "sparer",
@@ -48,12 +73,33 @@ export const BOT_BEHAVIORS = [
   "sniper",
   "sammler",
   "minimalist",
-  "blockierer",
-  "endgame",
+  "dominanz",
   "chaos",
   "meta",
   "anti_meta",
-  // (weitere können später ergänzt werden; nicht implementierte verhalten = neutral)
+  "eifersuechtig",
+  "konterspieler",
+  "late_bloomer",
+  "fruehstarter",
+  "absicherer",
+  "risiko",
+  "paniker",
+  "minimal_budget",
+  "taktiker",
+  "blockierer",
+  "fanboy",
+  "endgame",
+  "adaptive",
+  "abfucker",
+  "revanchist",
+  "pingpong",
+  "hoarder",
+  "nachahmer",
+  "saboteur",
+  "mitlaeufer",
+  "schlaefer",
+  "tunnelblick",
+  "verweigerer",
 ];
 
 const DIFFS = BOT_DIFFICULTIES;
@@ -75,7 +121,7 @@ export function generateBotConfigs(botCount, seedBase = Date.now()) {
       // seedBase nur für Optik/Feeling
       name: `${name} #${Math.floor(10 + Math.random() * 90)}`,
       difficulty: diff,
-      behavior1: "none",
+      behavior1: "zufall",
       behavior2: "none",
       reserveBias: Math.random(), // 0..1
       seedBase, // optional: falls du später reproduzierbare RNG willst
@@ -94,13 +140,28 @@ export function buildBots({ botConfigs = [], startTeamIndex = 0 }) {
     const cfg = botConfigs[i] || {};
     const teamId = `team${startIdx + i + 1}`; // ✅ team ist 1-based
 
+    const diff = String(cfg.difficulty || "normal");
+    let b1 = String(cfg.behavior1 || "zufall");
+    let b2 = String(cfg.behavior2 || "none");
+
+    // ✅ "zufall" bleibt pro Draft fix (seeded), nicht pro Bid wechselnd
+    const rng = mulberry32(hashStr(`${cfg.id || `bot:${i + 1}`}|${cfg.seedBase || 0}|${i}`));
+    const behaviorPool = (BOT_BEHAVIORS || []).filter((k) => k !== "none" && k !== "zufall");
+
+    if (b1 === "zufall") b1 = pickRng(behaviorPool, rng) || "none";
+    if (b2 === "zufall") b2 = pickRng(behaviorPool, rng) || "none";
+
+    // 2. Verhalten nur bei Sehr hart
+    const dd = diff.toLowerCase();
+    if (dd !== "veryhard" && dd !== "sehrhart") b2 = "none";
+
     bots.push({
       id: String(cfg.id || `bot:${i + 1}`),
       teamId,
       name: String(cfg.name || `Bot #${i + 1}`),
-      difficulty: String(cfg.difficulty || "normal"),
-      behavior1: String(cfg.behavior1 || "none"),
-      behavior2: String(cfg.behavior2 || "none"),
+      difficulty: diff,
+      behavior1: b1,
+      behavior2: b2,
       reserveBias: typeof cfg.reserveBias === "number" ? cfg.reserveBias : Math.random(),
       seedBase: cfg.seedBase,
     });
@@ -153,6 +214,7 @@ function bidFrequencyForDifficulty(difficulty) {
 
 function normalizeBehavior(v) {
   const x = String(v || "none").toLowerCase().trim();
+  if (x === "random") return "zufall";
   return x || "none";
 }
 
@@ -222,7 +284,136 @@ function applyBehaviorTuning(state, behavior, ctx) {
     s.maxPayMult *= 1.06;
   }
 
-  // meta / anti-meta aktuell neutral (placeholder)
+  
+  if (b === "dominanz") {
+    // will "dominieren": oft bieten + größere Sprünge
+    s.freqAdd += 0.14;
+    s.maxPayMult *= 1.08;
+    s.incFloor = Math.max(s.incFloor, 300);
+  }
+
+  if (b === "risiko") {
+    // risikofreudig: weniger Reserve, höherer MaxPay
+    s.reserveMult *= 0.65;
+    s.maxPayMult *= 1.10;
+    s.freqAdd += 0.06;
+  }
+
+  if (b === "absicherer") {
+    // safety first: viel Reserve, weniger overpay
+    s.reserveMult *= 1.55;
+    s.maxPayMult *= 0.95;
+    s.freqAdd -= 0.05;
+  }
+
+  if (b === "taktiker") {
+    // eher kontrolliert: seltenere bids, aber wenn dann solide jumps
+    s.freqAdd -= 0.08;
+    s.incFloor = Math.max(s.incFloor, 200);
+    s.maxPayMult *= 1.02;
+  }
+
+  if (b === "paniker") {
+    // wird nervös bei hohen bids / spätem draft
+    if (Number(ctx?.highestBid || 0) >= 600) s.freqAdd += 0.10;
+    if (Number(ctx?.picksLeft || 0) <= 2) {
+      s.freqAdd += 0.12;
+      s.reserveMult *= 0.70;
+    }
+  }
+
+  if (b === "fruehstarter") {
+    // lieber früh aktiv (Opening)
+    if (Number(ctx?.highestBid || 0) === 0) s.freqAdd += 0.18;
+  }
+
+  if (b === "late_bloomer") {
+    // erst zum Ende hin aktiv
+    if (Number(ctx?.picksLeft || 0) <= 3) s.freqAdd += 0.16;
+    else s.freqAdd -= 0.06;
+  }
+
+  if (b === "eifersuechtig" || b === "revanchist") {
+    // "ich will nicht verlieren": aggressiver bei hohen bids
+    if (Number(ctx?.highestBid || 0) >= 500) {
+      s.maxPayMult *= 1.10;
+      s.freqAdd += 0.08;
+    }
+  }
+
+  if (b === "saboteur" || b === "abfucker" || b === "blockierer") {
+    // blocken: gegen Ende eher overpayen
+    if (Number(ctx?.picksLeft || 0) <= 2) {
+      s.maxPayMult *= 1.08;
+      s.incFloor = Math.max(s.incFloor, 300);
+    }
+  }
+
+  if (b === "hoarder") {
+    // hortet Budget (wie sparer, aber weniger extrem)
+    s.reserveMult *= 1.25;
+    s.maxPayMult *= 0.96;
+    s.freqAdd -= 0.06;
+  }
+
+  if (b === "mitlaeufer" || b === "nachahmer" || b === "pingpong") {
+    // eher opportunistisch: kleine freq+ und nicht zu große jumps
+    s.freqAdd += 0.03;
+    s.incFloor = Math.max(s.incFloor, 100);
+  }
+
+  if (b === "schlaefer") {
+    // schläft oft -> seltene bids
+    s.freqAdd -= 0.20;
+  }
+
+  if (b === "tunnelblick") {
+    // stur: häufig, aber eher kleine Steps (weniger floor)
+    s.freqAdd += 0.08;
+    s.maxPayMult *= 0.98;
+  }
+
+  if (b === "verweigerer") {
+    // verweigert specials (einfacher Proxy)
+    const anySpecial = !!(ctx?.specialFlags?.starter || ctx?.specialFlags?.pseudo || ctx?.specialFlags?.subLegendary || ctx?.specialFlags?.legendary || ctx?.specialFlags?.mythical);
+    if (anySpecial) {
+      s.freqAdd -= 0.25;
+      s.maxPayMult *= 0.88;
+    }
+  }
+
+  if (b === "fanboy") {
+    // Fanboy: liebt specials etwas mehr
+    const anySpecial = !!(ctx?.specialFlags?.starter || ctx?.specialFlags?.pseudo || ctx?.specialFlags?.subLegendary || ctx?.specialFlags?.legendary || ctx?.specialFlags?.mythical);
+    if (anySpecial) {
+      s.desire += 0.12;
+      s.freqAdd += 0.06;
+    }
+  }
+
+  if (b === "meta") {
+    // Meta: priorisiert stark -> specials aggressiver
+    const anySpecial = !!(ctx?.specialFlags?.pseudo || ctx?.specialFlags?.subLegendary || ctx?.specialFlags?.legendary || ctx?.specialFlags?.mythical);
+    if (anySpecial) {
+      s.desire += 0.10;
+      s.maxPayMult *= 1.06;
+      s.freqAdd += 0.04;
+    }
+  }
+
+  if (b === "anti_meta") {
+    // Anti-Meta: specials eher meiden
+    const anySpecial = !!(ctx?.specialFlags?.pseudo || ctx?.specialFlags?.subLegendary || ctx?.specialFlags?.legendary || ctx?.specialFlags?.mythical);
+    if (anySpecial) {
+      s.desire -= 0.08;
+      s.freqAdd -= 0.06;
+      s.maxPayMult *= 0.95;
+    } else {
+      s.freqAdd += 0.03;
+    }
+  }
+
+// meta / anti-meta aktuell neutral (placeholder)
   return s;
 }
 
