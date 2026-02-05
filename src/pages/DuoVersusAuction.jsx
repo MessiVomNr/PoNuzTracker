@@ -2819,6 +2819,34 @@ const evoMaxTotal = (() => {
 const candidates = [];
 for (const b of bots) {
   const myBudget = Number(draft.budgets?.[b.teamId] ?? 0);
+// =======================
+// 🌍 MARKET AVERAGE PRICE
+// =======================
+
+// Gesamtbudget aller Teams berechnen
+const allBudgets = Object.values(draft.budgets || {});
+const totalBudgetRemaining = allBudgets.reduce(
+  (sum, b) => sum + Number(b || 0),
+  0
+);
+
+// Wie viele Pokémon insgesamt noch offen?
+const teamsCount = Object.keys(draft.teams || {}).length;
+const monsPerTeam = Number(draft.settings?.monsPerTeam || 6);
+
+// Wie viele Pokémon wurden schon gedraftet?
+const draftedCount = Object.values(draft.teams || {})
+  .flat()
+  .length;
+
+// Gesamtzahl Pokémon im Draft
+const totalMons = teamsCount * monsPerTeam;
+
+// verbleibende Pokémon
+const remainingMons = Math.max(1, totalMons - draftedCount);
+
+// 🌍 echter Marktpreis
+const avgPrice = totalBudgetRemaining / remainingMons;
 
   const bid = decideBotBid({
     bot: b,
