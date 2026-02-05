@@ -11,6 +11,7 @@ import VersusLobby from "./versus/VersusLobby";
 import VersusGame from "./versus/VersusGame";
 import DuoHome from "./duo/DuoHome";
 import DuoVersusAuction from "./pages/DuoVersusAuction";
+import PokemonInfo from "./pages/PokemonInfo";
 
 // Hook für Theme-Verwaltung
 function useInitTheme() {
@@ -58,6 +59,7 @@ function AppContent() {
       <Route path="/duo" element={<DuoHome />} />
       <Route path="/duo/:roomId/versus" element={<DuoVersusAuction />} />
       <Route path="/versus/:roomId/auction" element={<DuoVersusAuction />} />
+      <Route path="/pokemon/:dexId" element={<PokemonInfo />} />
   </Routes>
   );
 }

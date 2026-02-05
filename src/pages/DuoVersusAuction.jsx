@@ -31,6 +31,8 @@ import {
   typeIcon,
   btnDanger,
   pokeHeroOverlayFlashStrong,
+  selectOption,
+  selectDark
 } from "./DuoVersusAuction.styles";
 function normalizeBehavior(v) {
   return String(v || "none").trim().toLowerCase();
@@ -2316,25 +2318,50 @@ const totalTeams = Math.min(20, participants + botCount);
 const finalParticipants = Math.min(participants, totalTeams);
 const finalBotCount = Math.max(0, totalTeams - finalParticipants);
 
-// ✅ bot configs (aus Lobby), falls leer -> generieren
-let botConfigs = Array.isArray(settings.botsConfig) ? [...settings.botsConfig] : [];
+// ✅ bot configs (aus Lobby), stabil nach Index 1..N
+const existing = Array.isArray(settings.botsConfig) ? [...settings.botsConfig] : [];
+const generatedFull = generateBotConfigs(finalBotCount, Date.now());
 
-if (botConfigs.length > finalBotCount) {
-  botConfigs = botConfigs.slice(0, finalBotCount);
-} else if (botConfigs.length < finalBotCount) {
-  const missing = finalBotCount - botConfigs.length;
-  const extra = generateBotConfigs(missing, Date.now()).map((c, i) => ({
-    ...c,
-    // id/name bleiben stabil durch dein generateBotConfigs-Fix aus botEngine.js
-  }));
-  botConfigs = [...botConfigs, ...extra];
-}
+// Wir bauen die Liste IMMER als Länge finalBotCount neu auf,
+// damit IDs nie doppelt werden (bot:1 .. bot:N).
+let botConfigs = Array.from({ length: finalBotCount }, (_, i) => {
+  const id = `bot:${i + 1}`;
+
+  // Falls es schon einen Config mit dieser ID gibt -> übernehmen
+  const byId = existing.find((c) => String(c?.id) === id) || null;
+
+  // Fallback: gleiche Position
+  const byIdx = existing[i] || null;
+
+  // Basis ist immer generatedFull[i] (korrekte id/name)
+  const base = generatedFull[i];
+
+  // Prefer byId, dann byIdx (für "alte" saves)
+  const picked = byId || byIdx;
+
+  return picked
+    ? {
+        ...base,
+        ...picked,
+        id: base.id,     // erzwingen
+        name: base.name, // erzwingen (damit #index passt)
+      }
+    : base;
+});
+
 // ✅ Defaults: standardmäßig VeryHard + 2x Zufall (wie du wolltest)
-botConfigs = botConfigs.map((c) => ({
+//    WICHTIG: Diese Version bleibt für UI/Lobby-Anzeige erhalten.
+const botConfigsLobby = botConfigs.map((c) => ({
   ...c,
   difficulty: String(c?.difficulty || "veryhard"),
-  behavior1: String(c?.behavior1 || "zufall") === "none" ? "zufall" : String(c?.behavior1 || "zufall"),
-  behavior2: String(c?.behavior2 || "zufall") === "none" ? "zufall" : String(c?.behavior2 || "zufall"),
+  behavior1:
+    String(c?.behavior1 || "zufall") === "none"
+      ? "zufall"
+      : String(c?.behavior1 || "zufall"),
+  behavior2:
+    String(c?.behavior2 || "zufall") === "none"
+      ? "zufall"
+      : String(c?.behavior2 || "zufall"),
 }));
 
 function pickRandomBehavior(exclude = []) {
@@ -2345,8 +2372,8 @@ function pickRandomBehavior(exclude = []) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// ✅ "zufall" beim Draft-Start in echte Werte auflösen (jedes Draft neu!)
-botConfigs = botConfigs.map((b) => {
+// ✅ Draft-intern: "zufall" auflösen – aber NICHT in settings speichern!
+const botConfigsResolved = botConfigsLobby.map((b) => {
   let b1 = String(b.behavior1 || "none");
   let b2 = String(b.behavior2 || "none");
 
@@ -2355,6 +2382,7 @@ botConfigs = botConfigs.map((b) => {
 
   return { ...b, behavior1: b1, behavior2: b2 };
 });
+
 
 
 // ✅ TeamIds für alle Teams
@@ -2366,8 +2394,8 @@ const owners = ensureTeamOwners(totalTeams, teamOwners);
 // ✅ Bots erstellen (IDs MUSS "bot:X" sein, passend zu owners)
 //    startTeamIndex ist 0-based team index, also: humans starten bei 0..finalParticipants-1
 const bots = buildBots({
-  botConfigs,
-  startTeamIndex: finalParticipants, // <- 0-based Index, erstes Bot-Team ist team{finalParticipants+1}
+  botConfigs: botConfigsResolved,
+  startTeamIndex: finalParticipants,
 });
 
 // ✅ Bot-Teams als belegt setzen: ownerId exakt = bot.id ("bot:1", "bot:2", ...)
@@ -2415,7 +2443,7 @@ const poolIndex = nextIndex ?? 0;
         botCount: finalBotCount,
         budgetPerTeam,
         totalPokemon,
-        botsConfig: botConfigs,
+        botsConfig: botConfigsLobby,
         secondsPerBid,
         keepEvolvedForms: !!settings.keepEvolvedForms,
         baseFormsOnly: !!settings.baseFormsOnly,
@@ -2703,7 +2731,44 @@ useEffect(() => {
   timer?.running,
   roomRef,
 ]);
+// ✅ AUTO-END: Wenn global niemand mehr überhaupt 100 bieten kann -> Draft beenden
+useEffect(() => {
+  if (!meIsHost) return;
+  if (phase !== "auction") return;
 
+  const d = draft || {};
+  const teamIdsHere = Array.isArray(d.teamIds) ? d.teamIds : [];
+  const budgetsHere = d.budgets || {};
+
+  if (teamIdsHere.length === 0) return;
+
+  const anyoneCanOpen = teamIdsHere.some((tid) => Number(budgetsHere?.[tid] ?? 0) >= 100);
+
+  if (anyoneCanOpen) return;
+
+  // Schon im Results? dann nichts
+  // (phase check oben reicht, aber sicher ist sicher)
+  const t = setTimeout(() => {
+    updateDoc(roomRef, {
+      "versus.auction.phase": "results",
+      "versus.auction.timer": { running: false, paused: false, remaining: 0 },
+      "versus.auction.draft.current": null,
+      "versus.auction.draft.hasStarted": false,
+      "versus.auction.draft.highestBid": 0,
+      "versus.auction.draft.highestTeamId": null,
+      "versus.auction.updatedAt": serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }).catch(() => {});
+  }, 800);
+
+  return () => clearTimeout(t);
+}, [
+  meIsHost,
+  phase,
+  JSON.stringify(draft?.teamIds || []),
+  JSON.stringify(draft?.budgets || {}),
+  roomRef,
+]);
 useEffect(() => {
   if (!meIsHost) return;
   if (phase !== "auction") return;
@@ -2819,34 +2884,36 @@ const evoMaxTotal = (() => {
 const candidates = [];
 for (const b of bots) {
   const myBudget = Number(draft.budgets?.[b.teamId] ?? 0);
+
 // =======================
-// 🌍 MARKET AVERAGE PRICE
+// 🌍 MARKET AVERAGE PRICE (improved)
+// avgPrice = SummeBudgetsAll / verbleibende Picks gesamt
 // =======================
 
-// Gesamtbudget aller Teams berechnen
-const allBudgets = Object.values(draft.budgets || {});
-const totalBudgetRemaining = allBudgets.reduce(
-  (sum, b) => sum + Number(b || 0),
-  0
-);
-
-// Wie viele Pokémon insgesamt noch offen?
-const teamsCount = Object.keys(draft.teams || {}).length;
+// Team-IDs sauber als Basis (stabiler als Object.keys(teams))
+const teamIdsAll = Array.isArray(draft.teamIds) ? draft.teamIds : Object.keys(draft.teams || {});
+const teamsObj = draft.teams || {};
+const budgetsObj = draft.budgets || {};
 const monsPerTeam = Number(draft.settings?.monsPerTeam || 6);
 
-// Wie viele Pokémon wurden schon gedraftet?
-const draftedCount = Object.values(draft.teams || {})
-  .flat()
-  .length;
+// Gesamtbudget aller Teams
+const totalBudgetRemaining = teamIdsAll.reduce((sum, tid) => {
+  return sum + Number(budgetsObj?.[tid] ?? 0);
+}, 0);
 
-// Gesamtzahl Pokémon im Draft
-const totalMons = teamsCount * monsPerTeam;
-
-// verbleibende Pokémon
-const remainingMons = Math.max(1, totalMons - draftedCount);
+// Verbleibende Picks (wie viele Pokémon fehlen über alle Teams)
+const remainingMons = Math.max(
+  1,
+  teamIdsAll.reduce((sum, tid) => {
+    const teamSize = (teamsObj?.[tid] || []).length;
+    const missing = Math.max(0, monsPerTeam - teamSize);
+    return sum + missing;
+  }, 0)
+);
 
 // 🌍 echter Marktpreis
 const avgPrice = totalBudgetRemaining / remainingMons;
+
 
   const bid = decideBotBid({
     bot: b,
@@ -3171,12 +3238,22 @@ function teamTitle(tid) {
   const owner = teamOwners?.[tid] ?? null;
   if (!owner) return "Frei";
 
-  // ✅ wenn owner ein Bot ist -> Botname anzeigen
-  const bot = (draft?.bots || []).find((b) => b.teamId === tid);
-if (bot) return bot.name || tid;
+  const isBot = String(owner).startsWith("bot:");
+
+  // ⭐ Botnamen NUR während Draft / Results anzeigen
+  if (isBot) {
+    if (phase === "auction" || phase === "results") {
+      const bot = (draft?.bots || []).find((b) => b.teamId === tid);
+      return bot?.name || `Bot`;
+    }
+
+    // Lobby / Setup → nur "Bot"
+    return "Bot";
+  }
 
   return labelPlayer(owner, room);
 }
+
 
   function teamIsFree(tid) {
     return !teamOwners?.[tid];
@@ -3287,37 +3364,56 @@ if (bot) return bot.name || tid;
               ) : (
                 <div style={{ display: "grid", gap: 8, maxWidth: 560 }}>
                   <Row label="Generation">
-                    <select value={settings.generation} onChange={(e) => updateSettings({ generation: Number(e.target.value) })}>
-                      {[1, 2, 3, 4, 5, 6, 7].map((g) => (
-                        <option key={g} value={g}>
-                          Gen {g} (bis #{getDexCapForGen(g)})
-                        </option>
-                      ))}
-                    </select>
-                  </Row>
+  <select
+    value={settings.generation}
+    onChange={(e) => updateSettings({ generation: Number(e.target.value) })}
+    style={selectDark}
+  >
+    {[1, 2, 3, 4, 5, 6, 7].map((g) => (
+      <option key={g} value={g} style={selectOption}>
+        Gen {g} (bis #{getDexCapForGen(g)})
+      </option>
+    ))}
+  </select>
+</Row>
+
 
                   <Row label="Teilnehmer">
-                    <input
-                      type="number"
-                      min={0}
-                      max={10}
-                      value={settings.participants}
-                      onChange={(e) => updateSettings({ participants: Number(e.target.value) })}
-                    />
-                  </Row>
-	<Row label="Bots">
-	  <input
-	    type="number"
-	    min={0}
-	    max={7}
-	    value={settings.botCount ?? 0}
-	    onChange={(e) => {
-	      const v = Math.max(0, Math.min(7, parseInt(e.target.value || "0", 10)));
-	      updateSettings({ botCount: v });
-	    }}
-	    style={input}
-	  />
-	</Row>
+  <select
+    value={settings.participants ?? 0}
+    onChange={(e) =>
+      updateSettings({
+        participants: Math.max(0, Math.min(9, Number(e.target.value))),
+      })
+    }
+    style={input}
+  >
+    {Array.from({ length: 10 }, (_, i) => (
+      <option key={i} value={i} style={selectOption}>
+        {i}
+      </option>
+    ))}
+  </select>
+</Row>
+
+<Row label="Bots">
+  <select
+    value={settings.botCount ?? 0}
+    onChange={(e) =>
+      updateSettings({
+        botCount: Math.max(0, Math.min(9, Number(e.target.value))),
+      })
+    }
+    style={input}
+  >
+    {Array.from({ length: 10 }, (_, i) => (
+      <option key={i} value={i} style={selectOption}>
+        {i}
+      </option>
+    ))}
+  </select>
+</Row>
+
 
 <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
   Hinweis: Pro Bot-Team kannst du das Verhalten einstellen. Trotzdem bleibt immer etwas Zufall drin.
@@ -4249,14 +4345,31 @@ return (
               const ownerId = teamOwners?.[tid] || null;
 const bot = (draft?.bots || []).find((b) => b.teamId === tid || b.id === ownerId) || null;
 
-const botInfo =
-  bot && ownerId && String(ownerId).startsWith("bot:")
-    ? {
-        diff: String(bot.difficulty || "normal"),
-        b1: String(bot.behavior1 || "zufall"),
-        b2: String(bot.behavior2 || "none"),
-      }
+// 🔥 Lobby-Config enthält evtl. noch "zufall" (soll im Draft NICHT spoilern, aber im Results schon auflösen)
+const lobbyCfg =
+  ownerId && String(ownerId).startsWith("bot:")
+    ? (settings?.botsConfig || []).find((c) => String(c?.id) === String(ownerId)) || null
     : null;
+
+const botInfo =
+  bot && lobbyCfg
+    ? (() => {
+        const lobbyB1 = String(lobbyCfg.behavior1 || "none");
+        const lobbyB2 = String(lobbyCfg.behavior2 || "none");
+        const resolvedB1 = String(bot.behavior1 || "none");
+        const resolvedB2 = String(bot.behavior2 || "none");
+
+        const b1Text = lobbyB1 === "zufall" ? `zufall → ${resolvedB1}` : lobbyB1;
+        const b2Text = lobbyB2 === "zufall" ? `zufall → ${resolvedB2}` : lobbyB2;
+
+        return {
+          diff: String(lobbyCfg.difficulty || bot.difficulty || "normal"),
+          b1Text,
+          b2Text,
+        };
+      })()
+    : null;
+
               const showDraftedAsIs = !!settings.keepEvolvedForms && !settings.baseFormsOnly;
               const money = draft.budgets?.[tid] ?? 0;
               const free = teamIsFree(tid);
@@ -4290,8 +4403,8 @@ if (!showDraftedAsIs) {
                   </div>
 {botInfo && (
   <div style={{ opacity: 0.85, fontSize: 12, marginTop: 2 }}>
-    Bot: <b>{botInfo.diff}</b> — Verhalten: <b>{botInfo.b1}</b>
-    {botInfo.b2 && botInfo.b2 !== "none" ? ` + ${botInfo.b2}` : ""}
+    Bot: <b>{botInfo.diff}</b> — Verhalten: <b>{botInfo.b1Text}</b>
+    {botInfo.b2Text && botInfo.b2Text !== "none" ? ` + ${botInfo.b2Text}` : ""}
   </div>
 )}
                   <div style={{ marginTop: 10, display: "grid", gap: 8 }}>

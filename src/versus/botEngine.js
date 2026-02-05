@@ -493,8 +493,8 @@ export function decideBotBid({
   remainingSec,
 });
   if (String(diff).toLowerCase() === "veryhard" || String(diff).toLowerCase() === "sehrhart") {
-    tune = applyBehaviorTuning(tune, b2, { specialFlags, highestBid: hb, picksLeft });
-  }
+  tune = applyBehaviorTuning(tune, b2, { specialFlags, highestBid: hb, picksLeft, remainingSec });
+}
 
   const isLastForFreq = Number(picksLeft || 0) <= 1;
   let freq = clamp(baseFreq + tune.freqAdd + (isLastForFreq ? 0.15 : 0), 0.05, 0.98);
@@ -507,7 +507,18 @@ export function decideBotBid({
   if (pLeft2 <= 2) freq = clamp(freq + 0.18, 0.05, 0.98);
   if (pLeft2 <= 1) freq = clamp(freq + 0.22, 0.05, 0.98);
 
-  if (Math.random() > freq) return null;
+  const b1n = normalizeBehavior(b1);
+  const b2n = normalizeBehavior(b2);
+  const sniperLike = b1n === "sniper" || b2n === "sniper";
+  const tSec = Number(remainingSec ?? 999);
+
+  // Normaler Frequency Check
+  if (Math.random() > freq) {
+    // ✅ Sniper-Override: kurz vor Ende trotzdem oft "reaktiv" bieten
+    if (!(sniperLike && tSec <= 1.5 && hb > 0 && Math.random() < 0.80)) {
+      return null;
+    }
+  }
 
   let desire = desireFromSpecial(specialFlags || {}, diff);
   desire = clamp(desire + (tune.desire || 0), 0.05, 0.98);
@@ -612,6 +623,39 @@ export function decideBotBid({
 
   if (maxPay <= hb) return null;
 
+  // ✅ Anti-All-In / MaxPay Cap abhängig von Situation
+  // Früher Draft: nicht zu viel Budget in ein Mon stecken
+  // Später Draft: Cap steigt automatisch
+  const pL = Number(picksLeft || 0);
+
+  let capFrac = 0.60;
+  if (pL >= 6) capFrac = 0.55;
+  else if (pL === 5) capFrac = 0.58;
+  else if (pL === 4) capFrac = 0.64;
+  else if (pL === 3) capFrac = 0.72;
+  else if (pL === 2) capFrac = 0.88;
+  else if (pL <= 1) capFrac = 0.995;
+
+  // Special-Mons dürfen etwas mehr ziehen
+  if (sf.legendary || sf.mythical) capFrac += 0.06;
+  else if (sf.subLegendary) capFrac += 0.03;
+
+  // Wenn Bot extrem "reich" relativ zum Markt ist, darf er auch höher
+  if (ap > 0) {
+    const affordability = clamp(basePerPick / Math.max(1, ap), 0.35, 3.0);
+    if (affordability >= 2.2) capFrac += 0.05;
+    if (affordability >= 2.8) capFrac += 0.05;
+  }
+
+  capFrac = clamp(capFrac, 0.45, 0.995);
+
+  const cap = Math.floor((budget * capFrac) / 100) * 100;
+
+  // Cap anwenden, aber niemals unter "hb + increment" drücken
+  if (!isLast) {
+    maxPay = Math.min(maxPay, Math.max(hb + minBidIncrement, cap));
+  }
+
   const room = Math.max(0, maxPay - hb);
 
   const small = [100, 200, 300];
@@ -646,9 +690,6 @@ export function decideBotBid({
     wBig += 0.08;
   }
 
-  const b1n = normalizeBehavior(b1);
-  const b2n = normalizeBehavior(b2);
-  const sniperLike = b1n === "sniper" || b2n === "sniper";
   if (sniperLike) {
     wSmall -= 0.10;
     wBig += 0.10;

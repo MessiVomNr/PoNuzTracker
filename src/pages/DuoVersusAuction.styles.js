@@ -45,6 +45,17 @@ export const input = {
   outline: "none",
 };
 
+export const selectDark = {
+  ...input,
+  colorScheme: "dark",
+};
+
+export const selectOption = {
+  color: "white",
+  backgroundColor: "rgb(35,35,35)",
+};
+
+
 export const btnPrimary = {
   padding: "10px 12px",
   borderRadius: 10,
