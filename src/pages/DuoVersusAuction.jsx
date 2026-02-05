@@ -507,6 +507,8 @@ const STARTERS = new Set([
   495, 496, 497, 498, 499, 500, 501, 502, 503,
   // Gen 6
   650, 651, 652, 653, 654, 655, 656, 657, 658,
+  // Gen 7
+  722, 723, 724, 725, 726, 727, 728, 729, 730,
 ]);
 
 const PSEUDO = new Set([
@@ -2327,25 +2329,25 @@ if (botConfigs.length > finalBotCount) {
   }));
   botConfigs = [...botConfigs, ...extra];
 }
+// ✅ Defaults: standardmäßig VeryHard + 2x Zufall (wie du wolltest)
+botConfigs = botConfigs.map((c) => ({
+  ...c,
+  difficulty: String(c?.difficulty || "veryhard"),
+  behavior1: String(c?.behavior1 || "zufall") === "none" ? "zufall" : String(c?.behavior1 || "zufall"),
+  behavior2: String(c?.behavior2 || "zufall") === "none" ? "zufall" : String(c?.behavior2 || "zufall"),
+}));
+
 function pickRandomBehavior(exclude = []) {
-  const pool = BOT_BEHAVIORS
-    .map((x) => x.value)
+  const pool = (BOT_BEHAVIORS || [])
+    .map((v) => String(v))
     .filter((v) => v && v !== "none" && v !== "zufall" && !exclude.includes(v));
   if (!pool.length) return "none";
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// ✅ Wichtig:
-// - In den Lobby-Settings bleibt behavior1 i.d.R. "zufall" (damit Restart wieder "zufall" zeigt)
-// - Für den tatsächlichen Draft lösen wir "zufall" einmalig in echte Verhalten auf
-const botConfigsBase = botConfigs.map((b) => ({
-  ...b,
-  behavior1: String(b.behavior1 || "zufall"),
-  behavior2: String(b.behavior2 || "none"),
-}));
-
-const botConfigsResolved = botConfigsBase.map((b) => {
-  let b1 = String(b.behavior1 || "zufall");
+// ✅ "zufall" beim Draft-Start in echte Werte auflösen (jedes Draft neu!)
+botConfigs = botConfigs.map((b) => {
+  let b1 = String(b.behavior1 || "none");
   let b2 = String(b.behavior2 || "none");
 
   if (b1 === "zufall") b1 = pickRandomBehavior();
@@ -2353,7 +2355,6 @@ const botConfigsResolved = botConfigsBase.map((b) => {
 
   return { ...b, behavior1: b1, behavior2: b2 };
 });
-
 
 
 // ✅ TeamIds für alle Teams
@@ -2365,7 +2366,7 @@ const owners = ensureTeamOwners(totalTeams, teamOwners);
 // ✅ Bots erstellen (IDs MUSS "bot:X" sein, passend zu owners)
 //    startTeamIndex ist 0-based team index, also: humans starten bei 0..finalParticipants-1
 const bots = buildBots({
-  botConfigs: botConfigsResolved,
+  botConfigs,
   startTeamIndex: finalParticipants, // <- 0-based Index, erstes Bot-Team ist team{finalParticipants+1}
 });
 
@@ -2414,7 +2415,7 @@ const poolIndex = nextIndex ?? 0;
         botCount: finalBotCount,
         budgetPerTeam,
         totalPokemon,
-        botsConfig: botConfigsBase,
+        botsConfig: botConfigs,
         secondsPerBid,
         keepEvolvedForms: !!settings.keepEvolvedForms,
         baseFormsOnly: !!settings.baseFormsOnly,
@@ -2467,11 +2468,7 @@ const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
   generation: clampInt(settings.generation, 1, 7),
   participants,
   botCount,
-  botsConfig: (Array.isArray(settings.botsConfig) ? settings.botsConfig : generateBotConfigs(botCount, Date.now())).map((c) => ({
-    ...c,
-    behavior1: String(c?.behavior1 || "zufall"),
-    behavior2: String(c?.behavior2 || "none"),
-  })),
+  botsConfig: Array.isArray(settings.botsConfig) ? settings.botsConfig : generateBotConfigs(botCount, Date.now()),
   budgetPerTeam: Math.max(0, clampInt(settings.budgetPerTeam, 0, 9999999)),
   totalPokemon: Math.max(1, clampInt(settings.totalPokemon, 1, 999)),
   secondsPerBid,
@@ -2834,6 +2831,8 @@ for (const b of bots) {
     avgPrice,
     evoMaxTotal,
     highestTeamBudget: Number(draft.budgets?.[ht] ?? 0),
+    remainingSec,
+    myTeamSize: (draft.teams?.[b.teamId] ?? []).length,
   });
 
   if (bid && bid > hb) {

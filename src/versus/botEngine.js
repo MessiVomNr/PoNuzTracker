@@ -114,7 +114,7 @@ export function generateBotConfigs(botCount, seedBase = Date.now()) {
     const idx1 = i + 1;
 
     const name = picks[i] || `Bot-${idx1}`;
-    const diff = DIFFS[Math.floor(Math.random() * DIFFS.length)];
+    const diff = "veryhard";
 
     out.push({
       id: `bot:${idx1}`, // ✅ STABIL & EINFACH zu matchen
@@ -122,7 +122,7 @@ export function generateBotConfigs(botCount, seedBase = Date.now()) {
       name: `${name} #${idx1}`,
       difficulty: diff,
       behavior1: "zufall",
-      behavior2: "none",
+      behavior2: "zufall",
       reserveBias: Math.random(), // 0..1
       seedBase, // optional: falls du später reproduzierbare RNG willst
     });
@@ -488,6 +488,7 @@ export function decideBotBid({
   avgPrice,
   evoMaxTotal,
   remainingSec,
+  myTeamSize,
 }) {
 
   if (!bot) return null;
@@ -500,6 +501,10 @@ export function decideBotBid({
   const diff = bot.difficulty || "normal";
   const b1 = bot.behavior1 || "none";
   const b2 = bot.behavior2 || "none";
+
+  const myCount = Math.max(0, Number(myTeamSize ?? 0));
+  const mustGetOne = myCount <= 0; // Team hat noch 0 Pokémon
+  const isLast = Number(picksLeft || 0) <= 1;
 
   // ✅ Bot-Bietfrequenz (Punkt 10)
   // Grundfrequenz nach Difficulty + kleine Adjustments durch Verhalten
@@ -520,31 +525,31 @@ export function decideBotBid({
 // Opening: deutlich öfter (damit mehr "Leben" reinkommt)
 if (hb === 0) freq = clamp(freq + 0.18, 0.05, 0.98);
 
-// Endgame (Picks): aggressiver
+// Endgame: aggressiver
 const pLeft2 = Number(picksLeft || 0);
 if (pLeft2 <= 2) freq = clamp(freq + 0.18, 0.05, 0.98);
 if (pLeft2 <= 1) freq = clamp(freq + 0.22, 0.05, 0.98);
 
-// Endgame (Timer): in den letzten Sekunden deutlich öfter überbieten
-const tSec = Number(remainingSec ?? 0);
-if (tSec > 0 && tSec <= 4) freq = clamp(freq + 0.18, 0.05, 0.98);
-if (tSec > 0 && tSec <= 2) freq = clamp(freq + 0.30, 0.05, 0.98);
+  // ✅ Kein Bot bleibt leer: wenn Team noch 0 Pokémon hat, gegen Ende quasi sicher bieten
+  const tS = Number(remainingSec ?? 0);
+  const pL2 = Number(picksLeft || 0);
+  if (mustGetOne && (pL2 <= 2 || (tS > 0 && tS <= 4))) {
+    freq = clamp(Math.max(freq, 0.98), 0.05, 0.98);
+  }
 
-// Sniper-like Verhalten: wartet eher, wird am Ende sehr aktiv
-const b1n0 = normalizeBehavior(b1);
-const b2n0 = normalizeBehavior(b2);
-const sniperLike0 = (b1n0 === "sniper" || b2n0 === "sniper");
-if (sniperLike0 && tSec > 3) freq = clamp(freq - 0.08, 0.05, 0.98);
-if (sniperLike0 && tSec > 0 && tSec <= 3) freq = clamp(freq + 0.20, 0.05, 0.98);
-
-if (Math.random() > freq) return null;
+  if (Math.random() > freq) return null;
 
 
   // “Desire” = wie sehr will er dieses Pokémon
   let desire = desireFromSpecial(specialFlags || {}, diff);
-  desire = clamp(desire + (tune.desire || 0), 0.05, 0.98);
+  if (mustGetOne) {
+    // Wenn Bot noch 0 Pokémon hat, MUSS er gegen Ende aktiver werden (kein Bot bleibt leer)
+    const pL = Number(picksLeft || 0);
+    if (pL <= 4) desire = clamp(desire + 0.18, 0.05, 0.98);
+    if (pL <= 2) desire = clamp(desire + 0.28, 0.05, 0.98);
+  }
+desire = clamp(desire + (tune.desire || 0), 0.05, 0.98);
 
-  const isLast = Number(picksLeft || 0) <= 1;
   const picks = Math.max(1, Number(picksLeft || 1));
 // ✅ Endgame-Aggression: je weniger Picks übrig, desto mehr "Geld raus"
 // (wenn picksLeft klein ist, sollen sie sich nicht kaputtsparen)
@@ -562,11 +567,12 @@ if (picks <= 1) endgameMult *= 1.55;
   if (sf.legendary) specialMult *= 1.60;
   if (sf.mythical) specialMult *= 1.75;
 // ✅ BST/Power-Multiplikator: starke Endentwicklungen teurer (z.B. Kaumalat -> Knakrack)
+// stärker skaliert, damit 600+ BST nicht “billig” bleibt
 const evoT = Number(evoMaxTotal ?? 0);
 let bstMult = 1.0;
 if (evoT > 0) {
-  // 450 => ~1.00, 600 => ~1.35, 720 => ~1.60
-  bstMult = clamp(1 + (evoT - 450) / 400, 0.90, 1.60);
+  // 450 => ~1.00, 600 => ~1.46, 720 => ~1.84
+  bstMult = clamp(0.90 + (evoT - 420) / 320, 0.85, 1.90);
 }
 
   // Difficulty-Aggression (wie hart soll er “Geld verbrennen”)
@@ -664,15 +670,6 @@ if (pLeft <= 1) reserve = Math.round(reserve * 0.10);
   let wMid = 0.40;
   let wBig = 0.20;
 
-  // Timing-Feeling: früh kleiner "antasten", spät aggressiver werden
-  const tSec2 = Number(remainingSec ?? 0);
-  const isEarly = tSec2 > 4;
-  const isLate = tSec2 > 0 && tSec2 <= 3;
-
-  if (hb === 0) { wSmall += 0.10; wBig -= 0.10; }   // opener: eher kleine Schritte
-  if (isEarly)  { wSmall += 0.12; wBig -= 0.12; }   // früh: mehr small
-  if (isLate)   { wSmall -= 0.08; wBig += 0.08; }   // spät: mehr big
-
   // Difficulty: härter => weniger small, mehr big
   if (dLow === "hard" || dLow === "schwer") { wSmall -= 0.08; wBig += 0.08; }
   if (dLow === "veryhard" || dLow === "sehrhart") { wSmall -= 0.12; wBig += 0.12; }
@@ -718,12 +715,6 @@ if (pLeft <= 1) reserve = Math.round(reserve * 0.10);
     inc = Math.ceil(inc / 100) * 100;
   } else {
     inc = pickWeightedStep();
-  }
-
-  // Early-Game Cap: nicht am Anfang riesige Sprünge -> natürlicher "annähern"
-  if (isEarly && !isLast) {
-    const cap = Math.max(minBidIncrement, Math.floor((room * 0.22) / 100) * 100); // max ~22% der room pro Schritt
-    if (cap > 0) inc = Math.min(inc, cap);
   }
 
   // Mindest-Increment + incFloor
