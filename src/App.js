@@ -52,7 +52,7 @@ function AppContent() {
       <Route path="/team" element={<TeamManager />} />
       <Route path="/guide" element={<GuidePage />} />
       <Route path="/import" element={<ImportPage />} />
-      <Route path="/pokemon/:name" element={<PokemonDetail />} />
+      <Route path="/pokemon-name/:name" element={<PokemonDetail />} />
       <Route path="/versus" element={<VersusHome />} />
       <Route path="/versus/:roomId" element={<VersusLobby />} />
       <Route path="/versus/:roomId/game" element={<VersusGame />} />

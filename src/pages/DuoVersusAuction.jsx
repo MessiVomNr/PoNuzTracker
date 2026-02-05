@@ -963,10 +963,8 @@ async function makeAdmin(targetPlayerId, targetName) {
   }
 
   function openPokemonDetails(dexId) {
-    const name = getPokemonName(dexId); // deutsches Pokédex-Name-Mapping
-    const slug = encodeURIComponent(String(name).trim().replace(/\s+/g, "_"));
-    window.open(`https://www.pokewiki.de/${slug}#Zucht_und_Entwicklung`, "_blank", "noopener,noreferrer");
-  }
+  nav(`/pokemon/${dexId}`);
+}
 
   // Guard: only valid in auction status
   useEffect(() => {
