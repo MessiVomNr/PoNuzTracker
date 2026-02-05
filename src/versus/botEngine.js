@@ -119,7 +119,7 @@ export function generateBotConfigs(botCount, seedBase = Date.now()) {
     out.push({
       id: `bot:${idx1}`, // ✅ STABIL & EINFACH zu matchen
       // seedBase nur für Optik/Feeling
-      name: `${name} #${Math.floor(10 + Math.random() * 90)}`,
+      name: `${name} #${idx1}`,
       difficulty: diff,
       behavior1: "zufall",
       behavior2: "none",
@@ -135,21 +135,71 @@ export function generateBotConfigs(botCount, seedBase = Date.now()) {
 export function buildBots({ botConfigs = [], startTeamIndex = 0 }) {
   const bots = [];
   const startIdx = Math.max(0, Number(startTeamIndex) || 0);
+  // --- NEU: pro Draft einmal vorbereiten (nicht global über mehrere Drafts) ---
+  const behaviorPool = (BOT_BEHAVIORS || []).filter((k) => k !== "none" && k !== "zufall");
+
+  const globalSeed = hashStr(
+    `global|${(botConfigs?.[0]?.seedBase ?? 0)}|${botConfigs?.length ?? 0}|${startIdx}`
+  );
+  const globalRng = mulberry32(globalSeed);
+
+  // global gemischt, damit die Reihenfolge pro Draft anders ist
+  const shuffledPool = [...behaviorPool];
+  for (let s = shuffledPool.length - 1; s > 0; s--) {
+    const j = Math.floor(globalRng() * (s + 1));
+    [shuffledPool[s], shuffledPool[j]] = [shuffledPool[j], shuffledPool[s]];
+  }
+
+  // Wichtig: pro Draft frisch!
+  const usedB1 = new Set();
 
   for (let i = 0; i < botConfigs.length; i++) {
     const cfg = botConfigs[i] || {};
     const teamId = `team${startIdx + i + 1}`; // ✅ team ist 1-based
 
     const diff = String(cfg.difficulty || "normal");
-    let b1 = String(cfg.behavior1 || "zufall");
-    let b2 = String(cfg.behavior2 || "none");
+let b1 = normalizeBehavior(cfg.behavior1 || "zufall");
+let b2 = normalizeBehavior(cfg.behavior2 || "zufall");
 
     // ✅ "zufall" bleibt pro Draft fix (seeded), nicht pro Bid wechselnd
+    // --- NEU: globaler Draft-RNG + “nicht alle gleich”-Würfelhilfe ---
     const rng = mulberry32(hashStr(`${cfg.id || `bot:${i + 1}`}|${cfg.seedBase || 0}|${i}`));
-    const behaviorPool = (BOT_BEHAVIORS || []).filter((k) => k !== "none" && k !== "zufall");
 
-    if (b1 === "zufall") b1 = pickRng(behaviorPool, rng) || "none";
-    if (b2 === "zufall") b2 = pickRng(behaviorPool, rng) || "none";
+    function pickAny() {
+      if (!shuffledPool.length) return "none";
+      return shuffledPool[Math.floor(rng() * shuffledPool.length)];
+    }
+
+    function pickPreferUnused() {
+      if (!shuffledPool.length) return "none";
+      if (usedB1.size >= shuffledPool.length) return pickAny(); // alles schon benutzt -> normal würfeln
+
+      for (let tries = 0; tries < 12; tries++) {
+        const cand = pickAny();
+        if (!usedB1.has(cand)) return cand;
+      }
+      return pickAny();
+    }
+
+    if (b1 === "zufall") {
+      b1 = pickPreferUnused() || "none";
+      usedB1.add(b1);
+    }
+
+    if (b2 === "zufall") {
+      // b2 möglichst nicht identisch zu b1
+      let picked = null;
+      for (let tries = 0; tries < 12; tries++) {
+        const cand = pickAny();
+        if (cand !== b1) {
+          picked = cand;
+          break;
+        }
+      }
+      b2 = picked || pickAny() || "none";
+    }
+
+
 
     // 2. Verhalten nur bei Sehr hart
     const dd = diff.toLowerCase();
@@ -244,11 +294,13 @@ function applyBehaviorTuning(state, behavior, ctx) {
   }
 
   if (b === "raushauer") {
-    s.reserveMult *= 0.70;
-    s.maxPayMult *= 1.10;
-    s.incFloor = Math.max(s.incFloor, 300);
-    s.freqAdd += 0.10;
-  }
+  // deutlich weniger Reserve, deutlich mehr MaxPay, öfter bieten
+  s.reserveMult *= 0.45;
+  s.maxPayMult *= 1.28;
+  // kleine Schritte wirken natürlicher
+  s.incFloor = Math.max(s.incFloor, 100);
+  s.freqAdd += 0.20;
+}
 
   if (b === "sniper") {
     // bietet seltener, dafür größere Sprünge
@@ -287,9 +339,9 @@ function applyBehaviorTuning(state, behavior, ctx) {
   
   if (b === "dominanz") {
     // will "dominieren": oft bieten + größere Sprünge
-    s.freqAdd += 0.14;
-    s.maxPayMult *= 1.08;
-    s.incFloor = Math.max(s.incFloor, 300);
+    s.freqAdd += 0.18;
+s.maxPayMult *= 1.18;
+s.incFloor = Math.max(s.incFloor, 200);
   }
 
   if (b === "risiko") {
@@ -429,11 +481,15 @@ export function decideBotBid({
   myBudget,
   highestBid,
   highestTeamId,
+  highestTeamBudget, // ✅ neu
   minBidIncrement = 100,
-  specialFlags,      // {legendary, mythical, starter, pseudo, subLegendary}
-  picksLeft,         // wie viele Auktionen inkl. dieser noch kommen
-  avgPrice,          // optional
+  specialFlags,
+  picksLeft,
+  avgPrice,
+  evoMaxTotal,
+  remainingSec,
 }) {
+
   if (!bot) return null;
 
   const budget = clamp(myBudget, 0, 999999999);
@@ -459,65 +515,252 @@ export function decideBotBid({
 
   // Final frequency
   const isLastForFreq = Number(picksLeft || 0) <= 1;
-  let freq = clamp(baseFreq + tune.freqAdd + (isLastForFreq ? 0.10 : 0), 0.05, 0.98);
+  let freq = clamp(baseFreq + tune.freqAdd + (isLastForFreq ? 0.15 : 0), 0.05, 0.98);
 
-  // Beim Opening (hb===0) lieber etwas öfter anbieten, sonst startet Runde oft nur durch Humans
-  if (hb === 0) freq = clamp(freq + 0.08, 0.05, 0.98);
+// Opening: deutlich öfter (damit mehr "Leben" reinkommt)
+if (hb === 0) freq = clamp(freq + 0.18, 0.05, 0.98);
 
-  if (Math.random() > freq) return null;
+// Endgame (Picks): aggressiver
+const pLeft2 = Number(picksLeft || 0);
+if (pLeft2 <= 2) freq = clamp(freq + 0.18, 0.05, 0.98);
+if (pLeft2 <= 1) freq = clamp(freq + 0.22, 0.05, 0.98);
+
+// Endgame (Timer): in den letzten Sekunden deutlich öfter überbieten
+const tSec = Number(remainingSec ?? 0);
+if (tSec > 0 && tSec <= 4) freq = clamp(freq + 0.18, 0.05, 0.98);
+if (tSec > 0 && tSec <= 2) freq = clamp(freq + 0.30, 0.05, 0.98);
+
+// Sniper-like Verhalten: wartet eher, wird am Ende sehr aktiv
+const b1n0 = normalizeBehavior(b1);
+const b2n0 = normalizeBehavior(b2);
+const sniperLike0 = (b1n0 === "sniper" || b2n0 === "sniper");
+if (sniperLike0 && tSec > 3) freq = clamp(freq - 0.08, 0.05, 0.98);
+if (sniperLike0 && tSec > 0 && tSec <= 3) freq = clamp(freq + 0.20, 0.05, 0.98);
+
+if (Math.random() > freq) return null;
 
 
   // “Desire” = wie sehr will er dieses Pokémon
   let desire = desireFromSpecial(specialFlags || {}, diff);
   desire = clamp(desire + (tune.desire || 0), 0.05, 0.98);
 
-  // Reserve-Gefühl (kann 0 sein) – aber variiert
-  // reserveBias=0 => keine Reserve, reserveBias=1 => eher Reserve
-  const reserveFactor = clamp(bot.reserveBias, 0, 1);
-  let reserve = Math.round(budget * (0.05 + 0.18 * reserveFactor)); // ~5%..23%
-  reserve = Math.round(reserve * (tune.reserveMult || 1));
-  if (diff === "hard") reserve = Math.round(reserve * 0.6);
-  if (diff === "chaos") reserve = Math.round(reserve * 0.4);
-
-  // Letztes Pokémon: Reserve fast egal + aggressive cap
   const isLast = Number(picksLeft || 0) <= 1;
-  if (isLast) reserve = Math.round(reserve * 0.15);
+  const picks = Math.max(1, Number(picksLeft || 1));
+// ✅ Endgame-Aggression: je weniger Picks übrig, desto mehr "Geld raus"
+// (wenn picksLeft klein ist, sollen sie sich nicht kaputtsparen)
+let endgameMult = 1.0;
+if (picks <= 3) endgameMult *= 1.15;
+if (picks <= 2) endgameMult *= 1.30;
+if (picks <= 1) endgameMult *= 1.55;
 
-  // Max, das er für dieses Pokémon zahlen will
-  // Je specialer & je “last pick” desto näher ans All-in
-  let maxPay = Math.round((budget - reserve) * (0.55 + 0.45 * desire));
-  if (isLast) maxPay = Math.round(budget * (0.85 + 0.15 * desire)); // sehr nah ans all-in
+  // ✅ Specials-Multiplikator (damit Legis/Mythische deutlich teurer werden)
+  const sf = specialFlags || {};
+  let specialMult = 1.0;
+  if (sf.starter) specialMult *= 1.12;
+  if (sf.pseudo) specialMult *= 1.22;
+  if (sf.subLegendary) specialMult *= 1.35;
+  if (sf.legendary) specialMult *= 1.60;
+  if (sf.mythical) specialMult *= 1.75;
+// ✅ BST/Power-Multiplikator: starke Endentwicklungen teurer (z.B. Kaumalat -> Knakrack)
+const evoT = Number(evoMaxTotal ?? 0);
+let bstMult = 1.0;
+if (evoT > 0) {
+  // 450 => ~1.00, 600 => ~1.35, 720 => ~1.60
+  bstMult = clamp(1 + (evoT - 450) / 400, 0.90, 1.60);
+}
+
+  // Difficulty-Aggression (wie hart soll er “Geld verbrennen”)
+  const dLow = String(diff || "normal").toLowerCase();
+  let diffAgg = 1.0;
+  if (dLow === "easy" || dLow === "leicht") diffAgg = 0.82;
+  if (dLow === "normal" || dLow === "mittel") diffAgg = 1.00;
+  if (dLow === "hard" || dLow === "schwer") diffAgg = 1.18;
+  if (dLow === "veryhard" || dLow === "sehrhart") diffAgg = 1.32;
+  if (dLow === "chaos" || dLow === "chaotisch") diffAgg = 1.10;
+
+  // ✅ Reserve-Gefühl – aber: wenn viel Budget pro Pick da ist, Reserve runter (damit sie nicht bei 100k nur 300 bieten)
+  const reserveFactor = clamp(bot.reserveBias, 0, 1);
+ let reserve = Math.round(budget * (0.02 + 0.08 * reserveFactor)); // ~2%..10%
+  reserve = Math.round(reserve * (tune.reserveMult || 1));
+// ✅ Endgame: Reserve stark reduzieren -> Geld MUSS raus
+const pLeft = Number(picksLeft || 0);
+if (pLeft <= 2) reserve = Math.round(reserve * 0.25);
+if (pLeft <= 1) reserve = Math.round(reserve * 0.10);
+
+  const basePerPick = budget / picks;
+  const ap = Number(avgPrice || 0);
+  if (ap > 0) {
+    const affordability = clamp(basePerPick / Math.max(1, ap), 0.4, 6.0); // >1 => viel Geld pro Pick
+    // mehr Geld pro Pick => weniger Reserve
+    reserve = Math.round(reserve * clamp(1 / affordability, 0.30, 1.00));
+    // wenn avgPrice sehr niedrig, noch weniger Reserve
+    if (affordability >= 2.5) reserve = Math.round(reserve * 0.85);
+  }
+
+  // Hard/VeryHard/Chaos halten weniger Reserve zurück
+  if (dLow === "hard" || dLow === "schwer") reserve = Math.round(reserve * 0.70);
+  if (dLow === "veryhard" || dLow === "sehrhart") reserve = Math.round(reserve * 0.55);
+  if (dLow === "chaos" || dLow === "chaotisch") reserve = Math.round(reserve * 0.60);
+
+  // Letztes Pokémon: Reserve fast egal
+  if (isLast) reserve = Math.round(reserve * 0.10);
+
+  reserve = clamp(reserve, 0, budget);
+
+  // ✅ MaxPay: kombiniert “Budget pro Pick” + Desire + Specials + Difficulty
+  // Ziel: Bots sollen ihr Geld über den Draft verteilt weitgehend ausgeben.
+  const spendable = clamp(budget - reserve, 0, budget);
+
+  // Baseline (ohne avgPrice): orientiert sich am Budget pro Pick
+  let targetPay = basePerPick * (0.85 + 0.95 * desire) * specialMult * diffAgg * endgameMult * bstMult;
+
+  // Wenn avgPrice vorhanden: korrigiere targetPay so, dass es nicht absurd niedrig bleibt
+  if (ap > 0) {
+    // Wenn wir viel mehr Geld als “typischer Preis” haben: targetPay hochziehen
+    // (z.B. 100k Budget für 10 Mons, avgPrice 1200 => affordability ~8.3 -> targetPay deutlich höher)
+    const affordability = clamp(basePerPick / Math.max(1, ap), 0.4, 10.0);
+    if (affordability > 1.25) {
+      targetPay *= (1 + Math.min(1.2, (affordability - 1.25) * 0.35));
+    }
+    // Wenn Pokémon gerade “billig” ist (hb klein): ein bisschen aggressiver rein
+    if (hb <= ap * 0.7) targetPay *= 1.08;
+  }
+
+  // Sicherheits-Cap: niemals mehr als spendable * Faktor (damit Reserve noch Sinn hat)
+  let maxPay = Math.round(
+  Math.min(
+    budget,
+    Math.max(
+      hb + minBidIncrement,
+      targetPay,
+      // ✅ mutiger: mehr Budget darf in maxPay fließen
+      spendable * (0.55 + 0.75 * desire) * specialMult
+    )
+  )
+);
+  if (isLast) {
+    // last pick: sehr nah ans all-in
+    maxPay = Math.round(budget * clamp(0.88 + 0.12 * desire, 0.88, 0.995));
+  }
+
   maxPay = Math.round(maxPay * (tune.maxPayMult || 1));
   maxPay = clamp(maxPay, 0, budget);
 
   if (maxPay <= hb) return null;
 
-  // Schritt wählen (mind. +100)
-  const steps = bumpStep(diff);
-  let inc = pick(steps);
+  // ✅ Step/Jump: nicht nur 1000er – Mischung aus kleinen + mittleren + großen Sprüngen,
+  // und bei Specials öfter “bigger” + gelegentlich ein großer “pressure jump”.
+  const room = Math.max(0, maxPay - hb);
+
+  // Basis-Kandidaten (immer klein möglich)
+  const small = [100, 200, 300];
+  const mid = [400, 500, 700, 900, 1100];
+  // big skaliert mit Budget (damit bei 100k auch mal 5k–20k drin ist)
+  const bigBase = [1200, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000, 15000, 20000];
+  const big = bigBase.filter((x) => x <= Math.max(1500, Math.round(budget * 0.25))); // big max 25% Budget
+
+  // weights
+  let wSmall = 0.40;
+  let wMid = 0.40;
+  let wBig = 0.20;
+
+  // Timing-Feeling: früh kleiner "antasten", spät aggressiver werden
+  const tSec2 = Number(remainingSec ?? 0);
+  const isEarly = tSec2 > 4;
+  const isLate = tSec2 > 0 && tSec2 <= 3;
+
+  if (hb === 0) { wSmall += 0.10; wBig -= 0.10; }   // opener: eher kleine Schritte
+  if (isEarly)  { wSmall += 0.12; wBig -= 0.12; }   // früh: mehr small
+  if (isLate)   { wSmall -= 0.08; wBig += 0.08; }   // spät: mehr big
+
+  // Difficulty: härter => weniger small, mehr big
+  if (dLow === "hard" || dLow === "schwer") { wSmall -= 0.08; wBig += 0.08; }
+  if (dLow === "veryhard" || dLow === "sehrhart") { wSmall -= 0.12; wBig += 0.12; }
+  if (dLow === "easy" || dLow === "leicht") { wSmall += 0.10; wBig -= 0.10; }
+
+  // Specials: mehr big (und öfter overtake)
+  const anySpecial = !!(sf.starter || sf.pseudo || sf.subLegendary || sf.legendary || sf.mythical);
+  if (anySpecial) { wSmall -= 0.06; wBig += 0.06; }
+  if (sf.legendary || sf.mythical) { wSmall -= 0.08; wBig += 0.08; }
+
+  // Behavior influence: sniper eher big jumps
+  const b1n = normalizeBehavior(b1);
+  const b2n = normalizeBehavior(b2);
+  const sniperLike = (b1n === "sniper" || b2n === "sniper");
+  if (sniperLike) { wSmall -= 0.10; wBig += 0.10; }
+
+  // clamp weights
+  wSmall = clamp(wSmall, 0.10, 0.70);
+  wBig = clamp(wBig, 0.05, 0.60);
+  wMid = clamp(1 - wSmall - wBig, 0.10, 0.70);
+
+  function pickWeightedStep() {
+    const r = Math.random();
+    if (r < wSmall) return pick(small);
+    if (r < wSmall + wMid) return pick(mid);
+    return pick(big.length ? big : mid);
+  }
+
+  // gelegentlicher “pressure jump”: bei Specials/VeryHard/LastPick
+  let inc;
+  const pressureChance =
+    (isLast ? 0.40 : 0.0) +
+    ((dLow === "veryhard" || dLow === "sehrhart") ? 0.18 : 0.0) +
+    (sf.legendary || sf.mythical ? 0.22 : (anySpecial ? 0.10 : 0.0));
+
+  if (room >= 800 && Math.random() < clamp(pressureChance, 0, 0.65)) {
+    // springe einen spürbaren Teil der verfügbaren “room” (aber nicht direkt all-in)
+    const lo = isLast ? 0.45 : 0.28;
+    const hi = isLast ? 0.85 : 0.62;
+    const frac = lo + Math.random() * (hi - lo);
+    inc = Math.round(room * frac);
+    // runde auf 100
+    inc = Math.ceil(inc / 100) * 100;
+  } else {
+    inc = pickWeightedStep();
+  }
+
+  // Early-Game Cap: nicht am Anfang riesige Sprünge -> natürlicher "annähern"
+  if (isEarly && !isLast) {
+    const cap = Math.max(minBidIncrement, Math.floor((room * 0.22) / 100) * 100); // max ~22% der room pro Schritt
+    if (cap > 0) inc = Math.min(inc, cap);
+  }
+
+  // Mindest-Increment + incFloor
   if (tune.incFloor) inc = Math.max(inc, tune.incFloor);
-
-  // “Randomness” – manchmal nur +100, manchmal dicke Sprünge
-  if (diff === "easy" && Math.random() < 0.6) inc = 100;
-  if (diff === "normal" && Math.random() < 0.45) inc = 100;
-
-  // Last pick: öfter größere jumps (damit es “all-in feeling” hat)
-  if (isLast && Math.random() < 0.55) inc = Math.max(inc, 500);
+  inc = Math.max(minBidIncrement, inc);
 
   // Zielgebot
-  let bid = hb + Math.max(minBidIncrement, inc);
+  let bid = hb + inc;
   bid = Math.ceil(bid / 100) * 100;
 
   // nicht über maxPay
-  if (bid > maxPay) {
-    // wenn last pick, versucht er “bis maxPay” zu gehen
-    bid = Math.floor(maxPay / 100) * 100;
-  }
+  if (bid > maxPay) bid = Math.floor(maxPay / 100) * 100;
 
   // Safety
   if (bid <= hb) return null;
-  if (bid > budget) bid = Math.floor(budget / 100) * 100;
-  if (bid <= hb) return null;
+if (bid > budget) bid = Math.floor(budget / 100) * 100;
 
-  return bid;
+// ✅ SAFE-STEAL REGEL
+const htBud = Number(highestTeamBudget ?? 0);
+
+if (
+  highestTeamId &&
+  highestTeamId !== bot.teamId &&
+  hb > 0 &&
+  myBudget >= hb + minBidIncrement &&
+  htBud > 0 &&
+  htBud <= hb + minBidIncrement
+) {
+  const stealBid = hb + minBidIncrement;
+
+  if (bid < stealBid) {
+    bid = stealBid;
+  }
+}
+
+if (bid <= hb) return null;
+
+return bid;
+
 }
