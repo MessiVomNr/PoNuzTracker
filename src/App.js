@@ -12,6 +12,11 @@ import VersusGame from "./versus/VersusGame";
 import DuoHome from "./duo/DuoHome";
 import DuoVersusAuction from "./pages/DuoVersusAuction";
 import PokemonInfo from "./pages/PokemonInfo";
+import Pokedex from "./pages/Pokedex";
+import GlobalEscapeMenu from "./components/GlobalEscapeMenu";
+import MoveDex from "./pages/MoveDex";
+import MoveDetail from "./pages/MoveDetail";
+import TMStory from "./pages/TMStory";
 
 // Hook für Theme-Verwaltung
 function useInitTheme() {
@@ -45,22 +50,29 @@ function AppContent() {
   useInitTheme();
   useBackgroundControl();
 
-  return (
-    <Routes>
-      <Route path="/" element={<SaveGameManager />} />
-      <Route path="/table" element={<EncounterTable />} />
-      <Route path="/team" element={<TeamManager />} />
-      <Route path="/guide" element={<GuidePage />} />
-      <Route path="/import" element={<ImportPage />} />
-      <Route path="/pokemon-name/:name" element={<PokemonDetail />} />
-      <Route path="/versus" element={<VersusHome />} />
-      <Route path="/versus/:roomId" element={<VersusLobby />} />
-      <Route path="/versus/:roomId/game" element={<VersusGame />} />
-      <Route path="/duo" element={<DuoHome />} />
-      <Route path="/duo/:roomId/versus" element={<DuoVersusAuction />} />
-      <Route path="/versus/:roomId/auction" element={<DuoVersusAuction />} />
-      <Route path="/pokemon/:dexId" element={<PokemonInfo />} />
-  </Routes>
+    return (
+    <>
+      <GlobalEscapeMenu />
+      <Routes>
+        <Route path="/" element={<SaveGameManager />} />
+        <Route path="/table" element={<EncounterTable />} />
+        <Route path="/team" element={<TeamManager />} />
+        <Route path="/guide" element={<GuidePage />} />
+        <Route path="/import" element={<ImportPage />} />
+        <Route path="/pokemon-name/:name" element={<PokemonDetail />} />
+        <Route path="/versus" element={<VersusHome />} />
+        <Route path="/versus/:roomId" element={<VersusLobby />} />
+        <Route path="/versus/:roomId/game" element={<VersusGame />} />
+        <Route path="/duo" element={<DuoHome />} />
+        <Route path="/duo/:roomId/versus" element={<DuoVersusAuction />} />
+        <Route path="/versus/:roomId/auction" element={<DuoVersusAuction />} />
+        <Route path="/pokemon/:dexId" element={<PokemonInfo />} />
+        <Route path="/pokedex" element={<Pokedex />} />
+        <Route path="/movedex" element={<MoveDex />} />
+        <Route path="/move/:moveKey" element={<MoveDetail />} />
+        <Route path="/tms" element={<TMStory />} />
+      </Routes>
+    </>
   );
 }
 

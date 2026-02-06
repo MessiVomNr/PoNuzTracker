@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import dexBg from "../assets/DexBackground.png";
 
 function cap(s) {
   return String(s || "")
@@ -21,6 +22,15 @@ function getLocalizedName(namesArr, lang = "de") {
   return hit?.name || null;
 }
 const speciesNameDeCache = new Map(); // key: speciesId, value: germanName
+const GEN_TO_VERSION_GROUPS = {
+  1: ["red-blue", "yellow"],
+  2: ["gold-silver", "crystal"],
+  3: ["ruby-sapphire", "emerald", "firered-leafgreen"],
+  4: ["diamond-pearl", "platinum", "heartgold-soulsilver"],
+  5: ["black-white", "black-2-white-2"],
+  6: ["x-y", "omega-ruby-alpha-sapphire"],
+  7: ["sun-moon", "ultra-sun-ultra-moon"],
+};
 
 async function fetchSpeciesNameDeById(speciesId) {
   const id = Number(speciesId);
@@ -111,6 +121,18 @@ const TYPE_LABELS_DE = {
   steel: "Stahl",
   fairy: "Fee",
 };
+const VERSION_GROUPS_BY_GEN = {
+  1: ["red-blue", "yellow"],
+  2: ["gold-silver", "crystal"],
+  3: ["ruby-sapphire", "emerald", "firered-leafgreen"],
+  4: ["diamond-pearl", "platinum", "heartgold-soulsilver"],
+  5: ["black-white", "black-2-white-2"],
+  6: ["x-y", "omega-ruby-alpha-sapphire"],
+  7: ["sun-moon", "ultra-sun-ultra-moon"],
+};
+
+const ALL_GENS = [1, 2, 3, 4, 5, 6, 7];
+
 
 const typeIconRow = {
   marginTop: 10,
@@ -126,7 +148,7 @@ const typeIcon = {
   height: 28,
   borderRadius: 8,
   padding: 3,
-  background: "rgba(255,255,255,0.06)",
+  background: "rgba(0,0,0,0.55)",
   border: "1px solid rgba(255,255,255,0.14)",
 };
 const hideScrollbar = {
@@ -138,12 +160,197 @@ const hideScrollbar = {
 const hideScrollbarCss = `
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
+    /* ===== Catchrate Select Dark Mode ===== */
+.pinfo-select {
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.14);
+}
+
+.pinfo-select option {
+  background: #15171c;
+  color: #fff;
+}
   }
+/* ===== Catchrate Slider Fix ===== */
+.pinfo-range {
+  width: 100%;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.pinfo-range::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg,#a14cff,#ff4ca0);
+}
+
+.pinfo-range::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg,#a14cff,#ff4ca0);
+}
+
+.pinfo-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  margin-top: -5px;
+}
+
+.pinfo-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+}
+
+.pinfo-range:focus {
+  outline: none;
+}
 `;
+function timerBallMult(gen, turnsPassed) {
+  const t = Math.max(0, Math.floor(Number(turnsPassed) || 0));
+
+  // Gen 3–4: 1.0 + t/10, capped bei 4.0 (max ab Runde 31)
+  if (gen <= 4) return Math.min(4, 1 + t / 10);
+
+  // Gen 5+: Tabelle (capped 4× ab turnsPassed >= 10 -> Runde 11)
+  const table = [
+    1, // 0 (Runde 1)
+    5325 / 4096,
+    6554 / 4096,
+    7783 / 4096,
+    9012 / 4096,
+    10241 / 4096,
+    11470 / 4096,
+    12699 / 4096,
+    13928 / 4096,
+    15157 / 4096,
+    4, // 10+
+  ];
+  return t >= 10 ? 4 : table[t] || 1;
+}
+
+function quickBallMult(gen, turnNumber) {
+  const turn = Math.max(1, Math.floor(Number(turnNumber) || 1));
+  if (turn !== 1) return 1;
+  // Gen 4: 4×, Gen 5+: 5×
+  if (gen === 4) return 4;
+  return 5;
+}
+
+function duskBallMult(gen, isDark) {
+  if (!isDark) return 1;
+  // Gen 4–6: 3.5×, Gen 7+: 3×
+  if (gen >= 7) return 3;
+  return 3.5;
+}
+
+function getBallsForGen(gen) {
+  const g = Number(gen) || 7;
+
+  const base = [
+    { key: "poke", label: "Pokéball", kind: "static", mult: 1 },
+    { key: "great", label: "Superball", kind: "static", mult: 1.5 },
+    { key: "ultra", label: "Hyperball", kind: "static", mult: 2 },
+    { key: "master", label: "Meisterball", kind: "static", mult: Infinity },
+  ];
+
+  // Ab Gen 3: Timerball
+  if (g >= 3) base.push({ key: "timer", label: "Timerball", kind: "turns" });
+
+  // Ab Gen 4: Finsterball + Flottball
+  if (g >= 4) base.push({ key: "dusk", label: "Finsterball", kind: "dark" });
+  if (g >= 4) base.push({ key: "quick", label: "Flottball", kind: "turn" });
+
+  return base;
+}
+
+function getBallMultiplier(ball, { gen, turnNumber, isDark }) {
+  if (!ball) return 1;
+  if (ball.mult === Infinity) return Infinity;
+  if (ball.kind === "static") return ball.mult ?? 1;
+
+  const g = Number(gen) || 7;
+
+  if (ball.kind === "turns") {
+    const turnsPassed = Math.max(0, Math.floor(Number(turnNumber) || 1) - 1);
+    return timerBallMult(g, turnsPassed);
+  }
+
+  if (ball.kind === "turn") {
+    return quickBallMult(g, turnNumber);
+  }
+
+  if (ball.kind === "dark") {
+    return duskBallMult(g, Boolean(isDark));
+  }
+
+  return 1;
+}
+
+function getStatusBonus(status) {
+  // Gen 3+: Schlaf/Gefroren = 2, Para/Gift/Verbrennung = 1.5, sonst 1
+  if (status === "sleep" || status === "freeze") return 2;
+  if (status === "par" || status === "poison" || status === "burn") return 1.5;
+  return 1;
+}
+
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function estimateCatchChanceGen3Plus({
+  captureRate, // 0..255
+  ballMult,    // e.g. 1,1.5,2
+  statusBonus, // 1,1.5,2.5
+  hpPct,       // 1..100
+}) {
+  // Näherung ohne Level/Bonusbedingungen.
+  // Wir nutzen MaxHP=100, CurHP=hpPct (skaliert) -> Verhältnis reicht
+  const maxHP = 100;
+  const curHP = clamp(Math.round((hpPct / 100) * maxHP), 1, maxHP);
+
+  if (!Number.isFinite(captureRate) || captureRate <= 0) return 0;
+
+  if (ballMult === Infinity) return 1;
+
+  // Gen 3+ Fangformel: a = (((3M - 2H) * rate * ball) / (3M)) * status
+  let a =
+    (((3 * maxHP - 2 * curHP) * captureRate * ballMult) / (3 * maxHP)) *
+    statusBonus;
+
+  a = clamp(a, 0, 255);
+
+  if (a >= 255) return 1;
+
+  // b = 1048560 / sqrt(sqrt(16711680/a))
+  const b = 1048560 / Math.sqrt(Math.sqrt(16711680 / a));
+
+  // Chance = (b/65536)^4
+  const p = Math.pow(b / 65536, 4);
+  return clamp(p, 0, 1);
+}
+
+function formatCatchChance(chance01) {
+  const p = chance01 * 100;
+  if (!Number.isFinite(p) || p <= 0) return "<0.01%";
+  if (p < 0.01) return "<0.01%";
+  if (p < 0.1) return p.toFixed(2) + "%";
+  if (p < 1) return p.toFixed(2) + "%";
+  if (p < 10) return p.toFixed(1) + "%";
+  return Math.round(p) + "%";
+}
 
 export default function PokemonInfo() {
   const { dexId } = useParams();
   const navigate = useNavigate();
+  const nav = useNavigate();
   const id = Number(dexId);
   const [typesDe, setTypesDe] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -153,6 +360,29 @@ export default function PokemonInfo() {
   const [evoChain, setEvoChain] = useState(null);
   const [moveNameDeByUrl, setMoveNameDeByUrl] = useState({}); 
   const [evoNameDeById, setEvoNameDeById] = useState({});
+  const [simLevel, setSimLevel] = useState();
+  const [useSimulation, setUseSimulation] = useState(false);
+  const [selectedGen, setSelectedGen] = useState(7); // Default kannst du ändern
+  const [showCatchCalc, setShowCatchCalc] = useState(false);
+  const [ccBall, setCcBall] = useState("poke");       // poke/great/ultra/master/...
+  const [ccStatus, setCcStatus] = useState("none");   // none/par/poison/burn/sleep/freeze
+  const [ccHpPct, setCcHpPct] = useState(35);         // 1..100 (HP Balken)
+  const [ccTurn, setCcTurn] = useState(1);            // Runde im Kampf (1..)
+  const [ccDark, setCcDark] = useState(false);        // Nacht/Höhle (Finsterball)
+
+  // ✅ Background/Body darf NICHT scrollen (Content scrollt in eigener Fläche)
+  useEffect(() => {
+    const prevHtml = document.documentElement.style.overflow;
+    const prevBody = document.body.style.overflow;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.documentElement.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -229,9 +459,19 @@ useEffect(() => {
       .slice()
       .sort((a, b) => (a?.slot ?? 0) - (b?.slot ?? 0))
       .map((t) => cap(t?.type?.name));
-  }, [pokemon]);
+  }, [pokemon, selectedGen]);
 
   const catchRate = species?.capture_rate ?? null;
+const basePokeballChance = catchRate
+  ? Math.round(
+      estimateCatchChanceGen3Plus({
+        captureRate: Number(catchRate),
+        ballMult: 1,
+        statusBonus: 1,
+        hpPct: 100,
+      }) * 100
+    )
+  : null;
 
   const stats = useMemo(() => {
     const s = pokemon?.stats || [];
@@ -255,30 +495,70 @@ const typeKeys = useMemo(() => {
     .filter(Boolean);
 }, [pokemon]);
 
-  const levelUpMoves = useMemo(() => {
-    const mv = pokemon?.moves || [];
-    const out = [];
+ const levelUpMoves = useMemo(() => {
+  const mv = pokemon?.moves || [];
+  const out = [];
+
+  const allowed = new Set(VERSION_GROUPS_BY_GEN[selectedGen] || []);
+
+  for (const m of mv) {
+    const name = cap(m?.move?.name);
+    const details = m?.version_group_details || [];
+    for (const d of details) {
+      const vg = d?.version_group?.name;
+      if (!allowed.has(vg)) continue;
+      if (d?.move_learn_method?.name !== "level-up") continue;
+
+      const lvl = d?.level_learned_at ?? 0;
+      out.push({ level: lvl, name, url: m?.move?.url });
+    }
+  }
+
+  // sort + de-dupe (same move at same level)
+  out.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+  const seen = new Set();
+  return out.filter((x) => {
+    const key = `${x.level}|${x.name}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}, [pokemon, selectedGen]);
+const availableGens = useMemo(() => {
+  const mv = pokemon?.moves || [];
+  if (!mv.length) return [1, 2, 3, 4, 5, 6, 7];
+
+  const gensWithData = [];
+
+  for (let g = 1; g <= 7; g++) {
+    const allowed = new Set(VERSION_GROUPS_BY_GEN[g] || []);
+    let has = false;
 
     for (const m of mv) {
-      const name = cap(m?.move?.name);
       const details = m?.version_group_details || [];
       for (const d of details) {
+        const vg = d?.version_group?.name;
+        if (!allowed.has(vg)) continue;
         if (d?.move_learn_method?.name !== "level-up") continue;
-        const lvl = d?.level_learned_at ?? 0;
-        out.push({ level: lvl, name, url: m?.move?.url });
+        has = true;
+        break;
       }
+      if (has) break;
     }
 
-    // sort + de-dupe (same move at same level)
-    out.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
-    const seen = new Set();
-    return out.filter((x) => {
-      const key = `${x.level}|${x.name}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [pokemon]);
+    if (has) gensWithData.push(g);
+  }
+
+  return gensWithData.length ? gensWithData : [1, 2, 3, 4, 5, 6, 7];
+}, [pokemon]);
+
+useEffect(() => {
+  // falls man auf eine "leere" Gen wechselt, springen wir automatisch auf die höchste verfügbare
+  if (!availableGens.includes(selectedGen)) {
+    setSelectedGen(availableGens[availableGens.length - 1] || 7);
+  }
+}, [availableGens, selectedGen]);
+
 useEffect(() => {
   let alive = true;
 
@@ -339,6 +619,40 @@ acc.push({ id: speciesId, fallbackName: cap(chainNode?.species?.name) });
       return true;
     });
   }, [evoChain]);
+  const simStats = useMemo(() => {
+  if (!pokemon) return stats;
+
+  const lvl = Math.max(1, Math.min(100, Number(simLevel || 1)));
+
+  function calcStat(base) {
+    return Math.floor(((base * 2 * lvl) / 100) + 5);
+  }
+
+  function calcHp(base) {
+    return Math.floor(((base * 2 * lvl) / 100) + lvl + 10);
+  }
+
+  return {
+    HP: calcHp(stats.HP),
+    Atk: calcStat(stats.Atk),
+    Def: calcStat(stats.Def),
+    SpA: calcStat(stats.SpA),
+    SpD: calcStat(stats.SpD),
+    Spe: calcStat(stats.Spe),
+  };
+}, [stats, simLevel, pokemon]);
+const activeStats = useMemo(() => {
+  return useSimulation ? simStats : stats;
+}, [useSimulation, simStats, stats]);
+
+const levelFilteredMoves = useMemo(() => {
+  const lvl = Number(simLevel || 1);
+  return levelUpMoves.filter(m => m.level <= lvl);
+}, [levelUpMoves, simLevel]);
+const activeMoves = useMemo(() => {
+  return useSimulation ? levelFilteredMoves : levelUpMoves;
+}, [useSimulation, levelFilteredMoves, levelUpMoves]);
+
 useEffect(() => {
   let alive = true;
 
@@ -369,16 +683,36 @@ useEffect(() => {
     alive = false;
   };
 }, [evoList, evoNameDeById]);
+useEffect(() => {
+  function onKey(e) {
+    if (e.key === "Escape" && showCatchCalc) setShowCatchCalc(false);
+  }
+  window.addEventListener("keydown", onKey);
+  return () => window.removeEventListener("keydown", onKey);
+}, [showCatchCalc]);
 
-  const page = {
-    padding: 16,
-    maxWidth: 980,
-    margin: "0 auto",
-    color: "white",
-  };
+  const pageOuter = {
+  minHeight: "100vh",
+  padding: 16,
+  color: "white",
+  backgroundImage: `url(${dexBg})`,
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  backgroundRepeat: "no-repeat",
+  backgroundAttachment: "fixed",
+  position: "relative",
+  height: "100vh",
+  overflow: "hidden",
+};
+
+const page = {
+  maxWidth: 980,
+  margin: "0 auto",
+};
+
   const card = {
     border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.06)",
+    background: "rgba(0, 0, 0, 0.55)",
     borderRadius: 14,
     padding: 14,
   };
@@ -402,13 +736,69 @@ useEffect(() => {
   };
 
   return (
+    <div style={pageOuter}>
+    <style>{hideScrollbarCss}</style>
+  {/* ⭐ Hintergrund Layer */}
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      backgroundImage: `url(${dexBg})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      filter: "blur(6px)",
+      transform: "scale(1.05)", // verhindert Blur-Rand
+      zIndex: -2,
+    }}
+  />
+
+  {/* ⭐ dunkles Overlay */}
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.55)",
+      zIndex: -1,
+    }}
+  />
+
     <div style={page}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <h2 style={{ margin: 0 }}>Pokémon Info</h2>
-        <button style={btn} onClick={() => navigate(-1)}>
-          Zurück
-        </button>
-      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+  <h2>Pokémon Info</h2>
+
+  <div style={{ display: "flex", gap: 10 }}>
+    <button
+      onClick={() => nav("/pokedex")}
+      style={{
+        padding: "8px 12px",
+        borderRadius: 10,
+        border: "1px solid rgba(255,255,255,0.14)",
+        background: "rgba(0,0,0,0.25)",
+        color: "white",
+        cursor: "pointer",
+        fontWeight: 700
+      }}
+    >
+      Pokédex
+    </button>
+
+    <button
+      onClick={() => nav(-1)}
+      style={{
+        padding: "8px 12px",
+        borderRadius: 10,
+        border: "1px solid rgba(255,255,255,0.14)",
+        background: "rgba(0,0,0,0.25)",
+        color: "white",
+        cursor: "pointer",
+        fontWeight: 700
+      }}
+    >
+      Zurück
+    </button>
+  </div>
+</div>
+</div>
 
       {loading && <div style={{ marginTop: 12, opacity: 0.8 }}>Lade…</div>}
       {!loading && err && (
@@ -427,6 +817,7 @@ useEffect(() => {
                     src={compactSprite(pokemon)}
                     alt={pokemon?.name || "pokemon"}
                     style={{ width: 180, height: 180, objectFit: "contain" }}
+                    
                   />
                 ) : (
                   <div style={{ width: 180, height: 180, opacity: 0.6 }}>Kein Bild</div>
@@ -457,6 +848,7 @@ useEffect(() => {
           // Fallback auf zweites CDN (wie im Draft)
           e.currentTarget.src = `https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/${t}.svg`;
         }}
+        
       />
     ))}
   </div>
@@ -464,12 +856,103 @@ useEffect(() => {
 
                 </div>
 
-                <div style={{ marginTop: 10, opacity: 0.85 }}>
-                  Catchrate: <b>{catchRate ?? "-"}</b>
-                </div>
+                <div style={{ marginTop: 10, opacity: 0.9, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+  <div>
+    {basePokeballChance !== null ? (
+  <>Fangchance: {basePokeballChance}%</>
+) : (
+  <>Catchrate: {catchRate ?? "-"}</>
+)}
+  </div>
+
+  <button
+    style={{
+      padding: "6px 10px",
+      borderRadius: 10,
+      border: "1px solid rgba(255,255,255,0.14)",
+      background: "rgba(255,255,255,0.06)",
+      color: "white",
+      cursor: "pointer",
+      fontWeight: 800,
+    }}
+    onClick={() => setShowCatchCalc(true)}
+  >
+    Rechner öffnen
+  </button>
+</div>
+
+                <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+  <div>Gen:</div>
+
+  <select
+    value={selectedGen}
+    onChange={(e) => setSelectedGen(Number(e.target.value))}
+    style={{
+  padding: "6px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(20,20,20,0.95)",
+  color: "white",
+  cursor: "pointer",
+  outline: "none",
+  boxShadow: "0 0 0 1px rgba(0,255,150,0.15)",
+  appearance: "none"
+}}
+
+  >
+    {availableGens.map((g) => (
+  <option
+    key={g}
+    value={g}
+    style={{ background: "#1a1a1a", color: "white" }}
+  >
+    Gen {g}
+  </option>
+))}
+
+  </select>
+</div>
+
+<div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+  <div>Level:</div>
+
+  <input
+    type="number"
+    min={1}
+    max={100}
+    value={simLevel}
+    onChange={(e) => setSimLevel(e.target.value)}
+    disabled={!useSimulation}
+    style={{
+      width: 70,
+      padding: 6,
+      borderRadius: 8,
+      background: "rgba(0,0,0,0.3)",
+      border: "1px solid rgba(255,255,255,0.15)",
+      color: "white",
+      opacity: useSimulation ? 1 : 0.5,
+    }}
+  />
+
+  <button
+    onClick={() => setUseSimulation((v) => !v)}
+    style={{
+      padding: "8px 10px",
+      borderRadius: 10,
+      border: "1px solid rgba(255,255,255,0.14)",
+      background: useSimulation ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.06)",
+      color: "white",
+      cursor: "pointer",
+      fontWeight: 800,
+    }}
+    title="Umschalten zwischen Basisdaten und Level-Simulation"
+  >
+    {useSimulation ? "Basis anzeigen" : "Levelwerte anzeigen"}
+  </button>
+</div>
 
                 <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
-                  {Object.entries(stats).map(([k, v]) => (
+                  {Object.entries(activeStats).map(([k, v]) => (
                     <div key={k} style={{ ...card, padding: 10 }}>
                       <div style={{ fontSize: 12, opacity: 0.75 }}>{k}</div>
                       <div style={{ fontSize: 18, fontWeight: 800 }}>{v}</div>
@@ -484,8 +967,8 @@ useEffect(() => {
             <div style={card}>
               <div style={{ fontWeight: 800, marginBottom: 8 }}>Level-Up Moves</div>
               <div className="hide-scrollbar" style={hideScrollbar}>
-                {levelUpMoves.length === 0 && <div style={{ opacity: 0.75 }}>Keine Daten</div>}
-                {levelUpMoves.map((m, idx) => (
+                {activeMoves.length === 0 && <div style={{ opacity: 0.75 }}>Keine Daten</div>}
+                {activeMoves.map((m, idx) => (
                   <div key={`${m.level}-${m.name}-${idx}`} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                     <div style={{ opacity: 0.9 }}>
   {moveNameDeByUrl[m.url] || m.name}
@@ -510,9 +993,6 @@ useEffect(() => {
                   <div style={{ opacity: 0.65 }}>{e.id ? `#${e.id}` : ""}</div>
                 </div>
               ))}
-              <div style={{ marginTop: 10, opacity: 0.6, fontSize: 12 }}>
-                (V1: einfache Liste. Baum/Methoden können wir später ergänzen.)
-              </div>
             </div>
           </div>
 
@@ -525,6 +1005,211 @@ useEffect(() => {
               Egg Moves (später)
             </button>
           </div>
+                    {/* ✅ Catchrate Rechner Modal */}
+          {showCatchCalc && (
+            <div
+              onClick={() => setShowCatchCalc(false)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.55)",
+                backdropFilter: "blur(8px)",
+                zIndex: 99999,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 14,
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: "min(520px, 94vw)",
+                  borderRadius: 18,
+                  border: "1px solid rgba(255,255,255,0.14)",
+                  background: "rgba(10,10,16,0.88)",
+                  boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
+                  padding: 14,
+                  color: "white",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                  <div style={{ fontWeight: 950, fontSize: 16 }}>
+                    Catchrate Rechner – {getLocalizedName(species?.names, "de") || cap(pokemon?.name)}
+                  </div>
+                  <button
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,0.14)",
+                      background: "rgba(255,255,255,0.06)",
+                      color: "white",
+                      cursor: "pointer",
+                      fontWeight: 900,
+                    }}
+                    onClick={() => setShowCatchCalc(false)}
+                    title="Schließen"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                  {/* Ball */}
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ opacity: 0.85, fontWeight: 800 }}>Ball</div>
+                    <select
+  className="pinfo-select"
+  value={ccBall}
+  onChange={(e) => setCcBall(e.target.value)}
+  style={{
+    width: "100%",
+    padding: 10,
+    borderRadius: 12,
+    fontWeight: 800
+  }}
+>
+                      {getBallsForGen(selectedGen).map((b) => (
+                        <option key={b.key} value={b.key}>
+                          {b.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Status */}
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ opacity: 0.85, fontWeight: 800 }}>Status</div>
+                    <select
+                      className="pinfo-select"
+                      value={ccStatus}
+                      onChange={(e) => setCcStatus(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: 10,
+                        borderRadius: 12,
+                        fontWeight: 800,
+                      }}
+                    >
+                      <option value="none">Kein Status</option>
+                      <option value="par">Paralyse</option>
+                      <option value="poison">Gift</option>
+                      <option value="burn">Verbrennung</option>
+                      <option value="sleep">Schlaf</option>
+                      <option value="freeze">Gefroren</option>
+                    </select>
+                  </div>
+
+                  {/* HP Balken */}
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ opacity: 0.85, fontWeight: 800 }}>KP (Balken)</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.85 }}>
+                      <span>1%</span>
+                      <span>{ccHpPct}%</span>
+                      <span>100%</span>
+                    </div>
+                    <input
+  className="pinfo-range"
+  type="range"
+  min="1"
+  max="100"
+  value={ccHpPct}
+  onChange={(e) => setCcHpPct(Number(e.target.value))}
+/>
+                  </div>
+
+                  {/* Zusatz-Optionen (gen-/ball-abhängig) */}
+                  {ccBall === "timer" && (
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <div style={{ opacity: 0.85, fontWeight: 800 }}>Runde im Kampf (Timerball)</div>
+                      {(() => {
+                        const maxRound = Number(selectedGen) <= 4 ? 31 : 11; // max Effekt: Gen3–4 Runde 31, Gen5+ Runde 11
+                        const opts = [];
+                        for (let r = 1; r <= maxRound; r++) opts.push(r);
+                        return (
+                          <select
+                            className="pinfo-select"
+                            value={ccTurn}
+                            onChange={(e) => setCcTurn(Number(e.target.value))}
+                            style={{ width: "100%", padding: 10, borderRadius: 12, fontWeight: 800 }}
+                          >
+                            {opts.map((r) => (
+                              <option key={r} value={r}>
+                                Runde {r}
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      })()}
+                      <div style={{ opacity: 0.75, fontSize: 12 }}>
+                        Hinweis: Ab der Maximal-Runde steigt der Effekt nicht weiter.
+                      </div>
+                    </div>
+                  )}
+
+                  {ccBall === "quick" && (
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <div style={{ opacity: 0.85, fontWeight: 800 }}>Runde im Kampf (Flottball)</div>
+                      <select
+                        className="pinfo-select"
+                        value={ccTurn}
+                        onChange={(e) => setCcTurn(Number(e.target.value))}
+                        style={{ width: "100%", padding: 10, borderRadius: 12, fontWeight: 800 }}
+                      >
+                        <option value={1}>Runde 1 (Bonus aktiv)</option>
+                        <option value={2}>Runde 2+ (kein Bonus)</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {ccBall === "dusk" && (
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <div style={{ opacity: 0.85, fontWeight: 800 }}>Umgebung (Finsterball)</div>
+                      <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={ccDark}
+                          onChange={(e) => setCcDark(e.target.checked)}
+                        />
+                        Nacht / Höhle
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Ergebnis */}
+                  {(() => {
+                    const balls = getBallsForGen(selectedGen);
+                    const ball = balls.find((b) => b.key === ccBall) || balls[0];
+                    const captureRate = species?.capture_rate ?? null;
+
+                    const chance = estimateCatchChanceGen3Plus({
+                      captureRate: Number(captureRate),
+                      ballMult: getBallMultiplier(ball, { gen: selectedGen, turnNumber: ccTurn, isDark: ccDark }),
+                      statusBonus: getStatusBonus(ccStatus),
+                      hpPct: ccHpPct,
+                    });
+
+                    const pctText = formatCatchChance(chance);
+
+                    return (
+                      <div
+                        style={{
+                          marginTop: 6,
+                          padding: 12,
+                          borderRadius: 14,
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          background: "rgba(255,255,255,0.06)",
+                        }}
+                      >
+                        <div style={{ fontWeight: 950 }}>Erwartete Fangchance</div>
+                        <div style={{ fontSize: 28, fontWeight: 950, marginTop: 6 }}>{pctText}</div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

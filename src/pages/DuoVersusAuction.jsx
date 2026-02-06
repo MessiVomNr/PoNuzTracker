@@ -856,22 +856,111 @@ export default function DuoVersusAuction() {
   const [room, setRoom] = useState(null);
   const [err, setErr] = useState("");
   const [typeModalOpen, setTypeModalOpen] = useState(false);
-// 🔊 Mute Toggle (persist in localStorage)
+// 🔊 Audio Settings (kommt aus ESC-Menü via appAudioSettingsChanged)
+// Keys wie in GlobalEscapeMenu.jsx:
+const AUDIO_KEYS = {
+  muted: "app_audio_muted_v1",
+  volume: "app_audio_volume_v1", // 0..1
+};
+
+// Fallback: deine alten Keys noch mitlesen (damit nix „resetet“)
+const LEGACY_KEYS = {
+  muted: "versusSoundMuted",
+  volume: "versusSoundVolume", // 0..100
+};
+
 const [soundMuted, setSoundMuted] = useState(() => {
-  return localStorage.getItem("versusSoundMuted") === "1";
-});
-// 🔊 Master Volume in Prozent (0..100)
-const [soundVolume, setSoundVolume] = useState(() => {
-  const v = Number(localStorage.getItem("versusSoundVolume") ?? "80");
-  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 80;
+  const mNew = localStorage.getItem(AUDIO_KEYS.muted);
+  if (mNew != null) return mNew === "1";
+  return localStorage.getItem(LEGACY_KEYS.muted) === "1";
 });
 
+const [soundVolume, setSoundVolume] = useState(() => {
+  const vNew = localStorage.getItem(AUDIO_KEYS.volume);
+  if (vNew != null) {
+    const v = Number(vNew);
+    const vv = Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.6;
+    return Math.round(vv * 100);
+  }
+
+  const vOld = Number(localStorage.getItem(LEGACY_KEYS.volume) ?? "80");
+  return Number.isFinite(vOld) ? Math.max(0, Math.min(100, vOld)) : 80;
+});
+// =========================================================
+// GLOBAL AUDIO REGISTRY (für alle new Audio() in der App)
+// - verhindert "Ghost Audio", doppelte Songs
+// - ESC Menü kann global Mute/Volume setzen
+// =========================================================
+function readGlobalAudioSettings() {
+  const muted = localStorage.getItem(AUDIO_KEYS.muted) === "1";
+  const vRaw = localStorage.getItem(AUDIO_KEYS.volume);
+  const volume = vRaw == null ? 0.6 : Math.max(0, Math.min(1, Number(vRaw)));
+  return { muted, volume };
+}
+
+// global registry auf window
+function getAudioRegistry() {
+  if (!window.__GLOBAL_AUDIO_REGISTRY__) window.__GLOBAL_AUDIO_REGISTRY__ = new Set();
+  return window.__GLOBAL_AUDIO_REGISTRY__;
+}
+
+function registerGlobalAudio(a) {
+  if (!a) return;
+  getAudioRegistry().add(a);
+}
+
+function applySettingsToAudio(a, baseVolume = 1) {
+  if (!a) return;
+  const { muted, volume } = readGlobalAudioSettings();
+  a.muted = !!muted;
+  a.volume = Math.max(0, Math.min(1, volume * baseVolume));
+}
+
+function stopAudio(a) {
+  if (!a) return;
+  try {
+    a.pause();
+    a.currentTime = 0;
+  } catch {}
+}
+
+function stopAllGlobalAudio() {
+  try {
+    const reg = getAudioRegistry();
+    reg.forEach((a) => stopAudio(a));
+  } catch {}
+}
 
 function setMasterVolume(nextRaw) {
   const next = Math.max(0, Math.min(100, Number(nextRaw)));
   setSoundVolume(next);
   localStorage.setItem("versusSoundVolume", String(next));
 }
+// ✅ Sync: ESC-Menü -> Draft Audio
+useEffect(() => {
+  function onAudioChanged(e) {
+    const next = e?.detail;
+    if (!next) return;
+
+    const muted = !!next.muted;
+    const vol01 = Math.max(0, Math.min(1, Number(next.volume ?? 0.6)));
+    const volPct = Math.round(vol01 * 100);
+
+    setSoundMuted(muted);
+    setSoundVolume(volPct);
+
+    // neue Keys persistieren
+    localStorage.setItem(AUDIO_KEYS.muted, muted ? "1" : "0");
+    localStorage.setItem(AUDIO_KEYS.volume, String(vol01));
+
+    // alte Keys weiter pflegen (falls irgendwo im Code noch benutzt)
+    localStorage.setItem(LEGACY_KEYS.muted, muted ? "1" : "0");
+    localStorage.setItem(LEGACY_KEYS.volume, String(volPct));
+  }
+
+  window.addEventListener("appAudioSettingsChanged", onAudioChanged);
+  return () => window.removeEventListener("appAudioSettingsChanged", onAudioChanged);
+}, []);
 
 function toggleSoundMuted() {
   setSoundMuted((v) => {
@@ -1341,33 +1430,58 @@ function end2SrcForGen(gen) {
 }
 
 function ensureBattleAudio() {
-  if (!battleAudioRef.current) battleAudioRef.current = new Audio();
-  const a = battleAudioRef.current;
+  if (!battleAudioRef.current) {
+    const a = new Audio();
+    a.preload = "auto";
+    a.loop = true;
 
-a.loop = true;
-applyAudioSettings(a, 0.35);
+    registerGlobalAudio(a);
+    applySettingsToAudio(a, 0.35);
+    applyAudioSettings(a, 0.35);
+
+    battleAudioRef.current = a;
+  }
+
+  const a = battleAudioRef.current;
 
   const want = battleSrcForGen(genNum);
   const wantAbs = window.location.origin + want;
   if (a.src !== wantAbs) a.src = want;
 
+  // settings refresh (falls ESC geändert wurde)
+  applySettingsToAudio(a, 0.35);
+  applyAudioSettings(a, 0.35);
+
   return a;
 }
 
 function ensureWinAudio() {
-  if (!winAudioRef.current) winAudioRef.current = new Audio();
+  if (!winAudioRef.current) {
+    const w = new Audio();
+    w.preload = "auto";
+    w.loop = false;
+
+    // ✅ richtig: WIN registrieren (nicht battle)
+    registerGlobalAudio(w);
+    applySettingsToAudio(w, 0.45);
+    applyAudioSettings(w, 0.45);
+
+    winAudioRef.current = w;
+  }
+
   const w = winAudioRef.current;
-
-w.loop = false;
-applyAudioSettings(w, 0.9); // win lauter
-
 
   const want = winSrcForGen(genNum);
   const wantAbs = window.location.origin + want;
   if (w.src !== wantAbs) w.src = want;
 
+  // settings refresh (falls ESC geändert wurde)
+  applySettingsToAudio(w, 0.45);
+  applyAudioSettings(w, 0.45);
+
   return w;
 }
+
 function applyAudioSettings(a, baseVolume = 1) {
   if (!a) return;
 
@@ -1378,7 +1492,15 @@ function applyAudioSettings(a, baseVolume = 1) {
   a.volume = Math.max(0, Math.min(1, vol));
 }
 
-
+// ✅ Wenn Sound Settings sich ändern: auf alle Audio-Reusen anwenden
+useEffect(() => {
+  try {
+    applyAudioSettings(battleAudioRef.current, 0.35);
+    applyAudioSettings(winAudioRef.current, 0.45);
+    applyAudioSettings(startAudioRef.current, 0.9);
+    applyAudioSettings(endAudioRef.current, 0.8);
+  } catch {}
+}, [soundMuted, soundVolume]);
 
 function stopBattle() {
   const a = battleAudioRef.current;
@@ -1396,6 +1518,7 @@ function stopAllAudio() {
 }
 
 async function playBattleRestart() {
+  stopAllGlobalAudio();
   if (soundMuted) return;
 
   // ✅ Battle soll IMMER alles andere überschreiben
@@ -1438,7 +1561,14 @@ function ensureStartAudio() {
   if (startAudioRef.current) return startAudioRef.current;
   const a = new Audio();
   a.preload = "auto";
+
+  // ✅ global registrieren, damit stopAllGlobalAudio() + ESC Settings greifen
+  registerGlobalAudio(a);
+
+  // initial settings
+  applySettingsToAudio(a, 0.9);
   applyAudioSettings(a, 0.9);
+
   startAudioRef.current = a;
   return a;
 }
@@ -1447,7 +1577,14 @@ function ensureEndAudio() {
   if (endAudioRef.current) return endAudioRef.current;
   const a = new Audio();
   a.preload = "auto";
+
+  // ✅ global registrieren, damit stopAllGlobalAudio() + ESC Settings greifen
+  registerGlobalAudio(a);
+
+  // initial settings
+  applySettingsToAudio(a, 0.9);
   applyAudioSettings(a, 0.9);
+
   endAudioRef.current = a;
   return a;
 }
@@ -1469,6 +1606,7 @@ function playIntroOnce(gen) {
   a.currentTime = 0;
 
   const playStart2 = () => {
+    stopAllGlobalAudio();
     if (soundMuted) return;
     a.onended = null;
     a.src = start2SrcForGen(gen);
@@ -1481,6 +1619,7 @@ function playIntroOnce(gen) {
 }
 
 function playEndOnce(gen) {
+  stopAllGlobalAudio();
   if (soundMuted) return;
 
   // Sicherheit: alles andere aus
@@ -1527,6 +1666,7 @@ function stopWin() {
 
 
 function playWinOnce() {
+  stopAllGlobalAudio();
   if (soundMuted) return;
 
   const a = ensureWinAudio();
@@ -1582,9 +1722,22 @@ useEffect(() => {
   applyAudioSettings(endAudioRef.current, 0.9);
 }, [soundMuted, soundVolume]);
 
+useEffect(() => {
+  function onAudioChanged() {
+    // wenn ESC Menü etwas ändert: auf ALLE globalen audios anwenden
+    const reg = getAudioRegistry();
+    reg.forEach((a) => applySettingsToAudio(a, 1));
+  }
 
-
-
+  window.addEventListener("appAudioSettingsChanged", onAudioChanged);
+  return () => window.removeEventListener("appAudioSettingsChanged", onAudioChanged);
+}, []);
+useEffect(() => {
+  // ✅ wenn man die Draft-Seite verlässt (z.B. Pokémon Info öffnen), alles stoppen
+  return () => {
+    stopAllGlobalAudio();
+  };
+}, []);
 
 useEffect(() => {
   // nur während der Auction relevant
@@ -2476,6 +2629,7 @@ const poolIndex = nextIndex ?? 0;
 
   async function restartDraftToSetup() {
     if (!meIsHost) return;
+    stopAllGlobalAudio();
     stopAllAudio();
 
     const participants = clampInt(settings.participants ?? 0, 0, 20);
@@ -2544,6 +2698,34 @@ const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
       updatedAt: serverTimestamp(),
     });
   }
+  // =========================================================
+  // ESC Menu: Draft-Context (für GlobalEscapeMenu)
+  // - zeigt im ESC-Menü "Draft verlassen"
+  // - zeigt "Draft neu starten" nur für Admin/Host
+  // =========================================================
+  useEffect(() => {
+    // diese Seite IST die Draft-Seite
+    window.__ESC_DRAFT_CTX__ = {
+      inDraft: true,
+      // wohin "Draft verlassen" gehen soll:
+      // du hast oben bereits goLobby() -> nav(`/versus/`)
+      leaveTo: "/versus",
+      // Restart nur für Host/Admin
+      canRestart: !!meIsHost,
+      // Restart-Callback (nutzt deine existierende Funktion)
+      restart: () => restartDraftToSetup(),
+    };
+
+    window.dispatchEvent(new Event("escDraftCtxChanged"));
+
+    return () => {
+      // beim Verlassen der Seite wieder entfernen
+      if (window.__ESC_DRAFT_CTX__?.inDraft) {
+        window.__ESC_DRAFT_CTX__ = null;
+        window.dispatchEvent(new Event("escDraftCtxChanged"));
+      }
+    };
+  }, [meIsHost]);
 
   // ===== Bidding (transaction sync) =====
   function myBudget() {
@@ -2598,6 +2780,44 @@ const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
       });
     });
   }
+  // ===== Shortcut: Space = +100€ bid =====
+useEffect(() => {
+  if (phase !== "auction") return;
+
+  function isEditableTarget(t) {
+    const el = t;
+    if (!el) return false;
+    const tag = String(el.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return true;
+    if (el.isContentEditable) return true;
+    return false;
+  }
+
+  const onKeyDown = (e) => {
+    // Leertaste (verschiedene Browser)
+    const isSpace =
+      e.code === "Space" || e.key === " " || e.key === "Spacebar";
+
+    if (!isSpace) return;
+
+    // wenn User gerade tippt (Search/Input etc.), nix machen
+    if (isEditableTarget(e.target)) return;
+
+    // wir verhindern Scrollen per Space
+    e.preventDefault();
+
+    // nur wenn wir wirklich bieten können
+    if (!draft?.current) return;
+    if (!myTeamId) return;
+
+    const next = (draft?.highestBid ?? 0) + 100;
+    placeBid(next);
+  };
+
+  window.addEventListener("keydown", onKeyDown, { passive: false });
+  return () => window.removeEventListener("keydown", onKeyDown);
+}, [phase, draft?.current, draft?.highestBid, myTeamId]);
+
 async function placeBotBid(botTeamId, amountRaw) {
   if (!meIsHost) return;
   if (phase !== "auction") return;
