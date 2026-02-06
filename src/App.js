@@ -17,6 +17,8 @@ import GlobalEscapeMenu from "./components/GlobalEscapeMenu";
 import MoveDex from "./pages/MoveDex";
 import MoveDetail from "./pages/MoveDetail";
 import TMStory from "./pages/TMStory";
+import Controls from "./pages/Controls";
+import ControlsDraft from "./pages/ControlsDraft";
 
 // Hook für Theme-Verwaltung
 function useInitTheme() {
@@ -71,6 +73,8 @@ function AppContent() {
         <Route path="/movedex" element={<MoveDex />} />
         <Route path="/move/:moveKey" element={<MoveDetail />} />
         <Route path="/tms" element={<TMStory />} />
+        <Route path="/controls" element={<Controls />} />
+        <Route path="/controls/draft" element={<ControlsDraft />} />
       </Routes>
     </>
   );

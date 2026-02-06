@@ -93,6 +93,49 @@ async function mapInBatches(items, batchSize, fn) {
   }
   return out;
 }
+function prettyName(s) {
+  return String(s || "")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+function artworkFromDexId(id) {
+  if (!id) return null;
+
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+}
+
+function evoRequirementDe(detail) {
+  if (!detail) return "Unbekannt";
+
+  const trig = detail?.trigger?.name;
+
+  if (trig === "level-up") {
+    const parts = ["Level-Up"];
+    if (detail.min_level) parts.push(`ab Lv. ${detail.min_level}`);
+    if (detail.time_of_day)
+      parts.push(detail.time_of_day === "night" ? "bei Nacht" : "bei Tag");
+    if (detail.min_happiness)
+      parts.push(`Zuneigung ≥ ${detail.min_happiness}`);
+
+    return parts.join(" • ");
+  }
+
+  if (trig === "use-item") {
+  const key = detail.item?.name;
+  const de = key ? (itemNameDeCache[key] || prettyName(key)) : "Item";
+  return `Item: ${de}`;
+}
+
+  if (trig === "trade")
+    return `Tausch`;
+
+  return prettyName(trig);
+}
+
+function artworkFromSpeciesUrl(url) {
+  const id = Number(url.split("/").slice(-2, -1)[0]);
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+}
 
 function compactSprite(pokemon) {
   return (
@@ -346,6 +389,26 @@ function formatCatchChance(chance01) {
   if (p < 10) return p.toFixed(1) + "%";
   return Math.round(p) + "%";
 }
+const itemNameDeCache = {}; // key: "dusk-stone" -> "Finsterstein"
+
+async function getItemNameDe(itemKey) {
+  const key = String(itemKey || "").trim().toLowerCase();
+  if (!key) return null;
+  if (itemNameDeCache[key]) return itemNameDeCache[key];
+
+  try {
+    const res = await fetch(`https://pokeapi.co/api/v2/item/${encodeURIComponent(key)}`);
+    if (!res.ok) throw new Error("item fetch failed");
+    const data = await res.json();
+
+    const de = data?.names?.find((n) => n?.language?.name === "de")?.name;
+    itemNameDeCache[key] = de || prettyName(key);
+    return itemNameDeCache[key];
+  } catch {
+    itemNameDeCache[key] = prettyName(key);
+    return itemNameDeCache[key];
+  }
+}
 
 export default function PokemonInfo() {
   const { dexId } = useParams();
@@ -369,6 +432,7 @@ export default function PokemonInfo() {
   const [ccHpPct, setCcHpPct] = useState(35);         // 1..100 (HP Balken)
   const [ccTurn, setCcTurn] = useState(1);            // Runde im Kampf (1..)
   const [ccDark, setCcDark] = useState(false);        // Nacht/Höhle (Finsterball)
+  const [evoItemTick, setEvoItemTick] = useState(0);
 
   // ✅ Background/Body darf NICHT scrollen (Content scrollt in eigener Fläche)
   useEffect(() => {
@@ -594,16 +658,26 @@ useEffect(() => {
   };
 }, [levelUpMoves]);
 
-  function flattenEvo(chainNode, acc = []) {
-    if (!chainNode) return acc;
-    const speciesId = getIdFromSpeciesUrl(chainNode?.species?.url);
-acc.push({ id: speciesId, fallbackName: cap(chainNode?.species?.name) });
+  function flattenEvo(chainNode, acc = [], fromDetails = null) {
+  if (!chainNode) return acc;
 
+  const speciesId = getIdFromSpeciesUrl(chainNode?.species?.url);
 
-    const next = chainNode?.evolves_to || [];
-    for (const n of next) flattenEvo(n, acc);
-    return acc;
+  acc.push({
+    id: speciesId,
+    fallbackName: cap(chainNode?.species?.name),
+    // ✅ Entwicklungsmethode kommt vom Übergang davor (root hat keine)
+    details: Array.isArray(fromDetails) ? fromDetails : [],
+  });
+
+  const next = chainNode?.evolves_to || [];
+  for (const n of next) {
+    // ✅ Übergang "chainNode -> n" steckt in n.evolution_details
+    flattenEvo(n, acc, n?.evolution_details || []);
   }
+  return acc;
+}
+
 
   const evoList = useMemo(() => {
     const root = evoChain?.chain;
@@ -683,6 +757,36 @@ useEffect(() => {
     alive = false;
   };
 }, [evoList, evoNameDeById]);
+useEffect(() => {
+  let alive = true;
+
+  async function loadEvoItemNames() {
+    const keys = new Set();
+
+    for (const e of (evoList || [])) {
+      for (const d of (e.details || [])) {
+        if (d?.item?.name) keys.add(d.item.name);
+        if (d?.held_item?.name) keys.add(d.held_item.name);
+        if (d?.trade_species?.name) {} // species lassen wir, Items sind wichtig
+      }
+    }
+
+    if (keys.size === 0) return;
+
+    await Promise.all([...keys].map((k) => getItemNameDe(k)));
+
+    if (!alive) return;
+    // kein state nötig, Cache reicht – aber wir triggern ein Re-Render:
+    setEvoItemTick((x) => x + 1);
+  }
+
+  loadEvoItemNames();
+
+  return () => {
+    alive = false;
+  };
+}, [evoList]);
+
 useEffect(() => {
   function onKey(e) {
     if (e.key === "Escape" && showCatchCalc) setShowCatchCalc(false);
@@ -979,21 +1083,6 @@ const page = {
               </div>
             </div>
 
-            <div style={card}>
-              <div style={{ fontWeight: 800, marginBottom: 8 }}>Entwicklung</div>
-              {evoList.length === 0 && <div style={{ opacity: 0.75 }}>Keine Daten</div>}
-              {evoList.map((e) => (
-                <div
-                  key={`${e.id || e.name}`}
-                  style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.08)", cursor: e.id ? "pointer" : "default" }}
-                  onClick={() => e.id && navigate(`/pokemon/${e.id}`)}
-                  title={e.id ? "Öffnen" : ""}
-                >
-                  <div>{evoNameDeById[e.id] || e.fallbackName}</div>
-                  <div style={{ opacity: 0.65 }}>{e.id ? `#${e.id}` : ""}</div>
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* Optional Buttons (noch ohne Content) */}
@@ -1005,6 +1094,86 @@ const page = {
               Egg Moves (später)
             </button>
           </div>
+          {/* ✅ Entwicklung unten rechts */}
+{evoList.length > 0 && (
+  <div
+    style={{
+      position: "fixed",
+      right: 16,
+      bottom: 16,
+      width: "min(440px, 92vw)",
+      maxHeight: "48vh",
+      zIndex: 40,
+      borderRadius: 18,
+      border: "1px solid rgba(255,255,255,0.20)",
+      background: "rgba(10,10,16,0.88)",
+      boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
+      padding: 12,
+      backdropFilter: "blur(10px)",
+    }}
+  >
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+      <div style={{ fontWeight: 950, fontSize: 14 }}>Entwicklung</div>
+      <div style={{ fontSize: 12, opacity: 0.75 }}>
+        {getLocalizedName(species?.names, "de") || cap(pokemon?.name)}
+      </div>
+    </div>
+
+    <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
+
+    <div className="hide-scrollbar" style={{ ...hideScrollbar, overflowY: "auto", maxHeight: "38vh", paddingRight: 6 }}>
+      {evoList.map((e) => (
+        <div
+          key={e.id || e.fallbackName}
+          onClick={() => e.id && navigate(`/pokemon/${e.id}`)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "10px 10px",
+            borderRadius: 14,
+            marginBottom: 10,
+            border: "1px solid rgba(255,255,255,0.16)",
+            background: "rgba(255,255,255,0.07)",
+            cursor: e.id ? "pointer" : "default",
+          }}
+          title={e.id ? "Öffnen" : ""}
+        >
+          <img
+            src={artworkFromDexId(e.id)}
+            alt={e.fallbackName}
+            style={{
+              width: 54,
+              height: 54,
+              objectFit: "contain",
+              filter: "drop-shadow(0 10px 18px rgba(0,0,0,0.5))",
+            }}
+          />
+
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 950, fontSize: 14, lineHeight: 1.1 }}>
+              {evoNameDeById[e.id] || e.fallbackName}
+            </div>
+
+            {/* ✅ Entwicklungsmethode */}
+            {Array.isArray(e.details) && e.details.length > 0 ? (
+              e.details.map((d, i) => (
+                <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>
+                  {evoRequirementDe(d)}
+                </div>
+              ))
+            ) : (
+              <div style={{ fontSize: 12, opacity: 0.65, marginTop: 4 }}>
+                Basisform
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
                     {/* ✅ Catchrate Rechner Modal */}
           {showCatchCalc && (
             <div

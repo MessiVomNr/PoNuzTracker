@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { subscribeRoom, transferHost, heartbeat, getStoredPlayerId  } from "../versus/versusService"; // System A: versusRooms
 import { db } from "../firebase";
 import { doc, runTransaction, updateDoc, serverTimestamp, getDoc } from "firebase/firestore";
+import { comboMatches, isTypingTarget, loadHotkeys } from "../utils/hotkeys";
 import TypeModal from "../versus/TypeModal";
 import { makeShuffledPool, dexIdToImageUrl, getDexCapForGen } from "../utils/pokemonPool";
 import { pokedex as fullPokedex } from "../data/pokedex.js";
@@ -1124,6 +1125,28 @@ const activePlayers = useMemo(() => {
   }, [draft?.teams]);
 
   const timer = auction?.timer || { running: false, paused: false, remaining: settings.secondsPerBid };
+  async function togglePauseTimer() {
+  if (!meIsHost) return;
+  if (!timer?.running) return;
+
+  if (timer?.paused) {
+    // Fortfahren
+    await updateDoc(roomRef, {
+      "versus.auction.timer.paused": false,
+      "versus.auction.timer.remaining": (timer.remaining ?? 0) + 5,
+      "versus.auction.updatedAt": serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } else {
+    // Pause
+    await updateDoc(roomRef, {
+      "versus.auction.timer.paused": true,
+      "versus.auction.updatedAt": serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+}
+
   // ============================
 // Battle Music Control (Step 4)
 // ============================
@@ -2014,6 +2037,33 @@ useEffect(() => {
     alive = false;
   };
 }, [JSON.stringify((evoLineWithMega || []).map((p) => (p?.formKey ? `mega:${p.formKey}` : `dex:${p?.dexId}`)))]);
+const bumpBidSafe = (delta) => {
+  try {
+    if (typeof bumpBid === "function") return bumpBid(delta);
+    // Fallback: wenn du stattdessen bid-State hast, passe ich dir das gleich exakt an
+    console.warn("Hotkey: bumpBid() ist nicht vorhanden");
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+const allInSafe = () => {
+  try {
+    if (typeof doAllIn === "function") return doAllIn();
+    console.warn("Hotkey: doAllIn() ist nicht vorhanden");
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+const submitBidSafe = () => {
+  try {
+    if (typeof submitBid === "function") return submitBid();
+    console.warn("Hotkey: submitBid() ist nicht vorhanden");
+  } catch (e) {
+    console.error(e);
+  }
+};
 
   useEffect(() => {
     let alive = true;
@@ -2780,43 +2830,66 @@ const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
       });
     });
   }
-  // ===== Shortcut: Space = +100€ bid =====
+function clampBidToRules(v) {
+  const budget = Number(myBudget() || 0);
+
+  // bids: >=100, multiple of 100, not above budget
+  let x = Number(v || 0);
+
+  if (!Number.isFinite(x)) x = 100;
+
+  // auf 100er runden
+  x = Math.round(x / 100) * 100;
+
+  if (x < 100) x = 100;
+  if (budget > 0) x = Math.min(x, Math.floor(budget / 100) * 100);
+
+  // falls budget < 100 -> 100 bleibt stehen, aber placeBid wird eh blocken
+  return x;
+}
+
+function bumpBid(delta) {
+  setBidInput((prev) => clampBidToRules(Number(prev || 0) + Number(delta || 0)));
+}
+
+function doAllIn() {
+  const budget = Number(myBudget() || 0);
+  const max = Math.floor(budget / 100) * 100;
+  setBidInput(clampBidToRules(max));
+}
+
+function submitBid() {
+  placeBid(clampBidToRules(bidInput));
+}
+
 useEffect(() => {
+  // Hotkeys nur im Auction-Phase sinnvoll
   if (phase !== "auction") return;
 
-  function isEditableTarget(t) {
-    const el = t;
-    if (!el) return false;
-    const tag = String(el.tagName || "").toLowerCase();
-    if (tag === "input" || tag === "textarea" || tag === "select") return true;
-    if (el.isContentEditable) return true;
-    return false;
+  function onDraftHotkeys(e) {
+    if (isTypingTarget(document.activeElement)) return;
+
+    const hk = loadHotkeys();
+    const d = hk?.draft || {};
+
+if (d.togglePause && comboMatches(e, d.togglePause)) {e.preventDefault(); togglePauseTimer(); return;}
+
+    if (d.plus100 && comboMatches(e, d.plus100)) { e.preventDefault(); bumpBid(100); return; }
+    if (d.minus100 && comboMatches(e, d.minus100)) { e.preventDefault(); bumpBid(-100); return; }
+
+    if (d.plus10 && comboMatches(e, d.plus10)) { e.preventDefault(); bumpBid(10); return; }
+    if (d.minus10 && comboMatches(e, d.minus10)) { e.preventDefault(); bumpBid(-10); return; }
+
+    if (d.plus1 && comboMatches(e, d.plus1)) { e.preventDefault(); bumpBid(1); return; }
+    if (d.minus1 && comboMatches(e, d.minus1)) { e.preventDefault(); bumpBid(-1); return; }
+
+    if (d.allIn && comboMatches(e, d.allIn)) { e.preventDefault(); doAllIn(); return; }
+    if (d.bidSubmit && comboMatches(e, d.bidSubmit)) { e.preventDefault(); submitBid(); return; }
   }
 
-  const onKeyDown = (e) => {
-    // Leertaste (verschiedene Browser)
-    const isSpace =
-      e.code === "Space" || e.key === " " || e.key === "Spacebar";
-
-    if (!isSpace) return;
-
-    // wenn User gerade tippt (Search/Input etc.), nix machen
-    if (isEditableTarget(e.target)) return;
-
-    // wir verhindern Scrollen per Space
-    e.preventDefault();
-
-    // nur wenn wir wirklich bieten können
-    if (!draft?.current) return;
-    if (!myTeamId) return;
-
-    const next = (draft?.highestBid ?? 0) + 100;
-    placeBid(next);
-  };
-
-  window.addEventListener("keydown", onKeyDown, { passive: false });
-  return () => window.removeEventListener("keydown", onKeyDown);
-}, [phase, draft?.current, draft?.highestBid, myTeamId]);
+  window.addEventListener("keydown", onDraftHotkeys);
+  return () => window.removeEventListener("keydown", onDraftHotkeys);
+}, [phase, bidInput, myTeamId, auction?.draft?.highestBid]);
 
 async function placeBotBid(botTeamId, amountRaw) {
   if (!meIsHost) return;

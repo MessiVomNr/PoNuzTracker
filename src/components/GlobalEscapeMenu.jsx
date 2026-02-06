@@ -1,6 +1,7 @@
 // src/components/GlobalEscapeMenu.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { comboMatches, isTypingTarget, loadHotkeys } from "../utils/hotkeys";
 
 /* =========================================================
    AUDIO (global)
@@ -64,8 +65,15 @@ export default function GlobalEscapeMenu() {
   const [open, setOpen] = useState(false);
   const [audio, setAudio] = useState(() => readAudioSettings());
   const [draftCtx, setDraftCtx] = useState(() => readDraftCtx());
+  const [dexOpen, setDexOpen] = useState(false);
 
   const isPokedex = location.pathname === "/pokedex";
+  const isMoveDex = location.pathname === "/movedex" || location.pathname.startsWith("/move/");
+  const isControls = location.pathname.startsWith("/controls");
+function smartBack() {
+  if (window.history.length > 1) nav(-1);
+  else nav("/");
+}
 
   const lobbyPath = useMemo(() => {
     // Lobby-Ziel kontextabhängig
@@ -86,6 +94,11 @@ export default function GlobalEscapeMenu() {
       applyAudioToMediaEls(next);
       window.__APP_AUDIO__ = next;
     }
+function onMenuToggle() {
+  setOpen((v) => !v);
+}
+
+window.addEventListener("appMenuToggle", onMenuToggle);
 
     function onDraftCtxChanged() {
       setDraftCtx(readDraftCtx());
@@ -97,21 +110,92 @@ export default function GlobalEscapeMenu() {
     return () => {
       window.removeEventListener("appAudioSettingsChanged", onAudioChanged);
       window.removeEventListener("escDraftCtxChanged", onDraftCtxChanged);
+      window.removeEventListener("appMenuToggle", onMenuToggle);
     };
   }, []);
 
   // ESC Handler
   useEffect(() => {
+  function onGlobalHotkeys(e) {
+    // Hotkeys sollen NICHT greifen wenn:
+    // - Menü offen (sonst doppel-trigger)
+    // - du gerade tippst
+    // - du auf der Controls-Seite bist (sonst kannst du nichts belegen)
+    if (open) return;
+    if (isControls) return;
+    if (isTypingTarget(document.activeElement)) return;
+
+    const hk = loadHotkeys();
+const g = hk?.general || {};
+
+// Menü toggle (per Event, damit es nicht mit ESC Handler kollidiert)
+if (g.menuToggle && comboMatches(e, g.menuToggle)) {
+  e.preventDefault();
+  window.dispatchEvent(new Event("appMenuToggle"));
+  return;
+}
+
+// Startbildschirm
+if (g.goHome && comboMatches(e, g.goHome)) {
+  e.preventDefault();
+  nav("/");
+  return;
+}
+
+// Zur Lobby
+if (g.goLobby && comboMatches(e, g.goLobby)) {
+  e.preventDefault();
+  nav(lobbyPath);
+  return;
+}
+
+if (g.goBack && comboMatches(e, g.goBack)) {
+  e.preventDefault();
+  smartBack();
+  return;
+}
+
+if (g.openPokedex && comboMatches(e, g.openPokedex)) {
+  e.preventDefault();
+  if (isPokedex) {
+    smartBack();
+  } else {
+    nav("/pokedex");
+  }
+  return;
+}
+
+    if (g.openMoveDex && comboMatches(e, g.openMoveDex)) {
+  e.preventDefault();
+  if (isMoveDex) {
+    smartBack();
+  } else {
+    nav("/movedex");
+  }
+  return;
+}
+
+
+    if (g.toggleMute && comboMatches(e, g.toggleMute)) {
+      e.preventDefault();
+      setMuted(!(audio?.muted));
+      return;
+    }
+  }
+
+  window.addEventListener("keydown", onGlobalHotkeys);
+  return () => window.removeEventListener("keydown", onGlobalHotkeys);
+}, [open, isControls, nav, audio, lobbyPath, isPokedex, isMoveDex]);
+  useEffect(() => {
     function onKeyDown(e) {
       if (e.key !== "Escape") return;
 
-      // Wenn Pokédex offen ist: ESC schließt Pokédex (zurück / oder Home)
-      if (isPokedex) {
-        if (window.history.length > 1) nav(-1);
-        else nav("/");
-        return;
-      }
-
+      // Wenn Pokédex oder MoveDex offen ist: ESC schließt (wie Overlay)
+if (isPokedex || isMoveDex) {
+  if (window.history.length > 1) nav(-1);
+  else nav("/");
+  return;
+}
       // sonst Menü togglen
       setOpen((v) => !v);
     }
@@ -149,14 +233,14 @@ export default function GlobalEscapeMenu() {
   const leaveTo = draftCtx?.leaveTo || lobbyPath;
 
   return (
-    <div style={overlay} onClick={() => setOpen(false)}>
+    <div style={overlay} onClick={() => { setOpen(false); setDexOpen(false); }}>
       <div style={panel} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
           <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: 0.2 }}>
             Pause-Menü
           </div>
-          <button style={btnIcon} onClick={() => setOpen(false)} title="Schließen (ESC)">
+          <button style={btnIcon} onClick={() => { setOpen(false); setDexOpen(false); }} title="Schließen (ESC)">
             ✕
           </button>
         </div>
@@ -184,40 +268,56 @@ export default function GlobalEscapeMenu() {
           </button>
 
           <button
-            style={btnPurple}
-            onClick={() => {
-              setOpen(false);
-              nav("/pokedex");
-            }}
-          >
-            Pokédex anzeigen
-          </button>
-<button
   style={btnPurple}
-  onClick={() => {
-    setOpen(false);
-    nav("/movedex");
-  }}
+  onClick={() => setDexOpen((v) => !v)}
 >
-  MoveDex öffnen
+  Dex
 </button>
 
+{dexOpen && (
+  <div style={{ display: "grid", gap: 8, paddingLeft: 10 }}>
+    <button
+      style={btnGhost}
+      onClick={() => {
+        setOpen(false);
+        setDexOpen(false);
+        nav("/pokedex");
+      }}
+    >
+      Pokédex
+    </button>
+
+    <button
+      style={btnGhost}
+      onClick={() => {
+        setOpen(false);
+        setDexOpen(false);
+        nav("/movedex");
+      }}
+    >
+      MoveDex
+    </button>
+  </div>
+)}
+
+
 <button
-  style={btnPurple}
+  style={btnBlue}
   onClick={() => {
     setOpen(false);
-    nav("/tms");
+    nav("/controls");
   }}
 >
-  TM Story Liste
+  Steuerung
 </button>
 
           <button
             style={btnGhost}
             onClick={() => {
-              setOpen(false);
-              nav(-1);
-            }}
+  setOpen(false);
+  setDexOpen(false);
+  smartBack();
+}}
           >
             Zurück
           </button>
@@ -283,10 +383,6 @@ export default function GlobalEscapeMenu() {
             )}
           </div>
         )}
-
-        <div style={{ marginTop: 6, opacity: 0.7, fontSize: 12 }}>
-          ESC öffnet/schließt das Menü. Im Pokédex schließt ESC den Pokédex.
-        </div>
       </div>
     </div>
   );
