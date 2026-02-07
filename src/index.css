@@ -707,3 +707,45 @@ html, body {
   border: none;
   cursor: pointer;
 }
+/* Glas-Card Container */
+.glassCard {
+  width: min(1200px, 96vw);
+  margin: 18px auto;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(10,10,16,0.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: white;
+  box-shadow: 0 30px 90px rgba(0,0,0,0.55);
+}
+
+/* Tabelle leicht transparent + Blur (damit Hintergrund nur dezent durchkommt) */
+.glassTable table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(8, 10, 14, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.glassTable th {
+  background: rgba(20, 20, 24, 0.55);
+}
+
+.glassTable td {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+/* Inputs/Selects dunkler + leicht transparent */
+.glassTable select,
+.glassTable input,
+.glassTable textarea {
+  background: rgba(0,0,0,0.35);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 10px;
+  padding: 8px 10px;
+  outline: none;
+}

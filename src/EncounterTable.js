@@ -234,10 +234,8 @@ function EncounterTable() {
     filteredLocations.sort((a, b) => {
       const dataA = encounters[a] || {};
       const dataB = encounters[b] || {};
-      const hasDataA =
-        [...Array(slotCount)].some((_, i) => !!dataA[`pokemon${i + 1}`]) || !!dataA.status;
-      const hasDataB =
-        [...Array(slotCount)].some((_, i) => !!dataB[`pokemon${i + 1}`]) || !!dataB.status;
+      const hasDataA = [...Array(slotCount)].some((_, i) => !!dataA[`pokemon${i + 1}`]) || !!dataA.status;
+      const hasDataB = [...Array(slotCount)].some((_, i) => !!dataB[`pokemon${i + 1}`]) || !!dataB.status;
       return hasDataA === hasDataB ? 0 : hasDataA ? 1 : -1;
     });
   }
@@ -246,10 +244,8 @@ function EncounterTable() {
     filteredLocations.sort((a, b) => {
       const dataA = encounters[a] || {};
       const dataB = encounters[b] || {};
-      const hasDataA =
-        [...Array(slotCount)].some((_, i) => !!dataA[`pokemon${i + 1}`]) || !!dataA.status;
-      const hasDataB =
-        [...Array(slotCount)].some((_, i) => !!dataB[`pokemon${i + 1}`]) || !!dataB.status;
+      const hasDataA = [...Array(slotCount)].some((_, i) => !!dataA[`pokemon${i + 1}`]) || !!dataA.status;
+      const hasDataB = [...Array(slotCount)].some((_, i) => !!dataB[`pokemon${i + 1}`]) || !!dataB.status;
       return hasDataA === hasDataB ? 0 : hasDataA ? -1 : 1;
     });
   }
@@ -259,9 +255,11 @@ function EncounterTable() {
     return {
       control: (styles) => ({
         ...styles,
-        backgroundColor: dark ? "#222" : "#fff",
+        backgroundColor: dark ? "rgba(0,0,0,0.35)" : "#fff",
         color: dark ? "#fff" : "#000",
-        borderColor: dark ? "#444" : "#ccc",
+        borderColor: dark ? "rgba(255,255,255,0.14)" : "#ccc",
+        boxShadow: "none",
+        backdropFilter: dark ? "blur(8px)" : "none",
       }),
       input: (styles) => ({
         ...styles,
@@ -269,16 +267,26 @@ function EncounterTable() {
       }),
       menu: (styles) => ({
         ...styles,
-        backgroundColor: dark ? "#333" : "#fff",
+        backgroundColor: dark ? "rgba(10,10,16,0.92)" : "#fff",
+        border: dark ? "1px solid rgba(255,255,255,0.14)" : "1px solid #ddd",
         zIndex: 9999,
+        backdropFilter: dark ? "blur(10px)" : "none",
       }),
       singleValue: (styles) => ({
         ...styles,
         color: dark ? "#fff" : "#000",
       }),
-      option: (styles, { isFocused }) => ({
+      option: (styles, { isFocused, isSelected }) => ({
         ...styles,
-        backgroundColor: isFocused ? (dark ? "#555" : "#eee") : (dark ? "#333" : "#fff"),
+        backgroundColor: dark
+          ? isSelected
+            ? "rgba(67,233,123,0.22)"
+            : isFocused
+            ? "rgba(255,255,255,0.10)"
+            : "transparent"
+          : isFocused
+          ? "#eee"
+          : "#fff",
         color: dark ? "#fff" : "#000",
       }),
     };
@@ -299,221 +307,337 @@ function EncounterTable() {
     return "";
   };
 
+  const dark = theme === "dark";
+
   return (
-    <div style={{ position: "relative" }}>
-      {/* Duo Status + Exit */}
-      {isDuo && (
-        <div style={{ marginBottom: 10 }}>
-          <strong style={{ color: "#079e4b" }}>Duo Online aktiv</strong> — Room: <b>{activeDuoRoomId}</b>{" "}
-          <button
-            onClick={() => {
-              localStorage.removeItem("activeDuoRoomId");
-              localStorage.removeItem("activeSave");
-              localStorage.removeItem("current_slot");
-              sessionStorage.setItem("blockAutoResume", "1");
-              navigate("/duo", { replace: true });
-            }}
-          >
-            Lobby verlassen
-          </button>
-        </div>
-      )}
-      {duoError && <p style={{ color: "crimson" }}>{duoError}</p>}
+    <div style={pageWrap(dark)}>
+      {/* Hintergrund nur im Dark-Theme */}
+      {dark && <div style={bg} />}
+      {dark && <div style={bgOverlay} />}
 
-      {/* Run Title + Presence */}
-      {isDuo && (
-        <>
-          <RunTitleBar
-            title={duoSave?.title}
-            onSaveTitle={async (newTitle) => {
-              if (!activeDuoRoomId) throw new Error("Keine aktive Room-ID gefunden.");
+      {/* Content-Karte, damit der BG nur dezent durchscheint */}
+      <div style={contentCard(dark)}>
+        {/* Mini CSS für table-transparency (ohne deine globale CSS zu zerschießen) */}
+        <style>{tableCss(dark)}</style>
 
-              await updateDuoSave(activeDuoRoomId, { title: newTitle });
-
-              upsertRecentRoom({
-                roomId: activeDuoRoomId,
-                title: newTitle,
-                edition: duoSave?.edition || effectiveEdition || "",
-                linkMode: duoSave?.linkMode || effectiveLinkMode || "duo",
-              });
-            }}
-          />
-
-          <div style={{ marginBottom: 12, textAlign: "center" }}>
-            <div style={{ fontWeight: 700, opacity: 0.9 }}>
-              Online: {presence.online.length ? presence.online.map((p) => p.name).join(", ") : "—"}
-            </div>
-
-            {!!presence.all.length && (
-              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-                {presence.all.map((p) => (
-                  <span key={p.uid || p.name} style={{ margin: "0 8px", whiteSpace: "nowrap" }}>
-                    {p.name}: {formatLastActive(p.lastActiveAtMs)}
-                  </span>
-                ))}
-              </div>
-            )}
+        {/* Duo Status + Exit */}
+        {isDuo && (
+          <div style={{ marginBottom: 10 }}>
+            <strong style={{ color: "#079e4b" }}>Duo Online aktiv</strong> — Room: <b>{activeDuoRoomId}</b>{" "}
+            <button
+              onClick={() => {
+                localStorage.removeItem("activeDuoRoomId");
+                localStorage.removeItem("activeSave");
+                localStorage.removeItem("current_slot");
+                sessionStorage.setItem("blockAutoResume", "1");
+                navigate("/duo", { replace: true });
+              }}
+            >
+              Lobby verlassen
+            </button>
           </div>
-        </>
-      )}
+        )}
+        {duoError && <p style={{ color: "crimson" }}>{duoError}</p>}
 
-      <h1>
-        {effectiveEdition} Encounter-Tabelle ({effectiveLinkMode.toUpperCase()})
-      </h1>
+        {/* Run Title + Presence */}
+        {isDuo && (
+          <>
+            <RunTitleBar
+              title={duoSave?.title}
+              onSaveTitle={async (newTitle) => {
+                if (!activeDuoRoomId) throw new Error("Keine aktive Room-ID gefunden.");
 
-      <div className="button-row">
-        <button onClick={toggleTheme}>Dark Mode an/aus</button>
-        <button onClick={() => navigate("/team")}>Zum Team</button>
-        <button onClick={() => navigate("/")}>Zurück zur Spielstand-Auswahl</button>
-        <button onClick={() => navigate("/guide")}>Story-Guide öffnen</button>
-      </div>
+                await updateDuoSave(activeDuoRoomId, { title: newTitle });
 
-      <div className="button-row">
-        {Object.keys(filters).map((status) => (
-          <button
-            key={status}
-            onClick={() => toggleFilter(status)}
-            style={{ backgroundColor: filters[status] ? "#079e4b" : "#999" }}
+                upsertRecentRoom({
+                  roomId: activeDuoRoomId,
+                  title: newTitle,
+                  edition: duoSave?.edition || effectiveEdition || "",
+                  linkMode: duoSave?.linkMode || effectiveLinkMode || "duo",
+                });
+              }}
+            />
+
+            <div style={{ marginBottom: 12, textAlign: "center" }}>
+              <div style={{ fontWeight: 700, opacity: 0.9 }}>
+                Online: {presence.online.length ? presence.online.map((p) => p.name).join(", ") : "—"}
+              </div>
+
+              {!!presence.all.length && (
+                <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                  {presence.all.map((p) => (
+                    <span key={p.uid || p.name} style={{ margin: "0 8px", whiteSpace: "nowrap" }}>
+                      {p.name}: {formatLastActive(p.lastActiveAtMs)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        <h1 style={{ marginTop: 6 }}>
+          {effectiveEdition} Encounter-Tabelle ({effectiveLinkMode.toUpperCase()})
+        </h1>
+
+        <div className="button-row">
+          <button onClick={toggleTheme}>Dark Mode an/aus</button>
+          <button onClick={() => navigate("/team")}>Zum Team</button>
+          <button onClick={() => navigate("/")}>Zurück zur Spielstand-Auswahl</button>
+          <button onClick={() => navigate("/guide")}>Story-Guide öffnen</button>
+        </div>
+
+        <div className="button-row">
+          {Object.keys(filters).map((status) => (
+            <button
+              key={status}
+              onClick={() => toggleFilter(status)}
+              style={{ backgroundColor: filters[status] ? "#079e4b" : "#999" }}
+            >
+              {status}
+            </button>
+          ))}
+
+          <select
+            value={sortMode}
+            onChange={(e) => {
+              setSortMode(e.target.value);
+              localStorage.setItem("encounterSortMode", e.target.value);
+            }}
           >
-            {status}
-          </button>
-        ))}
+            <option value="route">Nach Route</option>
+            <option value="offen-oben">Offene oben</option>
+            <option value="offen-unten">Offene unten</option>
+          </select>
+        </div>
 
-        <select
-          value={sortMode}
-          onChange={(e) => {
-            setSortMode(e.target.value);
-            localStorage.setItem("encounterSortMode", e.target.value);
-          }}
-        >
-          <option value="route">Nach Route</option>
-          <option value="offen-oben">Offene oben</option>
-          <option value="offen-unten">Offene unten</option>
-        </select>
-      </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Ort</th>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Ort</th>
-
-            {[...Array(slotCount)].map((_, i) => {
-              const label = (slotNames[i] || "").trim() || `Pokémon ${i + 1}`;
-              return (
-                <th key={`pkmn-header-${i}`}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 8,
-                    }}
-                  >
-                    <span>{label}</span>
-                    <button
-                      onClick={() => editSlotName(i)}
-                      title="Spaltenname bearbeiten"
+              {[...Array(slotCount)].map((_, i) => {
+                const label = (slotNames[i] || "").trim() || `Pokémon ${i + 1}`;
+                return (
+                  <th key={`pkmn-header-${i}`}>
+                    <div
                       style={{
-                        padding: "2px 8px",
-                        borderRadius: 8,
-                        fontSize: 12,
-                        lineHeight: 1.2,
-                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
                       }}
                     >
-                      ✏️
-                    </button>
-                  </div>
-                </th>
+                      <span>{label}</span>
+                      <button
+                        onClick={() => editSlotName(i)}
+                        title="Spaltenname bearbeiten"
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: 8,
+                          fontSize: 12,
+                          lineHeight: 1.2,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ✏️
+                      </button>
+                    </div>
+                  </th>
+                );
+              })}
+
+              <th>Status</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {filteredLocations.map((loc) => {
+              const data = encounters[loc] || {};
+              const status = data.status || "";
+
+              const rowClass =
+                status === "Gefangen"
+                  ? "status-caught"
+                  : status === "Besiegt"
+                  ? "status-fainted"
+                  : status === "Entkommen"
+                  ? "status-escaped"
+                  : "unused-location";
+
+              const allFilled = [...Array(slotCount)].every((_, i) => !!data[`pokemon${i + 1}`]);
+
+              return (
+                <tr key={loc} className={rowClass} data-status={status}>
+                  <td>{loc}</td>
+
+                  {[...Array(slotCount)].map((_, i) => {
+                    const slotName = `pokemon${i + 1}`;
+                    const selected = data[slotName] || "";
+                    const available = pokemonList.filter((p) => !usedPokemon.has(p) || p === selected);
+
+                    return (
+                      <td key={`${loc}-slot-${i}`}>
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <div style={{ flex: 1 }}>
+                            <CreatableSelect
+                              key={`${loc}-${i}-${theme}`}
+                              options={available.map((name) => ({ label: name, value: name }))}
+                              value={selected ? { label: selected, value: selected } : null}
+                              onChange={(sel) => handleChange(loc, slotName, sel?.value || "")}
+                              isClearable
+                              isSearchable
+                              placeholder={`Pokémon ${i + 1}`}
+                              styles={getSelectStyles()}
+                            />
+                          </div>
+
+                          {selected && getDexIdFromName(selected, pokedex) && (
+                            <a
+                              href={`https://www.pokewiki.de/${selected}#Attacken`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`PokéWiki: ${selected}`}
+                            >
+                              <img
+                                src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${getDexIdFromName(
+                                  selected,
+                                  pokedex
+                                )}.png`}
+                                alt={selected}
+                                style={{ height: "60px", marginLeft: "10px", cursor: "pointer" }}
+                              />
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+
+                  <td>
+                    <select value={status || ""} onChange={(e) => handleChange(loc, "status", e.target.value)}>
+                      <option value="">-</option>
+                      {allFilled && <option value="Gefangen">Gefangen</option>}
+                      {allFilled && <option value="Besiegt">Besiegt</option>}
+                      <option value="Entkommen">Entkommen</option>
+                    </select>
+                    {getStatusIcon(status)}
+                  </td>
+                </tr>
               );
             })}
+          </tbody>
+        </table>
 
-            <th>Status</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {filteredLocations.map((loc) => {
-            const data = encounters[loc] || {};
-            const status = data.status || "";
-
-            const rowClass =
-              status === "Gefangen"
-                ? "status-caught"
-                : status === "Besiegt"
-                ? "status-fainted"
-                : status === "Entkommen"
-                ? "status-escaped"
-                : "unused-location";
-
-            const allFilled = [...Array(slotCount)].every((_, i) => !!data[`pokemon${i + 1}`]);
-
-            return (
-              <tr key={loc} className={rowClass} data-status={status}>
-                <td>{loc}</td>
-
-                {[...Array(slotCount)].map((_, i) => {
-                  const slotName = `pokemon${i + 1}`;
-                  const selected = data[slotName] || "";
-                  const available = pokemonList.filter((p) => !usedPokemon.has(p) || p === selected);
-
-                  return (
-                    <td key={`${loc}-slot-${i}`}>
-                      <div style={{ display: "flex", alignItems: "center" }}>
-                        <div style={{ flex: 1 }}>
-                          <CreatableSelect
-                            key={`${loc}-${i}-${theme}`}
-                            options={available.map((name) => ({ label: name, value: name }))}
-                            value={selected ? { label: selected, value: selected } : null}
-                            onChange={(sel) => handleChange(loc, slotName, sel?.value || "")}
-                            isClearable
-                            isSearchable
-                            placeholder={`Pokémon ${i + 1}`}
-                            styles={getSelectStyles()}
-                          />
-                        </div>
-
-                        {selected && getDexIdFromName(selected, pokedex) && (
-                          <a
-                            href={`https://www.pokewiki.de/${selected}#Attacken`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={`PokéWiki: ${selected}`}
-                          >
-                            <img
-                              src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${getDexIdFromName(
-                                selected,
-                                pokedex
-                              )}.png`}
-                              alt={selected}
-                              style={{ height: "60px", marginLeft: "10px", cursor: "pointer" }}
-                            />
-                          </a>
-                        )}
-                      </div>
-                    </td>
-                  );
-                })}
-
-                <td>
-                  <select value={status || ""} onChange={(e) => handleChange(loc, "status", e.target.value)}>
-                    <option value="">-</option>
-                    {allFilled && <option value="Gefangen">Gefangen</option>}
-                    {allFilled && <option value="Besiegt">Besiegt</option>}
-                    <option value="Entkommen">Entkommen</option>
-                  </select>
-                  {getStatusIcon(status)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-
-      <br />
-      <button onClick={handleReset}>Tabelle zurücksetzen</button>
+        <br />
+        <button onClick={handleReset}>Tabelle zurücksetzen</button>
+      </div>
     </div>
   );
 }
 
 export default EncounterTable;
+
+/* =======================
+   Styles (Background + Glass)
+======================= */
+
+const pageWrap = (dark) => ({
+  position: "relative",
+  minHeight: "100vh",
+  padding: 16,
+  overflow: "hidden",
+  background: dark ? "#05070b" : "transparent",
+});
+
+const bg = {
+  position: "fixed",
+  inset: 0,
+  backgroundImage: `url("/backgrounds/background_5.png")`,
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  backgroundRepeat: "no-repeat",
+  transform: "scale(1.03)",
+  zIndex: 0,
+  filter: "blur(0px)",
+};
+
+const bgOverlay = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 1,
+  // Das ist der wichtigste Teil: macht den BG deutlich dunkler/ruhiger
+  background:
+    "radial-gradient(1200px 600px at 20% 10%, rgba(0,0,0,0.35), rgba(0,0,0,0.78)), rgba(0,0,0,0.35)",
+};
+
+const contentCard = (dark) => ({
+  position: "relative",
+  zIndex: 2,
+  maxWidth: 1400,
+  margin: "0 auto",
+  padding: 18,
+  borderRadius: 18,
+  border: dark ? "1px solid rgba(255,255,255,0.12)" : "none",
+  background: dark ? "rgba(10,10,16,0.62)" : "transparent",
+  backdropFilter: dark ? "blur(10px)" : "none",
+  boxShadow: dark ? "0 30px 90px rgba(0,0,0,0.45)" : "none",
+});
+
+const tableCss = (dark) => {
+  if (!dark) return "";
+
+  // Wir machen nur im Dark-Mode „Glass Table“.
+  // Falls du globale Tabellen-CSS hast, wird das hier als Override drüber gelegt.
+  return `
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(0,0,0,0.18);
+      backdrop-filter: blur(8px);
+    }
+
+    thead th {
+      background: rgba(0,0,0,0.35);
+      color: rgba(255,255,255,0.92);
+      border-bottom: 1px solid rgba(255,255,255,0.10);
+    }
+
+    td, th {
+      border-right: 1px solid rgba(255,255,255,0.10);
+      border-bottom: 1px solid rgba(255,255,255,0.10);
+      padding: 10px 12px;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    th:last-child, td:last-child { border-right: none; }
+
+    tbody tr {
+      background: rgba(0,0,0,0.22);
+    }
+
+    tbody tr:nth-child(even) {
+      background: rgba(0,0,0,0.16);
+    }
+
+    /* Die kleinen nativen Selects (Status + Sort) leicht "glass" */
+    select {
+      background: rgba(0,0,0,0.28);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 10px;
+      padding: 8px 10px;
+      outline: none;
+      backdrop-filter: blur(8px);
+    }
+
+    /* Buttons bleiben wie du sie hast – aber minimal lesbarer auf BG */
+    .button-row button {
+      backdrop-filter: blur(8px);
+    }
+  `;
+};
