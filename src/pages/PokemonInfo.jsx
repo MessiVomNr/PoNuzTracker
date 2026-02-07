@@ -419,6 +419,7 @@ export default function PokemonInfo() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [pokemon, setPokemon] = useState(null);
+  const [basePokemon, setBasePokemon] = useState(null); // ✅ Basisform für Moves etc.
   const [species, setSpecies] = useState(null);
   const [evoChain, setEvoChain] = useState(null);
   const [moveNameDeByUrl, setMoveNameDeByUrl] = useState({}); 
@@ -449,52 +450,68 @@ export default function PokemonInfo() {
   }, []);
 
   useEffect(() => {
-    let alive = true;
-    async function run() {
+  let alive = true;
+
+  async function run() {
+    try {
+      setLoading(true);
+      setErr("");
+
+      // 1) Form (kann mega sein)
+      const pRes = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+      if (!pRes.ok) throw new Error("Pokémon konnte nicht geladen werden.");
+      const p = await pRes.json();
+
+      // 2) Basis-Species-ID kommt IMMER aus p.species.url
+      const baseId = getIdFromSpeciesUrl(p?.species?.url) || id;
+
+      // 3) Species immer über baseId laden (Catchrate, Evo-Chain, Name-DE)
+      const sRes = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${baseId}`);
+      if (!sRes.ok) throw new Error("Species konnte nicht geladen werden.");
+      const s = await sRes.json();
+
+      // 4) Basis-Pokémon laden (Moves etc.)
+      let bp = null;
       try {
-        setLoading(true);
-        setErr("");
-
-        const [pRes, sRes] = await Promise.all([
-          fetch(`https://pokeapi.co/api/v2/pokemon/${id}`),
-          fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`),
-        ]);
-
-        if (!pRes.ok) throw new Error("Pokémon konnte nicht geladen werden.");
-        if (!sRes.ok) throw new Error("Species konnte nicht geladen werden.");
-
-        const p = await pRes.json();
-        const s = await sRes.json();
-
-        // Evo chain nachladen
-        let chain = null;
-        const evoUrl = s?.evolution_chain?.url;
-        if (evoUrl) {
-          const eRes = await fetch(evoUrl);
-          if (eRes.ok) chain = await eRes.json();
-        }
-
-        if (!alive) return;
-        setPokemon(p);
-        setSpecies(s);
-        setEvoChain(chain);
-      } catch (e) {
-        if (!alive) return;
-        setErr(e?.message || "Fehler beim Laden.");
-      } finally {
-        if (!alive) return;
-        setLoading(false);
+        const bpRes = await fetch(`https://pokeapi.co/api/v2/pokemon/${baseId}`);
+        if (bpRes.ok) bp = await bpRes.json();
+      } catch {
+        bp = null;
       }
-    }
-    if (Number.isFinite(id) && id > 0) run();
-    else {
+
+      // 5) Evo chain nachladen (aus Species)
+      let chain = null;
+      const evoUrl = s?.evolution_chain?.url;
+      if (evoUrl) {
+        const eRes = await fetch(evoUrl);
+        if (eRes.ok) chain = await eRes.json();
+      }
+
+      if (!alive) return;
+      setPokemon(p);         // ✅ Form (Mega Bild/Stats/Types)
+      setSpecies(s);         // ✅ Basis-Species (Catchrate/Evo/Names)
+      setBasePokemon(bp);    // ✅ Basis-Pokémon (Moves)
+      setEvoChain(chain);
+    } catch (e) {
+      if (!alive) return;
+      setErr(e?.message || "Fehler beim Laden.");
+    } finally {
+      if (!alive) return;
       setLoading(false);
-      setErr("Ungültige Dex-ID.");
     }
-    return () => {
-      alive = false;
-    };
-  }, [id]);
+  }
+
+  if (Number.isFinite(id) && id > 0) run();
+  else {
+    setLoading(false);
+    setErr("Ungültige Dex-ID.");
+  }
+
+  return () => {
+    alive = false;
+  };
+}, [id]);
+
 useEffect(() => {
   let alive = true;
   async function run() {
@@ -560,7 +577,7 @@ const typeKeys = useMemo(() => {
 }, [pokemon]);
 
  const levelUpMoves = useMemo(() => {
-  const mv = pokemon?.moves || [];
+  const mv = (basePokemon?.moves || pokemon?.moves || []);
   const out = [];
 
   const allowed = new Set(VERSION_GROUPS_BY_GEN[selectedGen] || []);
@@ -589,7 +606,7 @@ const typeKeys = useMemo(() => {
   });
 }, [pokemon, selectedGen]);
 const availableGens = useMemo(() => {
-  const mv = pokemon?.moves || [];
+  const mv = (basePokemon?.moves || pokemon?.moves || []);
   if (!mv.length) return [1, 2, 3, 4, 5, 6, 7];
 
   const gensWithData = [];

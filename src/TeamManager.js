@@ -182,9 +182,7 @@ function TeamManager() {
       }
     });
 
-    const cleanedTeams = teams.map((team) =>
-      team.map((mon) => (mon && allEncountered.has(mon) ? mon : ""))
-    );
+    const cleanedTeams = teams.map((team) => team.map((mon) => (mon && allEncountered.has(mon) ? mon : "")));
 
     const changed = JSON.stringify(cleanedTeams) !== JSON.stringify(teams);
     if (changed) {
@@ -251,132 +249,288 @@ function TeamManager() {
   };
 
   return (
-    <div className="team-page">
-      {isDuo && (
-        <div style={{ marginBottom: 10 }}>
-          <strong style={{ color: "#079e4b" }}>Duo Online aktiv</strong> — Room: <b>{activeDuoRoomId}</b>{" "}
-          <button
-            onClick={() => {
-            localStorage.removeItem("activeDuoRoomId");
-            localStorage.removeItem("activeSave");
-            localStorage.removeItem("current_slot");
-            sessionStorage.setItem("blockAutoResume", "1");
-            navigate("/duo", { replace: true });
-  }}
->
-  Lobby Verlassen
-</button>
+    <div style={page}>
+      {/* Hintergrundbild */}
+      <div style={bg} />
+      {/* dunkles Overlay damit Hintergrund nur leicht sichtbar ist */}
+      <div style={overlay} />
 
-        </div>
-      )}
-      {duoError && <p style={{ color: "crimson" }}>{duoError}</p>}
-
-      <h1>Dein Team ({linkMode})</h1>
-
-      <div className="button-row">
-        <button onClick={() => navigate("/table")}>Zurück zur Tabelle</button>
-      </div>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "2rem", justifyContent: "center" }}>
-        {teams.map((team, i) => (
-          <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div className="team-container">
-              <h2>Team {i + 1}</h2>
-
-              <DragDropContext onDragEnd={(res) => onDragEnd(res, i)}>
-                <Droppable droppableId={`team-${i}`}>
-                  {(provided) => (
-                    <ul ref={provided.innerRef} {...provided.droppableProps} className="team-list">
-                      {team.map((p, j) => {
-                        const dexId = getDexIdFromName(p, fullDex);
-                        const imgUrl = dexId
-                          ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dexId}.png`
-                          : null;
-                        const types = pokemonTypes[p] || [];
-
-                        return (
-                          <Draggable key={`slot-${i}-${j}`} draggableId={`poke-${i}-${j}`} index={j}>
-                            {(provided) => (
-                              <li
-                                className="team-slot"
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                              >
-                                {p ? (
-                                  <div
-                                    className="slot-content"
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: "1rem",
-                                    }}
-                                  >
-                                    {imgUrl && (
-                                      <img
-                                        src={imgUrl}
-                                        alt={p}
-                                        className="pokemon-image"
-                                        onClick={() => toggleLinkedPokemon(i, p)}
-                                        style={{ width: 72, height: 72, cursor: "pointer" }}
-                                      />
-                                    )}
-                                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                                      {types.map((type) => (
-                                        <img
-                                          key={type}
-                                          src={`/type-icons/${type}.png`}
-                                          alt={type}
-                                          title={type}
-                                          style={{ width: 32, height: 32 }}
-                                        />
-                                      ))}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="slot-content">-leer-</div>
-                                )}
-                              </li>
-                            )}
-                          </Draggable>
-                        );
-                      })}
-                      {provided.placeholder}
-                    </ul>
-                  )}
-                </Droppable>
-              </DragDropContext>
+      {/* Content */}
+      <div style={content}>
+        {isDuo && (
+          <div style={topBar}>
+            <div>
+              <strong style={{ color: "#079e4b" }}>Duo Online aktiv</strong> — Room: <b>{activeDuoRoomId}</b>
             </div>
+            <button
+              style={btnGreen}
+              onClick={() => {
+                localStorage.removeItem("activeDuoRoomId");
+                localStorage.removeItem("activeSave");
+                localStorage.removeItem("current_slot");
+                sessionStorage.setItem("blockAutoResume", "1");
+                navigate("/duo", { replace: true });
+              }}
+            >
+              Lobby verlassen
+            </button>
+          </div>
+        )}
+        {duoError && <p style={{ color: "crimson" }}>{duoError}</p>}
 
-            <div className="pokebox">
-              <h3>Box {i + 1}</h3>
-              <div className="pokebox-list">
-                {availablePokemon[i]?.map((p) => {
-                  if (isInTeam(p)) return null;
+        <div style={headerCard}>
+          <h1 style={{ margin: 0 }}>Dein Team ({linkMode})</h1>
+          <div style={{ marginTop: 10 }}>
+            <button style={btnGhost} onClick={() => navigate("/table")}>
+              Zurück zur Tabelle
+            </button>
+          </div>
+        </div>
 
-                  const dexId = getDexIdFromName(p, fullDex);
-                  const imgUrl = dexId
-                    ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dexId}.png`
-                    : null;
+        <div style={teamsWrap}>
+          {teams.map((team, i) => (
+            <div key={i} style={teamCol}>
+              <div style={glassCard}>
+                <h2 style={{ marginTop: 0 }}>Team {i + 1}</h2>
 
-                  return (
-                    <div
-                      key={p}
-                      className="pokebox-item"
-                      onClick={() => toggleLinkedPokemon(i, p)}
-                      title={p}
-                    >
-                      {imgUrl && <img src={imgUrl} alt={p} />}
-                    </div>
-                  );
-                })}
+                <DragDropContext onDragEnd={(res) => onDragEnd(res, i)}>
+                  <Droppable droppableId={`team-${i}`}>
+                    {(provided) => (
+                      <ul ref={provided.innerRef} {...provided.droppableProps} style={teamList}>
+                        {team.map((p, j) => {
+                          const dexId = getDexIdFromName(p, fullDex);
+                          const imgUrl = dexId
+                            ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dexId}.png`
+                            : null;
+                          const types = pokemonTypes[p] || [];
+
+                          return (
+                            <Draggable key={`slot-${i}-${j}`} draggableId={`poke-${i}-${j}`} index={j}>
+                              {(provided) => (
+                                <li
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  style={{
+                                    ...teamSlot,
+                                    ...(provided.draggableProps.style || {}),
+                                  }}
+                                >
+                                  {p ? (
+                                    <div style={slotContent}>
+                                      {imgUrl && (
+                                        <img
+                                          src={imgUrl}
+                                          alt={p}
+                                          onClick={() => toggleLinkedPokemon(i, p)}
+                                          style={{ width: 72, height: 72, cursor: "pointer", filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.45))" }}
+                                        />
+                                      )}
+
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ fontWeight: 900, marginBottom: 6 }}>{p}</div>
+                                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                                          {types.map((type) => (
+                                            <img
+                                              key={type}
+                                              src={`/type-icons/${type}.png`}
+                                              alt={type}
+                                              title={type}
+                                              style={{ width: 28, height: 28, opacity: 0.95 }}
+                                            />
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div style={{ opacity: 0.65 }}>-leer-</div>
+                                  )}
+                                </li>
+                              )}
+                            </Draggable>
+                          );
+                        })}
+                        {provided.placeholder}
+                      </ul>
+                    )}
+                  </Droppable>
+                </DragDropContext>
+              </div>
+
+              <div style={glassCard}>
+                <h3 style={{ marginTop: 0 }}>Box {i + 1}</h3>
+                <div style={pokeboxList}>
+                  {availablePokemon[i]?.map((p) => {
+                    if (isInTeam(p)) return null;
+
+                    const dexId = getDexIdFromName(p, fullDex);
+                    const imgUrl = dexId
+                      ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dexId}.png`
+                      : null;
+
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => toggleLinkedPokemon(i, p)}
+                        title={p}
+                        style={pokeboxItem}
+                      >
+                        {imgUrl ? <img src={imgUrl} alt={p} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : null}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+
+        <div style={{ height: 22 }} />
       </div>
     </div>
   );
 }
 
 export default TeamManager;
+
+/* =======================
+   Styles
+======================= */
+
+const page = {
+  minHeight: "100vh",
+  position: "relative",
+  overflow: "hidden",
+};
+
+const bg = {
+  position: "absolute",
+  inset: 0,
+  backgroundImage: `url("/backgrounds/background_5.png")`,
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  backgroundRepeat: "no-repeat",
+  transform: "scale(1.02)",
+  zIndex: 0,
+};
+
+const overlay = {
+  position: "absolute",
+  inset: 0,
+  // hier steuerst du wie stark der Hintergrund “durchkommt”
+  background: "rgba(0,0,0,0.72)",
+  zIndex: 1,
+};
+
+const content = {
+  position: "relative",
+  zIndex: 2,
+  padding: 16,
+  color: "white",
+};
+
+const topBar = {
+  width: "min(1200px, 96vw)",
+  margin: "0 auto 12px auto",
+  padding: "10px 12px",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(10,10,16,0.40)",
+  backdropFilter: "blur(10px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+};
+
+const headerCard = {
+  width: "min(1200px, 96vw)",
+  margin: "0 auto 16px auto",
+  padding: 16,
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(10,10,16,0.40)",
+  backdropFilter: "blur(10px)",
+};
+
+const teamsWrap = {
+  width: "min(1200px, 96vw)",
+  margin: "0 auto",
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "1.2rem",
+  justifyContent: "center",
+  alignItems: "flex-start",
+};
+
+const teamCol = {
+  width: "min(520px, 96vw)",
+  display: "grid",
+  gap: 12,
+};
+
+const glassCard = {
+  padding: 14,
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(10,10,16,0.40)", // <- transparent/glasig
+  backdropFilter: "blur(10px)",
+  boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
+};
+
+const teamList = {
+  listStyle: "none",
+  padding: 0,
+  margin: 0,
+  display: "grid",
+  gap: 10,
+};
+
+const teamSlot = {
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(0,0,0,0.35)", // <- noch etwas “dunkler”, damit Text/Icons klar sind
+  padding: 10,
+};
+
+const slotContent = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+};
+
+const pokeboxList = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(64px, 1fr))",
+  gap: 10,
+};
+
+const pokeboxItem = {
+  width: "100%",
+  aspectRatio: "1 / 1",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(0,0,0,0.28)",
+  padding: 6,
+  cursor: "pointer",
+};
+
+const btnGreen = {
+  padding: "10px 14px",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "linear-gradient(135deg, rgba(67,233,123,0.30), rgba(56,249,215,0.16))",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 950,
+};
+
+const btnGhost = {
+  padding: "10px 14px",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.06)",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 950,
+};
