@@ -181,14 +181,9 @@ if (oldPid) {
   }
 
   return (
-    <div
-      style={{
-        maxWidth: 520,
-        margin: "24px auto",
-        padding: 16,
-        position: "relative",
-      }}
-    >
+  <div style={pageWrap}>
+    <div style={card}>
+
       {/* Top right button */}
       <button
         onClick={() => nav("/")}
@@ -232,7 +227,7 @@ if (oldPid) {
           setName(v);
           localStorage.setItem("versusPlayerName", v);
         }}
-        style={{ width: "100%", padding: 10 }}
+        style={input}
       />
 
       <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
@@ -248,7 +243,7 @@ if (oldPid) {
         value={roomId}
         onChange={(e) => setRoomId(e.target.value)}
         placeholder="z.B. ABCD12"
-        style={{ width: "100%", padding: 10, textTransform: "uppercase" }}
+        style={inputUpper}
       />
 
       <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
@@ -258,6 +253,44 @@ if (oldPid) {
       </div>
 
       {err && <p style={{ marginTop: 12, color: "crimson" }}>{err}</p>}
-    </div>
-  );
+        </div>
+  </div>
+);
 }
+const pageWrap = {
+  minHeight: "100vh",
+  padding: 16,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundImage: 'url("/backgrounds/background_1.png")',
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  backgroundRepeat: "no-repeat",
+};
+
+const card = {
+  width: "min(560px, 92vw)",
+  padding: 16,
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(10,10,16,0.55)",
+  backdropFilter: "blur(10px)",
+  color: "white",
+  position: "relative",
+};
+
+const input = {
+  width: "min(380px, 100%)",
+  padding: 10,
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(0,0,0,0.25)",
+  color: "white",
+  outline: "none",
+};
+
+const inputUpper = {
+  ...input,
+  textTransform: "uppercase",
+};

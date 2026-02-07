@@ -4,6 +4,8 @@ import editionData from "../data/editionData";
 import { getGenFromEdition } from "../utils/editionHelpers";
 import guideByGen from "../guides/guideByGen";
 import levelCapsByGen from "../guides/level_caps";
+import TMStoryPanel from "../components/TMStoryPanel";
+import TMStoryEmbedded from "./TMStoryEmbedded";
 
 function GuidePage() {
   const navigate = useNavigate();
@@ -193,6 +195,25 @@ function GuidePage() {
           ))}
         </div>
       )}
+<div
+  style={{
+    position: "fixed",
+    bottom: "1rem",
+    right: "320px",
+    width: "300px",
+    maxHeight: "35vh",
+    overflowY: "auto",
+    paddingRight: "0.5rem",
+    zIndex: 9,
+    background: "#111",
+    padding: "1rem",
+    borderRadius: "10px",
+    border: "1px solid rgba(255,255,255,0.12)",
+  }}
+>
+  <h3 style={{ marginTop: 0 }}>TM Story</h3>
+  <TMStoryEmbedded gen={gen} />
+</div>
 
       {vms.length > 0 && (
         <div

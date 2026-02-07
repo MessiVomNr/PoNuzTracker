@@ -1,29 +1,50 @@
+// src/duo/DuoHome.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createDuoRoom, joinDuoRoom, subscribeDuoRoom } from "./duoService";
+import { createDuoRoom } from "./duoService";
 import RecentRoomsPanel from "./RecentRoomsPanel";
 import { upsertRecentRoom } from "./recentRooms";
+import DarkSelect from "../components/DarkSelect";
 
-// ✅ NEU: Editions-Daten wie Solo
 import editionData from "../data/editionData.js";
 import { getGenFromEdition } from "../utils/editionHelpers";
+
+const DARK_SELECT_CSS = `
+  /* macht native Select-Popup dunkler (Browser "best effort") */
+  select.darkSelect { color-scheme: dark; }
+
+  select.darkSelect option {
+    background: #0b0f16;
+    color: #e5e7eb;
+  }
+
+  select.darkSelect optgroup {
+    background: #0b0f16;
+    color: #9ca3af;
+    font-weight: 800;
+  }
+
+  select.darkSelect option:checked {
+    background: #111827;
+    color: #ffffff;
+  }
+`;
 
 export default function DuoHome() {
   const nav = useNavigate();
 
-  // ✅ Name merken (wie du wolltest)
+  // ✅ Name merken
   const [name, setName] = useState(() => localStorage.getItem("duoPlayerName") || "Spieler");
 
   const [roomTitle, setRoomTitle] = useState("");
-  const [roomId, setRoomId] = useState("");
   const [mode, setMode] = useState("duo");
   const [edition, setEdition] = useState("Rot");
   const [err, setErr] = useState("");
-  const [preview, setPreview] = useState(null);
 
   // Name immer speichern
   useEffect(() => {
-    localStorage.setItem("duoPlayerName", name);
+    const dn = (name || "").trim() || "Spieler";
+    localStorage.setItem("duoPlayerName", dn);
   }, [name]);
 
   // ===== Editions-Liste wie Solo (aus editionData) =====
@@ -37,7 +58,6 @@ export default function DuoHome() {
       byGen.get(gen).push(ed);
     }
 
-    // Sortierung: Gen numerisch, dann Name
     const genOrder = Array.from(byGen.keys()).sort((a, b) => {
       const na = Number(a);
       const nb = Number(b);
@@ -51,33 +71,9 @@ export default function DuoHome() {
     });
   }, []);
 
-  // Falls im State eine Edition steht, die nicht in editionData ist (custom),
-  // behalten wir sie als Option, damit nichts "kaputt" wirkt.
   const editionExistsInList = useMemo(() => {
     return !!editionData?.[edition];
   }, [edition]);
-
-  // Helper: Spieler-Liste aus preview.players ziehen
-  const previewPlayerNames = (() => {
-    const players = preview?.players;
-    if (!players || typeof players !== "object") return [];
-    return Object.values(players)
-      .map((p) => (p?.displayName || "").trim())
-      .filter(Boolean);
-  })();
-
-  useEffect(() => {
-    const id = roomId.trim().toUpperCase();
-    if (id.length < 4) {
-      setPreview(null);
-      return;
-    }
-    const unsub = subscribeDuoRoom(id, (data) => {
-      if (!data || data.__error) return;
-      setPreview(data);
-    });
-    return () => unsub();
-  }, [roomId]);
 
   async function onCreate() {
     setErr("");
@@ -108,124 +104,155 @@ export default function DuoHome() {
     }
   }
 
-  async function onJoin() {
-    setErr("");
-    try {
-      const displayName = (name || "").trim() || "Spieler";
-      localStorage.setItem("duoPlayerName", displayName);
-
-      const id = roomId.trim().toUpperCase();
-      const res = await joinDuoRoom(id, { displayName });
-
-      localStorage.setItem("activeDuoRoomId", res.roomId);
-
-      const linkModeFromPreview = preview?.save?.linkMode;
-      const editionFromPreview = preview?.save?.edition;
-      const titleFromPreview = preview?.save?.title || preview?.save?.name;
-
-      upsertRecentRoom({
-        roomId: res.roomId,
-        linkMode: linkModeFromPreview || mode,
-        edition: editionFromPreview || edition,
-        title: (titleFromPreview || "").trim(),
-        lastPlayers: previewPlayerNames.length ? previewPlayerNames : [displayName],
-      });
-
-      nav("/table");
-    } catch (e) {
-      setErr(e?.message || String(e));
-    }
-  }
-
   return (
-    <div style={{ maxWidth: 520, margin: "24px auto", padding: 16, position: "relative" }}>
-      <button
-        onClick={() => nav("/")}
-        style={{ position: "absolute", top: 0, right: 0, padding: "8px 12px" }}
-      >
-        Zur Startseite
-      </button>
+    <div style={page}>
+      <style>{DARK_SELECT_CSS}</style>
 
-      <h2>Online</h2>
-      <p>Gemeinsamer Cloud-Spielstand (live).</p>
+      {/* Hintergrundbild */}
+      <div style={bg} />
+      {/* Overlay (wenn dir etwas "zu dunkel" war: den Wert hier kleiner machen, z.B. 0.18) */}
+      <div style={overlay} />
 
-      <label style={{ display: "block", marginTop: 12 }}>Dein Name</label>
-      <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%", padding: 10 }} />
-
-      <label style={{ display: "block", marginTop: 12 }}>Name des Online-Runs</label>
-      <input
-        value={roomTitle}
-        onChange={(e) => setRoomTitle(e.target.value)}
-        placeholder='z. B. "Theo & Max - Rot Nuzlocke"'
-        style={{ width: "100%", padding: 10 }}
-      />
-
-      <label style={{ display: "block", marginTop: 12 }}>Modus</label>
-      <select value={mode} onChange={(e) => setMode(e.target.value)} style={{ width: "100%", padding: 10 }}>
-        <option value="duo">Duo</option>
-        <option value="trio">Trio</option>
-      </select>
-
-      {/* ✅ NEU: Edition als Dropdown wie Solo */}
-      <label style={{ display: "block", marginTop: 12 }}>Edition</label>
-      <select value={edition} onChange={(e) => setEdition(e.target.value)} style={{ width: "100%", padding: 10 }}>
-        {!editionExistsInList && <option value={edition}>Benutzerdefiniert: {edition}</option>}
-
-        {editionGroups.map((g) => (
-          <optgroup key={String(g.gen)} label={`Gen ${g.gen}`}>
-            {g.list.map((ed) => (
-              <option key={ed} value={ed}>
-                {ed}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-
-      <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-        <button onClick={onCreate} style={{ padding: "10px 14px" }}>
-          Online-Run erstellen
+      <div style={card}>
+        <button style={topRightBtn} onClick={() => nav("/")}>
+          Zur Startseite
         </button>
-      </div>
 
-      <hr style={{ margin: "18px 0" }} />
+        <h2 style={{ marginTop: 0 }}>Online</h2>
 
-      <label style={{ display: "block" }}>Room-ID</label>
-      <input
-        value={roomId}
-        onChange={(e) => setRoomId(e.target.value)}
-        placeholder="z.B. ABCD12"
-        style={{ width: "100%", padding: 10 }}
-      />
+        <label style={label}>Dein Name</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} style={input} />
 
-      <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-        <button onClick={onJoin} style={{ padding: "10px 14px" }}>
-          Beitreten
-        </button>
-      </div>
+        <label style={label}>Name des Online-Runs</label>
+        <input
+          value={roomTitle}
+          onChange={(e) => setRoomTitle(e.target.value)}
+          placeholder='z. B. "Run 1"'
+          style={input}
+        />
 
-      {preview && (
-        <div style={{ marginTop: 10, opacity: 0.9 }}>
-          <div>
-            Vorschau: <b>{preview.save?.title || preview.save?.name || "—"}</b> ({preview.save?.edition || "?"} /{" "}
-            {preview.save?.linkMode || "?"})
-          </div>
-          <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
-            Spieler: {previewPlayerNames.length ? previewPlayerNames.join(", ") : "—"}
-          </div>
+        <label style={label}>Modus</label>
+        <select
+          className="darkSelect"
+          value={mode}
+          onChange={(e) => setMode(e.target.value)}
+          style={input}
+        >
+          <option value="duo">Duo</option>
+          <option value="trio">Trio</option>
+        </select>
+
+        <label style={label}>Edition</label>
+        <DarkSelect
+          value={edition}
+          onChange={setEdition}
+          groups={editionGroups}
+          style={input}
+          customOption={
+            !editionExistsInList
+              ? { value: edition, label: `Benutzerdefiniert: ${edition}` }
+              : null
+          }
+        />
+
+        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+          <button onClick={onCreate} style={btnGreen}>
+            Online-Run erstellen
+          </button>
         </div>
-      )}
 
-      {err && <p style={{ marginTop: 12, color: "crimson" }}>{err}</p>}
+        {err && <p style={{ marginTop: 12, color: "crimson" }}>{err}</p>}
 
-      <RecentRoomsPanel
-        ttlDays={7}
-        onReconnect={(room) => {
-          localStorage.setItem("activeDuoRoomId", room.roomId);
-          upsertRecentRoom(room);
-          nav("/table", { replace: true });
-        }}
-      />
+        <div style={{ marginTop: 16 }}>
+          <RecentRoomsPanel
+            ttlDays={7}
+            onReconnect={(room) => {
+              localStorage.setItem("activeDuoRoomId", room.roomId);
+              upsertRecentRoom(room);
+              nav("/table", { replace: true });
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 }
+
+/* =======================
+   Styles
+======================= */
+
+const page = {
+  minHeight: "100vh",
+  position: "relative",
+  overflow: "hidden",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 16,
+};
+
+const bg = {
+  position: "absolute",
+  inset: 0,
+  backgroundImage: `url("/backgrounds/background_1.png")`,
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  backgroundRepeat: "no-repeat",
+  transform: "scale(1.02)",
+  zIndex: 0,
+};
+
+const overlay = {
+  position: "absolute",
+  inset: 0,
+  background: "rgba(0,0,0,0.22)", // <- hier wird es dunkler/heller
+  zIndex: 1,
+};
+
+const card = {
+  width: "min(560px, 92vw)",
+  padding: 16,
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(10,10,16,0.55)",
+  backdropFilter: "blur(10px)",
+  color: "white",
+  position: "relative",
+  zIndex: 2,
+};
+
+const topRightBtn = {
+  position: "absolute",
+  top: 12,
+  right: 12,
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.06)",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 900,
+};
+
+const label = { display: "block", marginTop: 12, fontWeight: 800, opacity: 0.9 };
+
+const input = {
+  width: "100%",
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(0,0,0,0.25)",
+  color: "white",
+  outline: "none",
+};
+
+const btnGreen = {
+  padding: "10px 14px",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "linear-gradient(135deg, rgba(67,233,123,0.30), rgba(56,249,215,0.16))",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 950,
+};

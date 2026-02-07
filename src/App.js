@@ -19,6 +19,10 @@ import MoveDetail from "./pages/MoveDetail";
 import TMStory from "./pages/TMStory";
 import Controls from "./pages/Controls";
 import ControlsDraft from "./pages/ControlsDraft";
+import HomeMode from "./pages/HomeMode";
+import OnlineMode from "./pages/OnlineMode";
+import SoullinkStart from "./duo/SoullinkStart";
+import DuoLobby from "./duo/DuoLobby";
 
 // Hook für Theme-Verwaltung
 function useInitTheme() {
@@ -56,7 +60,8 @@ function AppContent() {
     <>
       <GlobalEscapeMenu />
       <Routes>
-        <Route path="/" element={<SaveGameManager />} />
+        <Route path="/" element={<HomeMode />} />
+        <Route path="/solo" element={<SaveGameManager/>} />
         <Route path="/table" element={<EncounterTable />} />
         <Route path="/team" element={<TeamManager />} />
         <Route path="/guide" element={<GuidePage />} />
@@ -66,6 +71,7 @@ function AppContent() {
         <Route path="/versus/:roomId" element={<VersusLobby />} />
         <Route path="/versus/:roomId/game" element={<VersusGame />} />
         <Route path="/duo" element={<DuoHome />} />
+        <Route path="/duo/:roomId" element={<DuoLobby />} />
         <Route path="/duo/:roomId/versus" element={<DuoVersusAuction />} />
         <Route path="/versus/:roomId/auction" element={<DuoVersusAuction />} />
         <Route path="/pokemon/:dexId" element={<PokemonInfo />} />
@@ -75,6 +81,8 @@ function AppContent() {
         <Route path="/tms" element={<TMStory />} />
         <Route path="/controls" element={<Controls />} />
         <Route path="/controls/draft" element={<ControlsDraft />} />
+        <Route path="/soullink" element={<SoullinkStart />} />
+        
       </Routes>
     </>
   );
