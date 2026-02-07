@@ -30,7 +30,7 @@ function genNameToNum(genName) {
   return null;
 }
 
-// Version groups die wir nutzen → Gen Nummer
+// Version groups → Gen
 const VERSION_GROUP_TO_GEN = {
   "red-blue": 1,
   yellow: 1,
@@ -50,8 +50,7 @@ const VERSION_GROUP_TO_GEN = {
   "ultra-sun-ultra-moon": 7,
 };
 
-
-// “Referenz”-Versiongruppe pro Gen (für past_values)
+// Referenz-VersionGroup pro Gen (für Flavor-Text Auswahl)
 const GEN_VERSION_GROUP = {
   1: "yellow",
   2: "crystal",
@@ -124,6 +123,41 @@ function getLocalizedEffect(effectEntries, lang = "de") {
   return hit?.short_effect || hit?.effect || null;
 }
 
+function normalizeText(s) {
+  return String(s || "")
+    .replace(/\f/g, " ")
+    .replace(/\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function applyEffectTokens(text, move) {
+  let out = String(text || "");
+  if (move?.effect_chance != null) out = out.replace(/\$effect_chance/g, String(move.effect_chance));
+  return out;
+}
+
+function pickFlavorText({ flavorTextEntries, lang, preferVersionGroup }) {
+  const arr = Array.isArray(flavorTextEntries) ? flavorTextEntries : [];
+
+  // 1) exakt passende VersionGroup + Sprache
+  if (preferVersionGroup) {
+    const hit = arr.find(
+      (x) =>
+        x?.language?.name === lang &&
+        x?.version_group?.name === preferVersionGroup &&
+        x?.flavor_text
+    );
+    if (hit?.flavor_text) return hit.flavor_text;
+  }
+
+  // 2) irgendeine der Sprache
+  const any = arr.find((x) => x?.language?.name === lang && x?.flavor_text);
+  if (any?.flavor_text) return any.flavor_text;
+
+  return null;
+}
+
 function safeLoadNameCache() {
   try {
     const v = JSON.parse(localStorage.getItem(CACHE_KEY_NAMES_DE) || "{}");
@@ -165,7 +199,6 @@ function resolveDamageClassForGen({ gen, typeName, apiDamageClass }) {
 function resolveValuesForGen(move, gen) {
   const selectedGen = (Number(gen) === 72 ? 7 : Number(gen)) || 7;
 
-  // Base = aktuelle Werte (neueste)
   const base = {
     type: move?.type?.name || null,
     power: move?.power ?? null,
@@ -197,11 +230,12 @@ function resolveValuesForGen(move, gen) {
     });
   }
 
-  // Falls es Snapshots gibt: wähle den Snapshot, dessen Gen <= selectedGen und am nächsten dran ist
   if (snaps.length > 0) {
-    const candidates = snaps.filter((s) => s.snapGen <= selectedGen).sort((a, b) => b.snapGen - a.snapGen);
+    const candidates = snaps
+      .filter((s) => s.snapGen <= selectedGen)
+      .sort((a, b) => b.snapGen - a.snapGen);
     if (candidates.length > 0) return { ...candidates[0], selectedGen };
-    // sonst (sehr selten): frühester Snapshot > selectedGen
+
     const earliest = snaps.sort((a, b) => a.snapGen - b.snapGen)[0];
     return { ...earliest, selectedGen };
   }
@@ -224,7 +258,7 @@ export default function MoveDetail() {
   const [introGen, setIntroGen] = useState(null);
   const [err, setErr] = useState("");
 
-  // ✅ wie Pokédex: Body nicht scrollen
+  // Body nicht scrollen
   useEffect(() => {
     const prevHtml = document.documentElement.style.overflow;
     const prevBody = document.body.style.overflow;
@@ -253,12 +287,11 @@ export default function MoveDetail() {
 
         const ig = genNameToNum(data?.generation?.name) || 1;
         setIntroGen(ig);
-        // Wenn ausgewählte Gen kleiner ist als Einführungs-Gen: hochsetzen
+
         const selected = (Number(gen) === 72 ? 7 : Number(gen)) || 7;
         if (selected < ig) setGen(ig);
 
-
-        // ✅ deutschen Namen in Cache speichern (damit MoveDex-Liste später deutsch kann)
+        // deutschen Namen cachen
         const deName = getLocalizedName(data?.names, "de");
         if (deName) {
           const cache = safeLoadNameCache();
@@ -290,11 +323,46 @@ export default function MoveDetail() {
     if (!move) return null;
 
     const applied = resolveValuesForGen(move, gen);
+    const selectedGen = applied.selectedGen;
+
     const typeName = applied.type;
     const apiDamageClass = move?.damage_class?.name || "status";
-    const resolvedClass = resolveDamageClassForGen({ gen, typeName, apiDamageClass });
+    const resolvedClass = resolveDamageClassForGen({ gen: selectedGen, typeName, apiDamageClass });
+
+    // Flavor-Text VersionGroup: wenn past_values genutzt wurden → dessen VG, sonst Gen-Referenz
+    const preferVg =
+      (applied.usedPast && applied.versionGroup) ||
+      GEN_VERSION_GROUP[selectedGen] ||
+      GEN_VERSION_GROUP[7];
+
+    const flavorDeRaw = pickFlavorText({
+      flavorTextEntries: move?.flavor_text_entries,
+      lang: "de",
+      preferVersionGroup: preferVg,
+    });
+
+    const flavorEnRaw = pickFlavorText({
+      flavorTextEntries: move?.flavor_text_entries,
+      lang: "en",
+      preferVersionGroup: preferVg,
+    });
+
+    const effectDeRaw = getLocalizedEffect(applied.effect_entries, "de");
+    const effectEnRaw = getLocalizedEffect(applied.effect_entries, "en");
+
+    const bestRaw =
+      flavorDeRaw ||
+      effectDeRaw ||
+      flavorEnRaw ||
+      effectEnRaw ||
+      null;
+
+    const effectText =
+      bestRaw ? normalizeText(applyEffectTokens(bestRaw, move)) : "Keine Beschreibung verfügbar.";
 
     return {
+      selectedGen,
+      preferVg,
       deName: getLocalizedName(move.names, "de") || move.name,
       typeName,
       typeDe: TYPE_LABELS_DE[String(typeName || "").toLowerCase()] || String(typeName || "-"),
@@ -303,10 +371,7 @@ export default function MoveDetail() {
       pp: applied.pp,
       damageClass: resolvedClass,
       damageClassDe: getDamageClassLabelDe(resolvedClass),
-      effectDe:
-        getLocalizedEffect(applied.effect_entries, "de") ||
-        getLocalizedEffect(applied.effect_entries, "en") ||
-        "Keine Beschreibung verfügbar.",
+      effectDe: effectText || "Keine Beschreibung verfügbar.",
       usedPast: applied.usedPast,
       versionGroup: applied.versionGroup,
     };
@@ -316,7 +381,7 @@ export default function MoveDetail() {
     const ig = introGen || 1;
     return GEN_OPTIONS.filter((o) => {
       const ng = (Number(o.value) === 72 ? 7 : Number(o.value)) || 7;
-      return ng >= ig && ng <= 7; // App: bis Gen 7/USUM
+      return ng >= ig && ng <= 7;
     });
   }, [introGen]);
 
@@ -361,7 +426,6 @@ export default function MoveDetail() {
               onChange={(e) => {
                 const next = Number(e.target.value);
                 setGen(next);
-                // URL nicht zwingend ändern, aber nice: so bleibt’s sharebar
                 const url = `/move/${encodeURIComponent(moveKey)}?gen=${encodeURIComponent(next)}`;
                 nav(url, { replace: true });
               }}
@@ -459,7 +523,9 @@ export default function MoveDetail() {
                 <div>
                   <div style={{ opacity: 0.7, fontSize: 12 }}>Quelle</div>
                   <div style={{ fontWeight: 900 }}>
-                    {derived.usedPast ? `Gen-Override (${derived.versionGroup})` : "Aktuelle Werte"}
+                    {derived.usedPast
+                      ? `Gen-Override (${derived.versionGroup})`
+                      : `Flavor: ${derived.preferVg}`}
                   </div>
                 </div>
               </div>
