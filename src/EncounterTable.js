@@ -1,3 +1,4 @@
+// src/EncounterTable.jsx (oder wo deine EncounterTable aktuell liegt)
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import CreatableSelect from "react-select/creatable";
@@ -14,6 +15,109 @@ function getDexIdFromName(pokemonName, pokedex) {
   const entry = Object.entries(pokedex).find(([, name]) => name === pokemonName);
   if (!entry) return null;
   return entry[0].replace("pokedex", "");
+}
+
+// ===== Mega-Form IDs (PokeAPI "pokemon-form" IDs) =====
+// formKey: "" | "mega" | "mega-x" | "mega-y"
+const MEGA_FORM_IDS = {
+  // Gen 1
+  3: { mega: 10033 }, // Bisaflor
+  6: { "mega-x": 10034, "mega-y": 10035 }, // Glurak
+  9: { mega: 10036 }, // Turtok
+  15: { mega: 10090 }, // Bibor
+  18: { mega: 10073 }, // Tauboss
+  65: { mega: 10037 }, // Simsala
+  80: { mega: 10071 }, // Lahmus
+  94: { mega: 10038 }, // Gengar
+  115: { mega: 10039 }, // Kangama
+  127: { mega: 10040 }, // Pinsir
+  130: { mega: 10041 }, // Garados
+  142: { mega: 10042 }, // Aerodactyl
+  150: { "mega-x": 10043, "mega-y": 10044 }, // Mewtu
+
+  // Gen 2
+  181: { mega: 10045 }, // Ampharos
+  208: { mega: 10072 }, // Stahlos
+  212: { mega: 10046 }, // Scherox
+  214: { mega: 10047 }, // Skaraborn
+  229: { mega: 10048 }, // Hundemon
+  248: { mega: 10049 }, // Despotar
+
+  // Gen 3
+  254: { mega: 10065 }, // Gewaldro
+  257: { mega: 10050 }, // Lohgock
+  260: { mega: 10064 }, // Sumpex
+  282: { mega: 10051 }, // Guardevoir
+  303: { mega: 10052 }, // Flunkifer
+  306: { mega: 10053 }, // Stolloss
+  308: { mega: 10054 }, // Meditalis
+  310: { mega: 10055 }, // Voltenso
+  319: { mega: 10070 }, // Tohaido
+  323: { mega: 10087 }, // Camerupt
+  334: { mega: 10067 }, // Altaria
+  354: { mega: 10056 }, // Banette
+  359: { mega: 10057 }, // Absol
+  362: { mega: 10074 }, // Firnontor
+  373: { mega: 10089 }, // Brutalanda
+  376: { mega: 10076 }, // Metagross
+
+  // Gen 4
+  380: { mega: 10062 }, // Latias
+  381: { mega: 10063 }, // Latios
+  445: { mega: 10058 }, // Knakrack
+  448: { mega: 10059 }, // Lucario
+  460: { mega: 10060 }, // Rexblisar
+
+  // Gen 5
+  531: { mega: 10061 }, // Ohrdoch
+
+  // Gen 6
+  719: { mega: 10075 }, // Diancie
+};
+
+function getMegaOptionsForDexId(dexId) {
+  const id = Number(dexId);
+  const forms = MEGA_FORM_IDS[id];
+  if (!forms) return [];
+  const out = [];
+  if (forms.mega) out.push("mega");
+  if (forms["mega-x"]) out.push("mega-x");
+  if (forms["mega-y"]) out.push("mega-y");
+  return out;
+}
+
+function nextMegaForm(current, options) {
+  if (!options.length) return "";
+  // cycle: "" -> first -> second -> ... -> ""
+  const idx = options.indexOf(current);
+  if (!current || idx === -1) return options[0];
+  if (idx === options.length - 1) return "";
+  return options[idx + 1];
+}
+
+function megaLabel(formKey) {
+  if (!formKey) return "Normal";
+  if (formKey === "mega") return "Mega";
+  if (formKey === "mega-x") return "Mega X";
+  if (formKey === "mega-y") return "Mega Y";
+  return "Form";
+}
+
+function spriteUrlFor(dexId, formKey) {
+  const baseId = Number(dexId);
+  if (!baseId) return null;
+
+  const forms = MEGA_FORM_IDS[baseId];
+  const formId = formKey && forms ? forms[formKey] : null;
+
+  const idToUse = formId || baseId;
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${idToUse}.png`;
+}
+
+function pokewikiUrlFor(name, formKey) {
+  if (!name) return "";
+  if (!formKey) return `https://www.pokewiki.de/${name}#Attacken`;
+  return `https://www.pokewiki.de/Mega-${name}#Attacken`;
 }
 
 function formatLastActive(ms) {
@@ -70,34 +174,31 @@ function EncounterTable() {
       }))
       .sort((a, b) => (b.lastActiveAtMs || 0) - (a.lastActiveAtMs || 0));
 
-    // online=true ODER Aktivität in den letzten 60 Sekunden
     const online = all.filter((p) => p.online || (p.lastActiveAtMs && Date.now() - p.lastActiveAtMs < 60000));
-
     return { online, all };
   }, [duoRoom]);
 
   const gen = getGenFromEdition(effectiveEdition);
-  const genData = editionData[effectiveEdition]; // aktuell nicht genutzt, aber okay
+  const genData = editionData[effectiveEdition]; // (aktuell nicht genutzt)
   const pokedex = versionToPokedex[effectiveEdition] || {};
   const locationList = allLocations[`locationsGen${gen}`] || [];
   const pokemonList = Object.values(pokedex);
 
-  // ===== Slot-Namen (Header: Pokémon 1/2/3) =====
+  // ===== Slot-Namen =====
   const [slotNames, setSlotNames] = useState(() =>
     normalizeSlotNames(isDuo ? duoSave?.slotNames : currentSave?.slotNames, slotCount)
   );
 
-  // Sync: wenn DuoSave / Savewechsel / SlotCount ändert
   useEffect(() => {
     setSlotNames(normalizeSlotNames(isDuo ? duoSave?.slotNames : currentSave?.slotNames, slotCount));
-  }, [isDuo, duoSave, activeSave, slotCount]); // activeSave reicht um local wechsel zu erkennen
+  }, [isDuo, duoSave, activeSave, slotCount]);
 
   const editSlotName = async (index) => {
     const current = (slotNames[index] || "").trim();
     const next = window.prompt(`Name für Spalte ${index + 1} (Spieler)`, current);
-    if (next === null) return; // abbrechen
+    if (next === null) return;
 
-    const cleaned = String(next).trim(); // leer erlaubt -> fällt im UI zurück auf "Pokémon X"
+    const cleaned = String(next).trim();
     const updated = normalizeSlotNames([...slotNames], slotCount);
     updated[index] = cleaned;
 
@@ -120,14 +221,12 @@ function EncounterTable() {
   // ===== Encounters state =====
   const [encounters, setEncounters] = useState(() => currentSave?.encounters || {});
 
-  // Duo: Encounters aus Firestore übernehmen
   useEffect(() => {
     if (!isDuo) return;
     if (!duoSave) return;
     setEncounters(duoSave.encounters || {});
   }, [isDuo, duoSave]);
 
-  // Local: bei Savewechsel Encounters aus local neu setzen
   useEffect(() => {
     if (isDuo) return;
     setEncounters(currentSave?.encounters || {});
@@ -138,7 +237,6 @@ function EncounterTable() {
   const [filters, setFilters] = useState(() => JSON.parse(localStorage.getItem("encounterFilters")) || defaultFilters);
 
   const [sortMode, setSortMode] = useState(() => localStorage.getItem("encounterSortMode") || "route");
-
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
 
   useEffect(() => {
@@ -182,7 +280,17 @@ function EncounterTable() {
 
     const data = updated[location];
 
+    // Wenn Pokémon geändert/gelöscht: Form für diesen Slot resetten
     if (field.startsWith("pokemon")) {
+      const idx = Number(field.replace("pokemon", "")); // 1..3
+      if (Number.isFinite(idx) && idx >= 1 && idx <= 3) {
+        const nextName = value || "";
+        const prevName = prev?.[field] || "";
+        if (!nextName || nextName !== prevName) {
+          updated[location][`form${idx}`] = "";
+        }
+      }
+
       const allFilled = [...Array(slotCount)].every((_, i) => !!data[`pokemon${i + 1}`]);
       const status = data.status;
       if (!allFilled && (status === "Gefangen" || status === "Besiegt")) {
@@ -190,6 +298,8 @@ function EncounterTable() {
         for (let i = 1; i <= slotCount; i++) data[`status${i}`] = "";
       }
     }
+
+    // Form-Wechsel ändert NICHT den Status – das lassen wir so.
 
     if (field === "status") {
       for (let i = 1; i <= slotCount; i++) updated[location][`status${i}`] = value;
@@ -213,6 +323,7 @@ function EncounterTable() {
     }
   };
 
+  // Duplicate-Check bleibt auf Basis-Pokémon (Name) – Mega ist nur Anzeige/Form.
   const usedPokemon = useMemo(() => {
     return new Set(
       Object.values(encounters)
@@ -311,13 +422,10 @@ function EncounterTable() {
 
   return (
     <div style={pageWrap(dark)}>
-      {/* Hintergrund nur im Dark-Theme */}
       {dark && <div style={bg} />}
       {dark && <div style={bgOverlay} />}
 
-      {/* Content-Karte, damit der BG nur dezent durchscheint */}
       <div style={contentCard(dark)}>
-        {/* Mini CSS für table-transparency (ohne deine globale CSS zu zerschießen) */}
         <style>{tableCss(dark)}</style>
 
         {/* Duo Status + Exit */}
@@ -420,14 +528,7 @@ function EncounterTable() {
                 const label = (slotNames[i] || "").trim() || `Pokémon ${i + 1}`;
                 return (
                   <th key={`pkmn-header-${i}`}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 8,
-                      }}
-                    >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                       <span>{label}</span>
                       <button
                         onClick={() => editSlotName(i)}
@@ -473,13 +574,20 @@ function EncounterTable() {
 
                   {[...Array(slotCount)].map((_, i) => {
                     const slotName = `pokemon${i + 1}`;
+                    const formKey = data[`form${i + 1}`] || "";
                     const selected = data[slotName] || "";
                     const available = pokemonList.filter((p) => !usedPokemon.has(p) || p === selected);
 
+                    const dexId = selected ? getDexIdFromName(selected, pokedex) : null;
+                    const megaOptions = dexId ? getMegaOptionsForDexId(dexId) : [];
+                    const hasMega = megaOptions.length > 0;
+                    const sprite = dexId ? spriteUrlFor(dexId, formKey) : null;
+                    const wikiUrl = selected ? pokewikiUrlFor(selected, formKey) : "";
+
                     return (
                       <td key={`${loc}-slot-${i}`}>
-                        <div style={{ display: "flex", alignItems: "center" }}>
-                          <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ flex: 1, minWidth: 180 }}>
                             <CreatableSelect
                               key={`${loc}-${i}-${theme}`}
                               options={available.map((name) => ({ label: name, value: name }))}
@@ -492,20 +600,34 @@ function EncounterTable() {
                             />
                           </div>
 
-                          {selected && getDexIdFromName(selected, pokedex) && (
+                          {/* Mega Toggle */}
+                          {selected && dexId && hasMega && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = nextMegaForm(formKey, megaOptions);
+                                handleChange(loc, `form${i + 1}`, next);
+                              }}
+                              title="Form wechseln (Normal/Mega/Mega X/Mega Y)"
+                              style={megaBtn(dark, !!formKey)}
+                            >
+                              {megaLabel(formKey)}
+                            </button>
+                          )}
+
+                          {/* Sprite */}
+                          {selected && dexId && (
                             <a
-                              href={`https://www.pokewiki.de/${selected}#Attacken`}
+                              href={wikiUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              title={`PokéWiki: ${selected}`}
+                              title={`PokéWiki: ${selected}${formKey ? ` (${megaLabel(formKey)})` : ""}`}
+                              style={{ display: "inline-flex", alignItems: "center" }}
                             >
                               <img
-                                src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${getDexIdFromName(
-                                  selected,
-                                  pokedex
-                                )}.png`}
+                                src={sprite || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexId}.png`}
                                 alt={selected}
-                                style={{ height: "60px", marginLeft: "10px", cursor: "pointer" }}
+                                style={{ height: "60px", cursor: "pointer" }}
                               />
                             </a>
                           )}
@@ -566,7 +688,6 @@ const bgOverlay = {
   position: "fixed",
   inset: 0,
   zIndex: 1,
-  // Das ist der wichtigste Teil: macht den BG deutlich dunkler/ruhiger
   background:
     "radial-gradient(1200px 600px at 20% 10%, rgba(0,0,0,0.35), rgba(0,0,0,0.78)), rgba(0,0,0,0.35)",
 };
@@ -584,11 +705,24 @@ const contentCard = (dark) => ({
   boxShadow: dark ? "0 30px 90px rgba(0,0,0,0.45)" : "none",
 });
 
+const megaBtn = (dark, active) => ({
+  padding: "8px 10px",
+  borderRadius: 12,
+  border: active ? "1px solid rgba(255,255,255,0.22)" : "1px solid rgba(255,255,255,0.14)",
+  background: active
+    ? "linear-gradient(135deg, rgba(161,76,255,0.35), rgba(255,76,160,0.22))"
+    : dark
+    ? "rgba(255,255,255,0.06)"
+    : "rgba(0,0,0,0.06)",
+  color: dark ? "white" : "black",
+  cursor: "pointer",
+  fontWeight: 950,
+  whiteSpace: "nowrap",
+});
+
 const tableCss = (dark) => {
   if (!dark) return "";
 
-  // Wir machen nur im Dark-Mode „Glass Table“.
-  // Falls du globale Tabellen-CSS hast, wird das hier als Override drüber gelegt.
   return `
     table {
       width: 100%;
@@ -611,6 +745,7 @@ const tableCss = (dark) => {
       border-right: 1px solid rgba(255,255,255,0.10);
       border-bottom: 1px solid rgba(255,255,255,0.10);
       padding: 10px 12px;
+      vertical-align: middle;
     }
 
     tr:last-child td { border-bottom: none; }
@@ -624,7 +759,6 @@ const tableCss = (dark) => {
       background: rgba(0,0,0,0.16);
     }
 
-    /* Die kleinen nativen Selects (Status + Sort) leicht "glass" */
     select {
       background: rgba(0,0,0,0.28);
       color: white;
@@ -635,7 +769,6 @@ const tableCss = (dark) => {
       backdrop-filter: blur(8px);
     }
 
-    /* Buttons bleiben wie du sie hast – aber minimal lesbarer auf BG */
     .button-row button {
       backdrop-filter: blur(8px);
     }
