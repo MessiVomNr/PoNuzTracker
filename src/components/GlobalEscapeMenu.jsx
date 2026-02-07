@@ -127,6 +127,37 @@ function fmtMult(x) {
   return `${x}×`;
 }
 
+/* Scrollbar hide helper (scrollbar bleibt nutzbar) */
+const HIDE_SCROLL_CSS = `
+.tm-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+.tm-scroll::-webkit-scrollbar { width: 0px; height: 0px; }
+
+@keyframes tmPulse {
+  0% {
+    box-shadow:
+      inset 0 0 0 2px rgba(255,255,255,0.35),
+      0 0 0 1px rgba(161,76,255,0.35),
+      0 0 18px rgba(161,76,255,0.35),
+      0 0 28px rgba(0,242,254,0.18);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 2px rgba(255,255,255,0.55),
+      0 0 0 1px rgba(161,76,255,0.55),
+      0 0 26px rgba(161,76,255,0.55),
+      0 0 40px rgba(0,242,254,0.28);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 2px rgba(255,255,255,0.35),
+      0 0 0 1px rgba(161,76,255,0.35),
+      0 0 18px rgba(161,76,255,0.35),
+      0 0 28px rgba(0,242,254,0.18);
+  }
+}
+`;
+
+
 export default function GlobalEscapeMenu() {
   const nav = useNavigate();
   const location = useLocation();
@@ -137,11 +168,16 @@ export default function GlobalEscapeMenu() {
 
   const [dexOpen, setDexOpen] = useState(false);
 
-  // NEW: types calculator panel
+  // Types calculator
   const [typeOpen, setTypeOpen] = useState(false);
   const [typeMode, setTypeMode] = useState("def"); // "def" | "atk" | "table"
   const [defTypes, setDefTypes] = useState([]);    // up to 2
   const [atkTypes, setAtkTypes] = useState([]);    // multiple
+
+  // Table zoom + highlight (row/col)
+  const [tableZoomOpen, setTableZoomOpen] = useState(false);
+  const [tableSelAtk, setTableSelAtk] = useState(null); // row (atk)
+  const [tableSelDef, setTableSelDef] = useState(null); // col (def)
 
   const isPokedex = location.pathname === "/pokedex";
   const isMoveDex = location.pathname === "/movedex" || location.pathname.startsWith("/move/");
@@ -170,6 +206,18 @@ export default function GlobalEscapeMenu() {
       applyAudioToMediaEls(next);
       window.__APP_AUDIO__ = next;
     }
+
+    window.addEventListener("appAudioSettingsChanged", onAudioChanged);
+
+    function onDraftCtxChanged() {
+      setDraftCtx(readDraftCtx());
+    }
+    window.addEventListener("escDraftCtxChanged", onDraftCtxChanged);
+
+    return () => {
+      window.removeEventListener("appAudioSettingsChanged", onAudioChanged);
+      window.removeEventListener("escDraftCtxChanged", onDraftCtxChanged);
+    };
   }, []);
 
   // ESC / global hotkeys (ohne Menü offen)
@@ -187,33 +235,28 @@ export default function GlobalEscapeMenu() {
         nav("/");
         return;
       }
-
       if (g.goLobby && comboMatches(e, g.goLobby)) {
         e.preventDefault();
         nav(lobbyPath);
         return;
       }
-
       if (g.goBack && comboMatches(e, g.goBack)) {
         e.preventDefault();
         smartBack();
         return;
       }
-
       if (g.openPokedex && comboMatches(e, g.openPokedex)) {
         e.preventDefault();
         if (isPokedex) smartBack();
         else nav("/pokedex");
         return;
       }
-
       if (g.openMoveDex && comboMatches(e, g.openMoveDex)) {
         e.preventDefault();
         if (isMoveDex) smartBack();
         else nav("/movedex");
         return;
       }
-
       if (g.toggleMute && comboMatches(e, g.toggleMute)) {
         e.preventDefault();
         setMuted(!(audio?.muted));
@@ -230,6 +273,13 @@ export default function GlobalEscapeMenu() {
     function onKeyDown(e) {
       if (e.key !== "Escape") return;
 
+      // wenn große Typentabelle offen: ESC schließt erst diese
+      if (open && tableZoomOpen) {
+        e.preventDefault();
+        setTableZoomOpen(false);
+        return;
+      }
+
       if (isPokedex || isMoveDex) {
         if (window.history.length > 1) nav(-1);
         else nav("/");
@@ -241,7 +291,7 @@ export default function GlobalEscapeMenu() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isPokedex, isMoveDex, nav]);
+  }, [isPokedex, isMoveDex, nav, open, tableZoomOpen]);
 
   const volumePct = Math.round((audio.volume ?? 0) * 100);
 
@@ -299,7 +349,6 @@ export default function GlobalEscapeMenu() {
       else if (m === 2) out["2x"].push(a);
       else if (m === 4) out["4x"].push(a);
       else {
-        // seltene Fälle (z.B. mehr als 2 Def-Typen wären hier)
         out[`${m}x`] = (out[`${m}x`] || []).concat([a]);
       }
     }
@@ -320,7 +369,7 @@ export default function GlobalEscapeMenu() {
       if (best === 0) out.immune.push(d);
       else if (best >= 2) out.super.push(d);
       else if (best === 1) out.neutral.push(d);
-      else out.resist.push(d); // 0.5 / 0.25
+      else out.resist.push(d);
     }
 
     return out;
@@ -331,24 +380,24 @@ export default function GlobalEscapeMenu() {
       <button
         onClick={onClick}
         style={{
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  padding: "8px 10px",
-  borderRadius: 12,
-  border: active
-    ? "1px solid rgba(255,255,255,0.32)"
-    : "1px solid rgba(255,255,255,0.14)",
-  background: active
-    ? "linear-gradient(135deg, rgba(161,76,255,0.35), rgba(255,76,160,0.22))"
-    : "rgba(255,255,255,0.06)",
-  boxShadow: active ? "0 0 0 2px rgba(161,76,255,0.18)" : "none",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 900,
-  transform: active ? "scale(1.02)" : "scale(1.0)",
-  transition: "120ms ease",
-}}
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 10px",
+          borderRadius: 12,
+          border: active
+            ? "1px solid rgba(255,255,255,0.32)"
+            : "1px solid rgba(255,255,255,0.14)",
+          background: active
+            ? "linear-gradient(135deg, rgba(161,76,255,0.35), rgba(255,76,160,0.22))"
+            : "rgba(255,255,255,0.06)",
+          boxShadow: active ? "0 0 0 2px rgba(161,76,255,0.18)" : "none",
+          color: "white",
+          cursor: "pointer",
+          fontWeight: 900,
+          transform: active ? "scale(1.02)" : "scale(1.0)",
+          transition: "120ms ease",
+        }}
         title={TYPE_LABELS_DE[t] || t}
       >
         <img
@@ -414,7 +463,60 @@ export default function GlobalEscapeMenu() {
       </div>
     );
   }
-if (!open) return null;
+
+  function openBigTable() {
+    setTableZoomOpen(true);
+    // optional: wenn noch nichts gewählt ist, lassen wir null
+  }
+
+  function cellStyle({ a, d }) {
+    const rowOn = tableSelAtk && tableSelAtk === a;
+    const colOn = tableSelDef && tableSelDef === d;
+    const both = rowOn && colOn;
+
+    const base = { ...td };
+
+    if (both) {
+  return {
+    ...base,
+    background:
+      "radial-gradient(circle at 30% 25%, rgba(255,255,255,0.18), transparent 55%)," +
+      "linear-gradient(135deg, rgba(161,76,255,0.55), rgba(0,242,254,0.28))",
+    borderBottom: "1px solid rgba(255,255,255,0.18)",
+    boxShadow:
+      "inset 0 0 0 2px rgba(255,255,255,0.42)," +
+      "0 0 0 1px rgba(161,76,255,0.45)," +
+      "0 0 22px rgba(161,76,255,0.45)," +
+      "0 0 36px rgba(0,242,254,0.22)",
+    fontWeight: 950,
+    textShadow: "0 0 10px rgba(255,255,255,0.22)",
+    animation: "tmPulse 1.4s ease-in-out infinite",
+  };
+}
+
+
+    if (rowOn || colOn) {
+      return {
+        ...base,
+        background: "rgba(117, 117, 117, 0.34)",
+        borderBottom: "1px solid rgba(255,255,255,0.12)",
+      };
+    }
+
+    return base;
+  }
+
+  function headStyleActive(isActive, baseStyle) {
+    if (!isActive) return baseStyle;
+    return {
+      ...baseStyle,
+      background: "rgba(65, 84, 255, 0.22)",
+      boxShadow: "inset 0 0 0 2px rgba(255,255,255,0.18)",
+    };
+  }
+
+  if (!open) return null;
+
   return (
     <div
       style={overlay}
@@ -422,8 +524,11 @@ if (!open) return null;
         setOpen(false);
         setDexOpen(false);
         setTypeOpen(false);
+        setTableZoomOpen(false);
       }}
     >
+      <style>{HIDE_SCROLL_CSS}</style>
+
       <div style={panel} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
@@ -434,6 +539,7 @@ if (!open) return null;
               setOpen(false);
               setDexOpen(false);
               setTypeOpen(false);
+              setTableZoomOpen(false);
             }}
             title="Schließen (ESC)"
           >
@@ -475,6 +581,7 @@ if (!open) return null;
                   setOpen(false);
                   setDexOpen(false);
                   setTypeOpen(false);
+                  setTableZoomOpen(false);
                   nav("/pokedex");
                 }}
               >
@@ -487,6 +594,7 @@ if (!open) return null;
                   setOpen(false);
                   setDexOpen(false);
                   setTypeOpen(false);
+                  setTableZoomOpen(false);
                   nav("/movedex");
                 }}
               >
@@ -495,7 +603,7 @@ if (!open) return null;
             </div>
           )}
 
-          {/* NEW: Type calculator */}
+          {/* Type calculator */}
           <button
             style={btnBlue}
             onClick={() => {
@@ -535,6 +643,8 @@ if (!open) return null;
                   onClick={() => {
                     setDefTypes([]);
                     setAtkTypes([]);
+                    setTableSelAtk(null);
+                    setTableSelDef(null);
                   }}
                   title="Reset"
                 >
@@ -571,7 +681,6 @@ if (!open) return null;
                       <Bucket title="½× Resist" items={defBuckets?.["0.5x"]} />
                       <Bucket title="¼× Resist" items={defBuckets?.["0.25x"]} />
                       <Bucket title="Immun (0×)" items={defBuckets?.["0x"]} />
-                      {/* neutral lassen wir optional, sonst riesig */}
                     </div>
                   ) : (
                     <div style={{ opacity: 0.75 }}>
@@ -610,7 +719,6 @@ if (!open) return null;
                       <Bucket title="Nicht sehr effektiv (½×/¼×)" items={atkCoverage?.resist} />
                       <Bucket title="Keine Wirkung (0×)" items={atkCoverage?.immune} />
 
-                      {/* Extra: „wo man nichts hat“ */}
                       <div style={{ opacity: 0.8, fontSize: 12 }}>
                         Tipp: Wenn du sehen willst „wo du nichts hast“, schau auf Neutral/Resist/Immune.
                       </div>
@@ -626,9 +734,31 @@ if (!open) return null;
               {/* TABLE MODE */}
               {typeMode === "table" && (
                 <div style={{ display: "grid", gap: 10 }}>
-                  <div style={{ fontWeight: 950, opacity: 0.9 }}>Typentabelle</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                    <div style={{ fontWeight: 950, opacity: 0.9 }}>Typentabelle</div>
 
-                  <div style={{ overflow: "auto", maxHeight: 360, borderRadius: 14, border: "1px solid rgba(255,255,255,0.12)" }}>
+                    <button
+                      style={btnTab}
+                      onClick={() => openBigTable()}
+                      title="Groß öffnen"
+                    >
+                      Groß öffnen
+                    </button>
+                  </div>
+
+                  {/* small table (click to enlarge) */}
+                  <div
+                    className="tm-scroll"
+                    style={{
+                      overflow: "auto",
+                      maxHeight: 360,
+                      borderRadius: 14,
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      cursor: "zoom-in",
+                    }}
+                    onClick={() => openBigTable()}
+                    title="Klicken zum Vergrößern"
+                  >
                     <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 720 }}>
                       <thead>
                         <tr>
@@ -649,7 +779,11 @@ if (!open) return null;
                             {TYPES.map((d) => {
                               const m = mult(a, d);
                               return (
-                                <td key={d} style={td} title={`${TYPE_LABELS_DE[a]} vs ${TYPE_LABELS_DE[d]} = ${fmtMult(m)}`}>
+                                <td
+                                  key={d}
+                                  style={td}
+                                  title={`${TYPE_LABELS_DE[a]} vs ${TYPE_LABELS_DE[d]} = ${fmtMult(m)}`}
+                                >
                                   {fmtMult(m)}
                                 </td>
                               );
@@ -658,10 +792,6 @@ if (!open) return null;
                         ))}
                       </tbody>
                     </table>
-                  </div>
-
-                  <div style={{ opacity: 0.8, fontSize: 12 }}>
-                    Hinweis: Werte sind für das Standard-Typechart ab Gen 6 (inkl. Fee).
                   </div>
                 </div>
               )}
@@ -674,6 +804,7 @@ if (!open) return null;
               setOpen(false);
               setDexOpen(false);
               setTypeOpen(false);
+              setTableZoomOpen(false);
               nav("/controls");
             }}
           >
@@ -686,6 +817,7 @@ if (!open) return null;
               setOpen(false);
               setDexOpen(false);
               setTypeOpen(false);
+              setTableZoomOpen(false);
               smartBack();
             }}
           >
@@ -754,6 +886,115 @@ if (!open) return null;
           </div>
         )}
       </div>
+
+      {/* ===== BIG TABLE OVERLAY ===== */}
+      {tableZoomOpen && (
+        <div
+          style={bigOverlay}
+          onClick={() => setTableZoomOpen(false)}
+        >
+          <div
+            style={bigPanel}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+              <div style={{ fontSize: 16, fontWeight: 950, opacity: 0.95 }}>
+                Typentabelle (groß) — Zeile/Spalte anklicken zum Markieren
+              </div>
+
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <button
+                  style={btnTab}
+                  onClick={() => {
+                    setTableSelAtk(null);
+                    setTableSelDef(null);
+                  }}
+                  title="Markierung zurücksetzen"
+                >
+                  Markierung reset
+                </button>
+                <button
+                  style={btnIcon}
+                  onClick={() => setTableZoomOpen(false)}
+                  title="Schließen (ESC)"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div style={{ opacity: 0.75, fontSize: 12, marginTop: 6 }}>
+              Auswahl: Atk {tableSelAtk ? TYPE_LABELS_DE[tableSelAtk] : "-"} / Def {tableSelDef ? TYPE_LABELS_DE[tableSelDef] : "-"}
+            </div>
+
+            <div
+              className="tm-scroll"
+              style={{
+                marginTop: 10,
+                overflow: "auto",
+                borderRadius: 14,
+                border: "1px solid rgba(255,255,255,0.12)",
+                height: "calc(86vh - 120px)",
+                background: "rgba(0,0,0,0.20)",
+              }}
+            >
+              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 980 }}>
+                <thead>
+                  <tr>
+                    <th style={thBig}>Atk \\ Def</th>
+                    {TYPES.map((d) => {
+                      const active = tableSelDef === d;
+                      return (
+                        <th
+                          key={d}
+                          style={headStyleActive(active, thBig)}
+                          title={TYPE_LABELS_DE[d]}
+                          onClick={() => setTableSelDef((prev) => (prev === d ? null : d))}
+                        >
+                          {TYPE_LABELS_DE[d]}
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {TYPES.map((a) => {
+                    const rowActive = tableSelAtk === a;
+                    return (
+                      <tr key={a}>
+                        <td
+                          style={headStyleActive(rowActive, rowHeadBig)}
+                          title={TYPE_LABELS_DE[a]}
+                          onClick={() => setTableSelAtk((prev) => (prev === a ? null : a))}
+                        >
+                          {TYPE_LABELS_DE[a]}
+                        </td>
+
+                        {TYPES.map((d) => {
+                          const m = mult(a, d);
+                          return (
+                            <td
+                              key={d}
+                              style={cellStyle({ a, d })}
+                              title={`${TYPE_LABELS_DE[a]} vs ${TYPE_LABELS_DE[d]} = ${fmtMult(m)}`}
+                              onClick={() => {
+                                setTableSelAtk(a);
+                                setTableSelDef(d);
+                              }}
+                            >
+                              {fmtMult(m)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -888,7 +1129,7 @@ const btnTabActive = {
   background: "rgba(255,255,255,0.10)",
 };
 
-// table styles
+// table styles (small)
 const th = {
   position: "sticky",
   top: 0,
@@ -920,4 +1161,57 @@ const td = {
   fontSize: 12,
   opacity: 0.95,
   whiteSpace: "nowrap",
+};
+
+/* ===== big table overlay styles ===== */
+const bigOverlay = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.66)",
+  backdropFilter: "blur(10px)",
+  zIndex: 100000,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 16,
+};
+
+const bigPanel = {
+  width: "min(1120px, 96vw)",
+  height: "min(86vh, 900px)",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(10,10,16,0.90)",
+  boxShadow: "0 30px 90px rgba(0,0,0,0.70)",
+  padding: 14,
+  color: "white",
+  display: "flex",
+  flexDirection: "column",
+};
+
+const thBig = {
+  position: "sticky",
+  top: 0,
+  zIndex: 3,
+  background: "rgba(10,10,16,0.95)",
+  borderBottom: "1px solid rgba(255,255,255,0.14)",
+  padding: 10,
+  fontSize: 13,
+  textAlign: "left",
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+};
+
+const rowHeadBig = {
+  position: "sticky",
+  left: 0,
+  zIndex: 2,
+  background: "rgba(10,10,16,0.95)",
+  borderRight: "1px solid rgba(255,255,255,0.10)",
+  borderBottom: "1px solid rgba(255, 255, 255, 0.27)",
+  padding: 10,
+  fontSize: 13,
+  fontWeight: 950,
+  whiteSpace: "nowrap",
+  cursor: "pointer",
 };
