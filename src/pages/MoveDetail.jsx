@@ -519,15 +519,6 @@ export default function MoveDetail() {
                   <div style={{ opacity: 0.7, fontSize: 12 }}>Genauigkeit</div>
                   <div style={{ fontWeight: 900 }}>{derived.accuracy ?? "-"}</div>
                 </div>
-
-                <div>
-                  <div style={{ opacity: 0.7, fontSize: 12 }}>Quelle</div>
-                  <div style={{ fontWeight: 900 }}>
-                    {derived.usedPast
-                      ? `Gen-Override (${derived.versionGroup})`
-                      : `Flavor: ${derived.preferVg}`}
-                  </div>
-                </div>
               </div>
             </div>
 

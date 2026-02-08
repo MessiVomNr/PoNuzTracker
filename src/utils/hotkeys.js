@@ -19,8 +19,13 @@ export const DEFAULT_HOTKEYS = {
     minus100: "ArrowDown",
     togglePause: "P",
   },
-};
 
+  // NEU: Soullink/Duo-spezifische Hotkeys
+  soullink: {
+    goTeam: "T",
+    goGuide: "R",
+  },
+};
 
 export function loadHotkeys() {
   try {
@@ -40,6 +45,7 @@ export function saveHotkeys(next) {
 function mergeDefaults(def, v) {
   if (!v || typeof v !== "object") return def;
   const out = Array.isArray(def) ? [...def] : { ...def };
+
   for (const k of Object.keys(def)) {
     if (def[k] && typeof def[k] === "object" && !Array.isArray(def[k])) {
       out[k] = mergeDefaults(def[k], v[k]);
@@ -47,16 +53,20 @@ function mergeDefaults(def, v) {
       out[k] = v[k] ?? def[k];
     }
   }
+
   // Keep any extra keys user had
   for (const k of Object.keys(v)) {
     if (!(k in out)) out[k] = v[k];
   }
+
   return out;
 }
+
 export function flattenHotkeys(hk) {
   const out = [];
   const general = hk?.general || {};
   const draft = hk?.draft || {};
+  const soullink = hk?.soullink || {};
 
   for (const [k, v] of Object.entries(general)) {
     if (!v) continue;
@@ -66,19 +76,26 @@ export function flattenHotkeys(hk) {
     if (!v) continue;
     out.push({ section: "draft", key: k, combo: String(v) });
   }
+  for (const [k, v] of Object.entries(soullink)) {
+    if (!v) continue;
+    out.push({ section: "soullink", key: k, combo: String(v) });
+  }
+
   return out;
 }
 
 export function findConflict(hk, nextCombo, where) {
-  // where: { section: "general"|"draft", key: "openMoveDex" ... }
+  // where: { section: "general"|"draft"|"soullink", key: "openMoveDex" ... }
   const want = String(nextCombo || "").trim().toLowerCase();
   if (!want) return null;
 
   const all = flattenHotkeys(hk);
-  return all.find((x) => {
-    if (x.section === where.section && x.key === where.key) return false;
-    return String(x.combo).trim().toLowerCase() === want;
-  }) || null;
+  return (
+    all.find((x) => {
+      if (x.section === where.section && x.key === where.key) return false;
+      return String(x.combo).trim().toLowerCase() === want;
+    }) || null
+  );
 }
 
 export function labelHotkey(section, key) {
@@ -98,6 +115,10 @@ export function labelHotkey(section, key) {
       plus100: "+100",
       minus100: "-100",
       togglePause: "Pause/Fortfahren",
+    },
+    soullink: {
+      goTeam: "Team öffnen",
+      goGuide: "Story-Guide öffnen",
     },
   };
 
@@ -124,10 +145,13 @@ export function normalizeKeyComboFromEvent(e) {
 
   // Normalize some keys
   const key =
-    k === " " ? "Space" :
-    k === "Escape" ? "Esc" :
-    k.length === 1 ? k.toUpperCase() :
-    k;
+    k === " "
+      ? "Space"
+      : k === "Escape"
+      ? "Esc"
+      : k.length === 1
+      ? k.toUpperCase()
+      : k;
 
   // Disallow modifier-only
   if (key === "Control" || key === "Shift" || key === "Alt") return "";

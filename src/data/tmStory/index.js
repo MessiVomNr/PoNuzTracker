@@ -1,24 +1,18 @@
 // src/data/tmStory/index.js
-
-// Eintrag-Schema:
-// {
-//   order: 1,
-//   title: "Solarstrahl",
-//   where: "Ort / NPC / Route / etc.",
-//   requirements: { badges: ["Steinorden"], hms: ["Zerschneider"] },
-//   notes: "Optionaler Hinweis"
-// }
+import { tmStoryGen62 } from "./tmStory_gen62";
 
 export const TM_STORY_BY_GEN = {
   1: [],
   2: [],
-   3: [
+  3: [
     {
       order: 1,
       title: "Schaufler",
       where: "Metarost City – Haus",
       requirements: { badges: ["Steinorden"], hms: [] },
-      notes: "Früh praktisch für Backtracking.",},],
+      notes: "Früh praktisch für Backtracking.",
+    },
+  ],
   4: [],
   5: [],
   6: [],
@@ -27,7 +21,7 @@ export const TM_STORY_BY_GEN = {
   32: [],
   42: [],
   52: [],
-  62: [],
+  62: tmStoryGen62, // ✅ OR/AS
 };
 
 export const TM_STORY_GEN_OPTIONS = [

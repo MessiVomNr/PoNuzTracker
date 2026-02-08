@@ -157,7 +157,6 @@ const HIDE_SCROLL_CSS = `
 }
 `;
 
-
 export default function GlobalEscapeMenu() {
   const nav = useNavigate();
   const location = useLocation();
@@ -182,6 +181,13 @@ export default function GlobalEscapeMenu() {
   const isPokedex = location.pathname === "/pokedex";
   const isMoveDex = location.pathname === "/movedex" || location.pathname.startsWith("/move/");
   const isControls = location.pathname.startsWith("/controls");
+
+  // Soullink/Duo Context:
+// Bei dir ist Duo oft NICHT in der URL, sondern über localStorage aktiv
+const isVersusInDuo = location.pathname.includes("/versus");
+const activeDuoRoomId = (localStorage.getItem("activeDuoRoomId") || "").trim();
+const isSoullinkContext = !!activeDuoRoomId && !isVersusInDuo;
+
 
   function smartBack() {
     if (window.history.length > 1) nav(-1);
@@ -221,52 +227,97 @@ export default function GlobalEscapeMenu() {
   }, []);
 
   // ESC / global hotkeys (ohne Menü offen)
-  useEffect(() => {
-    function onGlobalHotkeys(e) {
-      if (open) return;
-      if (isControls) return;
-      if (isTypingTarget(document.activeElement)) return;
+  // ESC / global hotkeys (ohne Menü offen)
+useEffect(() => {
+  function onGlobalHotkeys(e) {
+    if (open) return;
+    if (isControls) return;
 
-      const hk = loadHotkeys();
-      const g = hk?.general || {};
+    const hk = loadHotkeys();
+    const g = hk?.general || {};
+    const s = hk?.soullink || {};
 
-      if (g.goHome && comboMatches(e, g.goHome)) {
-        e.preventDefault();
-        nav("/");
-        return;
-      }
-      if (g.goLobby && comboMatches(e, g.goLobby)) {
-        e.preventDefault();
-        nav(lobbyPath);
-        return;
-      }
-      if (g.goBack && comboMatches(e, g.goBack)) {
-        e.preventDefault();
-        smartBack();
-        return;
-      }
-      if (g.openPokedex && comboMatches(e, g.openPokedex)) {
-        e.preventDefault();
-        if (isPokedex) smartBack();
-        else nav("/pokedex");
-        return;
-      }
-      if (g.openMoveDex && comboMatches(e, g.openMoveDex)) {
-        e.preventDefault();
-        if (isMoveDex) smartBack();
-        else nav("/movedex");
-        return;
-      }
-      if (g.toggleMute && comboMatches(e, g.toggleMute)) {
-        e.preventDefault();
-        setMuted(!(audio?.muted));
-        return;
-      }
+    // ✅ Soullink (Duo) Hotkeys zuerst (damit sie auch bei Fokus in Selects funktionieren)
+    if (s.goTeam && comboMatches(e, s.goTeam)) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  if (location.pathname.startsWith("/team")) {
+    smartBack();
+  } else {
+    nav("/team");
+  }
+
+  return;
+}
+
+if (s.goGuide && comboMatches(e, s.goGuide)) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  if (location.pathname.startsWith("/guide")) {
+    smartBack();
+  } else {
+    nav("/guide");
+  }
+
+  return;
+}
+
+
+    // Danach erst: Tippen blocken (damit normale Hotkeys nicht beim Schreiben triggern)
+    if (isTypingTarget(document.activeElement)) return;
+
+    if (g.goHome && comboMatches(e, g.goHome)) {
+      e.preventDefault();
+      e.stopPropagation();
+      nav("/");
+      return;
     }
 
-    window.addEventListener("keydown", onGlobalHotkeys);
-    return () => window.removeEventListener("keydown", onGlobalHotkeys);
-  }, [open, isControls, nav, audio, lobbyPath, isPokedex, isMoveDex]);
+    if (g.goLobby && comboMatches(e, g.goLobby)) {
+      e.preventDefault();
+      e.stopPropagation();
+      nav(lobbyPath);
+      return;
+    }
+
+    if (g.goBack && comboMatches(e, g.goBack)) {
+      e.preventDefault();
+      e.stopPropagation();
+      smartBack();
+      return;
+    }
+
+    if (g.openPokedex && comboMatches(e, g.openPokedex)) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isPokedex) smartBack();
+      else nav("/pokedex");
+      return;
+    }
+
+    if (g.openMoveDex && comboMatches(e, g.openMoveDex)) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isMoveDex) smartBack();
+      else nav("/movedex");
+      return;
+    }
+
+    if (g.toggleMute && comboMatches(e, g.toggleMute)) {
+      e.preventDefault();
+      e.stopPropagation();
+      setMuted(!(audio?.muted));
+      return;
+    }
+  }
+
+  // ✅ capture: true damit react-select / inputs es nicht "wegfangen"
+  window.addEventListener("keydown", onGlobalHotkeys, { capture: true });
+  return () => window.removeEventListener("keydown", onGlobalHotkeys, { capture: true });
+}, [open, isControls, nav, audio, lobbyPath, isPokedex, isMoveDex, isSoullinkContext]);
+
 
   // ESC Handler (Menü togglen / Overlay-Pages schließen)
   useEffect(() => {
@@ -477,23 +528,22 @@ export default function GlobalEscapeMenu() {
     const base = { ...td };
 
     if (both) {
-  return {
-    ...base,
-    background:
-      "radial-gradient(circle at 30% 25%, rgba(255,255,255,0.18), transparent 55%)," +
-      "linear-gradient(135deg, rgba(161,76,255,0.55), rgba(0,242,254,0.28))",
-    borderBottom: "1px solid rgba(255,255,255,0.18)",
-    boxShadow:
-      "inset 0 0 0 2px rgba(255,255,255,0.42)," +
-      "0 0 0 1px rgba(161,76,255,0.45)," +
-      "0 0 22px rgba(161,76,255,0.45)," +
-      "0 0 36px rgba(0,242,254,0.22)",
-    fontWeight: 950,
-    textShadow: "0 0 10px rgba(255,255,255,0.22)",
-    animation: "tmPulse 1.4s ease-in-out infinite",
-  };
-}
-
+      return {
+        ...base,
+        background:
+          "radial-gradient(circle at 30% 25%, rgba(255,255,255,0.18), transparent 55%)," +
+          "linear-gradient(135deg, rgba(161,76,255,0.55), rgba(0,242,254,0.28))",
+        borderBottom: "1px solid rgba(255,255,255,0.18)",
+        boxShadow:
+          "inset 0 0 0 2px rgba(255,255,255,0.42)," +
+          "0 0 0 1px rgba(161,76,255,0.45)," +
+          "0 0 22px rgba(161,76,255,0.45)," +
+          "0 0 36px rgba(0,242,254,0.22)",
+        fontWeight: 950,
+        textShadow: "0 0 10px rgba(255,255,255,0.22)",
+        animation: "tmPulse 1.4s ease-in-out infinite",
+      };
+    }
 
     if (rowOn || colOn) {
       return {

@@ -10,6 +10,7 @@ import { useDuoSave } from "./duo/useDuoSave";
 import RunTitleBar from "./duo/RunTitleBar";
 import { updateDuoSave } from "./duo/duoService";
 import { upsertRecentRoom } from "./duo/recentRooms";
+import levelCapsByGen from "./guides/level_caps";
 
 function getDexIdFromName(pokemonName, pokedex) {
   const entry = Object.entries(pokedex).find(([, name]) => name === pokemonName);
@@ -184,6 +185,45 @@ function EncounterTable() {
   const locationList = allLocations[`locationsGen${gen}`] || [];
   const pokemonList = Object.values(pokedex);
 
+  // ===== Level-Cap (aus GuidePage-Checklist) =====
+  const levelCaps = levelCapsByGen[gen] || [];
+
+  const levelCapsProgressKey = useMemo(() => {
+    if (!gen) return "";
+    if (isDuo) return `guidecheck_duo_${activeDuoRoomId}_gen_${gen}`;
+    return `guidecheck_save_${activeSave}_gen_${gen}`;
+  }, [isDuo, activeDuoRoomId, activeSave, gen]);
+
+  const [currentLevelCap, setCurrentLevelCap] = useState(null); // { order, name, location, level }
+
+  const computeCurrentLevelCap = () => {
+    if (!gen || !levelCaps.length) return null;
+    try {
+      const raw = levelCapsProgressKey ? localStorage.getItem(levelCapsProgressKey) : null;
+      const parsed = raw ? JSON.parse(raw) : null;
+      const doneArr = Array.isArray(parsed?.levelcaps) ? parsed.levelcaps : [];
+      const done = new Set(doneArr);
+
+      const idFor = (cap) => `${cap.order}|${cap.name}|${cap.level}`;
+
+      const next = levelCaps.find((cap) => !done.has(idFor(cap)));
+      return next || levelCaps[levelCaps.length - 1];
+    } catch {
+      return levelCaps[0] || null;
+    }
+  };
+
+  useEffect(() => {
+    setCurrentLevelCap(computeCurrentLevelCap());
+
+    const onStorage = (e) => {
+      if (!e.key) return;
+      if (e.key === levelCapsProgressKey) setCurrentLevelCap(computeCurrentLevelCap());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [gen, levelCapsProgressKey, levelCaps.length]);
+
   // ===== Slot-Namen =====
   const [slotNames, setSlotNames] = useState(() =>
     normalizeSlotNames(isDuo ? duoSave?.slotNames : currentSave?.slotNames, slotCount)
@@ -298,8 +338,6 @@ function EncounterTable() {
         for (let i = 1; i <= slotCount; i++) data[`status${i}`] = "";
       }
     }
-
-    // Form-Wechsel ändert NICHT den Status – das lassen wir so.
 
     if (field === "status") {
       for (let i = 1; i <= slotCount; i++) updated[location][`status${i}`] = value;
@@ -484,16 +522,31 @@ function EncounterTable() {
           </>
         )}
 
-        <h1 style={{ marginTop: 6 }}>
-          {effectiveEdition} Encounter-Tabelle ({effectiveLinkMode.toUpperCase()})
-        </h1>
+        {/* Titelzeile + Actions rechts oben */}
+        <div style={headerRow}>
+          <h1 style={{ marginTop: 6, marginBottom: 0 }}>
+            {effectiveEdition} Encounter-Tabelle ({effectiveLinkMode.toUpperCase()})
+          </h1>
 
-        <div className="button-row">
-          <button onClick={toggleTheme}>Dark Mode an/aus</button>
-          <button onClick={() => navigate("/team")}>Zum Team</button>
-          <button onClick={() => navigate("/")}>Zurück zur Spielstand-Auswahl</button>
-          <button onClick={() => navigate("/guide")}>Story-Guide öffnen</button>
+          <div style={topRightActions}>
+            <button onClick={() => navigate("/team")}>Zum Team</button>
+            <button onClick={() => navigate("/guide")}>Story-Guide öffnen</button>
+          </div>
         </div>
+
+        {currentLevelCap && (
+          <div style={levelCapBanner(dark)}>
+            <div style={{ fontWeight: 950, letterSpacing: 0.2 }}>
+              Aktuelles Level-Cap: <span style={{ fontSize: 18 }}>{currentLevelCap.level}</span>
+            </div>
+            <div style={{ opacity: 0.9, fontSize: 13, marginTop: 2 }}>
+              {currentLevelCap.order}. {currentLevelCap.name}
+              {currentLevelCap.location ? ` — ${currentLevelCap.location}` : ""}
+            </div>
+          </div>
+        )}
+
+        {/* Erstes Button-Row entfernt (Dark Mode + Zurück zur Spielstand-Auswahl weg) */}
 
         <div className="button-row">
           {Object.keys(filters).map((status) => (
@@ -703,6 +756,42 @@ const contentCard = (dark) => ({
   background: dark ? "rgba(10,10,16,0.62)" : "transparent",
   backdropFilter: dark ? "blur(10px)" : "none",
   boxShadow: dark ? "0 30px 90px rgba(0,0,0,0.45)" : "none",
+});
+
+/* NEU: Titel + Buttons rechts */
+const headerRow = {
+  position: "relative",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center", // Titel wirklich mittig
+  gap: 12,
+  marginTop: 6,
+};
+
+const topRightActions = {
+  position: "absolute",
+  right: 0,
+  top: -50, // <-- höher schieben (wenn zu viel: -8 / wenn noch höher: -16)
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  flexWrap: "wrap",
+};
+
+
+/* Level-Cap: kleiner + mittig */
+const levelCapBanner = (dark) => ({
+  margin: "10px auto 14px auto",
+  maxWidth: 520,
+  padding: "10px 12px",
+  borderRadius: 14,
+  textAlign: "center",
+  border: dark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.10)",
+  background: dark
+    ? "linear-gradient(135deg, rgba(67,233,123,0.18), rgba(56,249,215,0.10))"
+    : "rgba(7,158,75,0.12)",
+  backdropFilter: dark ? "blur(10px)" : "none",
+  boxShadow: dark ? "0 18px 40px rgba(0,0,0,0.35)" : "none",
 });
 
 const megaBtn = (dark, active) => ({

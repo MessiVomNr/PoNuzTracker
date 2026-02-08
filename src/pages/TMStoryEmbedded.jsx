@@ -8,7 +8,7 @@ function norm(s) {
 export default function TMStoryEmbedded({ gen }) {
   const [q, setQ] = useState("");
   const list = TM_STORY_BY_GEN[gen] || [];
-
+  const items = TM_STORY_BY_GEN[gen] || [];
   const filtered = useMemo(() => {
     const nq = norm(q);
     return list
