@@ -22,8 +22,8 @@ export const DEFAULT_HOTKEYS = {
 
   // NEU: Soullink/Duo-spezifische Hotkeys
   soullink: {
-    goTeam: "T",
-    goGuide: "R",
+    goTeam: "",
+    goGuide: "",
   },
 };
 

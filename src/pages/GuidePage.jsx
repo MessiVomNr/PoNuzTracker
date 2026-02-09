@@ -357,7 +357,7 @@ function GuidePage() {
                               <div style={{ opacity: 0.8, marginTop: 6, fontSize: 12 }}>
                                 {!!tm?.requirements?.badges?.length && (
                                   <div>
-                                    <b>Badges:</b> {tm.requirements.badges.join(", ")}
+                                    <b>Orden:</b> {tm.requirements.badges.join(", ")}
                                   </div>
                                 )}
                                 {!!tm?.requirements?.hms?.length && (

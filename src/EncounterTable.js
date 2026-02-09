@@ -115,12 +115,6 @@ function spriteUrlFor(dexId, formKey) {
   return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${idToUse}.png`;
 }
 
-function pokewikiUrlFor(name, formKey) {
-  if (!name) return "";
-  if (!formKey) return `https://www.pokewiki.de/${name}#Attacken`;
-  return `https://www.pokewiki.de/Mega-${name}#Attacken`;
-}
-
 function formatLastActive(ms) {
   if (!ms) return "unbekannt";
   const diff = Date.now() - ms;
@@ -283,13 +277,6 @@ function EncounterTable() {
     document.body.className = theme + "-mode";
   }, [theme]);
 
-  const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    localStorage.setItem("theme", next);
-    document.body.className = next + "-mode";
-  };
-
   const toggleFilter = (status) => {
     const updated = { ...filters, [status]: !filters[status] };
     setFilters(updated);
@@ -307,6 +294,34 @@ function EncounterTable() {
       localStorage.setItem("savegames", JSON.stringify(savegames));
     }
   };
+
+  // ===== Spieler-Optionen für "Sündiger" =====
+  const sinnerOptions = useMemo(() => {
+    return [...Array(slotCount)].map((_, i) => {
+      const label = (slotNames[i] || "").trim() || `Pokémon ${i + 1}`;
+      return { key: `p${i + 1}`, label };
+    });
+  }, [slotNames, slotCount]);
+
+  // ===== Counter (Entkommen/Besiegt pro Spieler) =====
+  const sinnerStats = useMemo(() => {
+    const base = {};
+    for (const opt of sinnerOptions) {
+      base[opt.key] = { label: opt.label, escaped: 0, fainted: 0 };
+    }
+
+    Object.values(encounters || {}).forEach((row) => {
+      if (!row) return;
+      const status = row.status || "";
+      const sinnerKey = (row.sinner || "").trim(); // "p1" | "p2" | "p3" | ""
+      if (!sinnerKey || !base[sinnerKey]) return;
+
+      if (status === "Entkommen") base[sinnerKey].escaped += 1;
+      if (status === "Besiegt") base[sinnerKey].fainted += 1;
+    });
+
+    return Object.values(base);
+  }, [encounters, sinnerOptions]);
 
   const handleChange = async (location, field, value) => {
     const prev = encounters[location] || {};
@@ -336,12 +351,18 @@ function EncounterTable() {
       if (!allFilled && (status === "Gefangen" || status === "Besiegt")) {
         data.status = "";
         for (let i = 1; i <= slotCount; i++) data[`status${i}`] = "";
+        // wenn Status ungültig wird, Sündiger auch reset
+        data.sinner = "";
       }
     }
 
     if (field === "status") {
-      for (let i = 1; i <= slotCount; i++) updated[location][`status${i}`] = value;
-    }
+  for (let i = 1; i <= slotCount; i++) updated[location][`status${i}`] = value;
+  if (value !== "Entkommen" && value !== "Besiegt") {
+    updated[location].sinner = "";
+  }
+}
+
 
     setEncounters(updated);
     try {
@@ -456,6 +477,27 @@ function EncounterTable() {
     return "";
   };
 
+  const openInternalPokedex = (baseDexId, formKey, pokemonName) => {
+    const baseId = Number(baseDexId);
+    if (!baseId) return;
+
+    const forms = MEGA_FORM_IDS[baseId];
+    const formId = formKey && forms ? forms[formKey] : null;
+    const idToUse = formId || baseId;
+
+    // ✅ Hier wird NICHT mehr PokéWiki geöffnet, sondern deine interne Seite.
+    // Falls dein Route nicht "/pokedex" ist: hier anpassen.
+    navigate("/pokedex", {
+      state: {
+        focusDexId: idToUse,
+        baseDexId: baseId,
+        formKey: formKey || "",
+        name: pokemonName || "",
+        from: "encounters",
+      },
+    });
+  };
+
   const dark = theme === "dark";
 
   return (
@@ -546,7 +588,20 @@ function EncounterTable() {
           </div>
         )}
 
-        {/* Erstes Button-Row entfernt (Dark Mode + Zurück zur Spielstand-Auswahl weg) */}
+        {/* ✅ NEU: Counter-Box */}
+        <div style={sinnerStatsBox(dark)}>
+          <div style={{ fontWeight: 900, marginBottom: 6 }}>Sünden-Zähler</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center" }}>
+            {sinnerStats.map((s) => (
+              <div key={s.label} style={sinnerStatPill(dark)}>
+                <div style={{ fontWeight: 900 }}>{s.label}</div>
+                <div style={{ fontSize: 12, opacity: 0.9 }}>
+                  👟 Entkommen: <b>{s.escaped}</b> &nbsp;|&nbsp; ☠️ Besiegt: <b>{s.fainted}</b>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <div className="button-row">
           {Object.keys(filters).map((status) => (
@@ -602,6 +657,8 @@ function EncounterTable() {
               })}
 
               <th>Status</th>
+              {/* ✅ NEU */}
+              <th>Sündiger</th>
             </tr>
           </thead>
 
@@ -621,6 +678,9 @@ function EncounterTable() {
 
               const allFilled = [...Array(slotCount)].every((_, i) => !!data[`pokemon${i + 1}`]);
 
+              const sinnerKey = (data.sinner || "").trim();
+              const sinnerEnabled = status === "Entkommen" || status === "Besiegt";
+
               return (
                 <tr key={loc} className={rowClass} data-status={status}>
                   <td>{loc}</td>
@@ -635,7 +695,6 @@ function EncounterTable() {
                     const megaOptions = dexId ? getMegaOptionsForDexId(dexId) : [];
                     const hasMega = megaOptions.length > 0;
                     const sprite = dexId ? spriteUrlFor(dexId, formKey) : null;
-                    const wikiUrl = selected ? pokewikiUrlFor(selected, formKey) : "";
 
                     return (
                       <td key={`${loc}-slot-${i}`}>
@@ -668,21 +727,35 @@ function EncounterTable() {
                             </button>
                           )}
 
-                          {/* Sprite */}
+                          {/* ✅ Sprite: Klick -> interne Pokédex-Seite */}
                           {selected && dexId && (
-                            <a
-                              href={wikiUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title={`PokéWiki: ${selected}${formKey ? ` (${megaLabel(formKey)})` : ""}`}
-                              style={{ display: "inline-flex", alignItems: "center" }}
-                            >
-                              <img
-                                src={sprite || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexId}.png`}
-                                alt={selected}
-                                style={{ height: "60px", cursor: "pointer" }}
-                              />
-                            </a>
+                            <button
+  type="button"
+  onClick={() => {
+    const idToUse =
+      formKey && dexId && MEGA_FORM_IDS[Number(dexId)]?.[formKey]
+        ? MEGA_FORM_IDS[Number(dexId)][formKey]
+        : Number(dexId);
+
+    if (idToUse) navigate(`/pokemon/${idToUse}`);
+  }}
+  title={`Info öffnen: ${selected}${formKey ? ` (${megaLabel(formKey)})` : ""}`}
+  style={{
+    border: "none",
+    background: "transparent",
+    padding: 0,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+  }}
+>
+  <img
+    src={sprite || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexId}.png`}
+    alt={selected}
+    style={{ height: "60px" }}
+  />
+</button>
+
                           )}
                         </div>
                       </td>
@@ -697,6 +770,34 @@ function EncounterTable() {
                       <option value="Entkommen">Entkommen</option>
                     </select>
                     {getStatusIcon(status)}
+                  </td>
+
+                  {/* ✅ NEU: Sündiger */}
+                  <td>
+                    <select
+                      value={sinnerEnabled ? (sinnerKey || "") : ""}
+                      disabled={!sinnerEnabled}
+                      onChange={(e) => handleChange(loc, "sinner", e.target.value)}
+                      style={{
+                        width: "100%",
+                        opacity: sinnerEnabled ? 1 : 0.35,
+                        cursor: sinnerEnabled ? "pointer" : "not-allowed",
+                      }}
+                    >
+                      {!sinnerEnabled ? (
+  <option value="">—</option>
+) : (
+  <>
+    <option value="">-</option>
+    {sinnerOptions.map((opt) => (
+      <option key={opt.key} value={opt.key}>
+        {opt.label}
+      </option>
+    ))}
+  </>
+)}
+
+                    </select>
                   </td>
                 </tr>
               );
@@ -758,12 +859,12 @@ const contentCard = (dark) => ({
   boxShadow: dark ? "0 30px 90px rgba(0,0,0,0.45)" : "none",
 });
 
-/* NEU: Titel + Buttons rechts */
+/* Titel + Buttons rechts */
 const headerRow = {
   position: "relative",
   display: "flex",
   alignItems: "center",
-  justifyContent: "center", // Titel wirklich mittig
+  justifyContent: "center",
   gap: 12,
   marginTop: 6,
 };
@@ -771,15 +872,14 @@ const headerRow = {
 const topRightActions = {
   position: "absolute",
   right: 0,
-  top: -50, // <-- höher schieben (wenn zu viel: -8 / wenn noch höher: -16)
+  top: -50,
   display: "flex",
   alignItems: "center",
   gap: 10,
   flexWrap: "wrap",
 };
 
-
-/* Level-Cap: kleiner + mittig */
+/* Level-Cap */
 const levelCapBanner = (dark) => ({
   margin: "10px auto 14px auto",
   maxWidth: 520,
@@ -807,6 +907,37 @@ const megaBtn = (dark, active) => ({
   cursor: "pointer",
   fontWeight: 950,
   whiteSpace: "nowrap",
+});
+
+/* ✅ Sprite als Button ohne "Button-Look" */
+const spriteBtn = {
+  border: "none",
+  background: "transparent",
+  padding: 0,
+  margin: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  cursor: "pointer",
+};
+
+/* ✅ Sünden-Zähler Box */
+const sinnerStatsBox = (dark) => ({
+  margin: "10px auto 14px auto",
+  maxWidth: 980,
+  padding: "12px 14px",
+  borderRadius: 16,
+  textAlign: "center",
+  border: dark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.10)",
+  background: dark ? "rgba(0,0,0,0.20)" : "rgba(0,0,0,0.04)",
+  backdropFilter: dark ? "blur(10px)" : "none",
+});
+
+const sinnerStatPill = (dark) => ({
+  padding: "10px 12px",
+  borderRadius: 14,
+  border: dark ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.08)",
+  background: dark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.85)",
+  minWidth: 200,
 });
 
 const tableCss = (dark) => {
