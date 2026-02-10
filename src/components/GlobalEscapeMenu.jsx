@@ -104,48 +104,14 @@ const CHART = {
   fire: { fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 },
   water: { fire: 2, water: 0.5, grass: 0.5, ground: 2, rock: 2, dragon: 0.5 },
   electric: { water: 2, electric: 0.5, grass: 0.5, ground: 0, flying: 2, dragon: 0.5 },
-  grass: {
-    fire: 0.5,
-    water: 2,
-    grass: 0.5,
-    poison: 0.5,
-    ground: 2,
-    flying: 0.5,
-    bug: 0.5,
-    rock: 2,
-    dragon: 0.5,
-    steel: 0.5,
-  },
+  grass: { fire: 0.5, water: 2, grass: 0.5, poison: 0.5, ground: 2, flying: 0.5, bug: 0.5, rock: 2, dragon: 0.5, steel: 0.5 },
   ice: { fire: 0.5, water: 0.5, grass: 2, ice: 0.5, ground: 2, flying: 2, dragon: 2, steel: 0.5 },
-  fighting: {
-    normal: 2,
-    ice: 2,
-    rock: 2,
-    dark: 2,
-    steel: 2,
-    poison: 0.5,
-    flying: 0.5,
-    psychic: 0.5,
-    bug: 0.5,
-    fairy: 0.5,
-    ghost: 0,
-  },
+  fighting: { normal: 2, ice: 2, rock: 2, dark: 2, steel: 2, poison: 0.5, flying: 0.5, psychic: 0.5, bug: 0.5, fairy: 0.5, ghost: 0 },
   poison: { grass: 2, fairy: 2, poison: 0.5, ground: 0.5, rock: 0.5, ghost: 0.5, steel: 0 },
   ground: { fire: 2, electric: 2, grass: 0.5, poison: 2, flying: 0, bug: 0.5, rock: 2, steel: 2 },
   flying: { electric: 0.5, grass: 2, fighting: 2, bug: 2, rock: 0.5, steel: 0.5 },
   psychic: { fighting: 2, poison: 2, psychic: 0.5, dark: 0, steel: 0.5 },
-  bug: {
-    fire: 0.5,
-    grass: 2,
-    fighting: 0.5,
-    poison: 0.5,
-    flying: 0.5,
-    psychic: 2,
-    ghost: 0.5,
-    dark: 2,
-    steel: 0.5,
-    fairy: 0.5,
-  },
+  bug: { fire: 0.5, grass: 2, fighting: 0.5, poison: 0.5, flying: 0.5, psychic: 2, ghost: 0.5, dark: 2, steel: 0.5, fairy: 0.5 },
   rock: { fire: 2, ice: 2, flying: 2, bug: 2, fighting: 0.5, ground: 0.5, steel: 0.5 },
   ghost: { normal: 0, psychic: 2, ghost: 2, dark: 0.5 },
   dragon: { dragon: 2, steel: 0.5, fairy: 0 },
@@ -169,45 +135,6 @@ const HIDE_SCROLL_CSS = `
 .tm-scroll { scrollbar-width: none; -ms-overflow-style: none; }
 .tm-scroll::-webkit-scrollbar { width: 0px; height: 0px; }
 `;
-
-/* =========================================================
-   POKEDEX / MOVEDEX "RETURN ORIGIN" (hotkey toggle)
-========================================================= */
-const RETURN_KEYS = {
-  pokedex: "app_return_before_pokedex_v1",
-  movedex: "app_return_before_movedex_v1",
-};
-
-function fullPathFromLocation(loc) {
-  const p = loc?.pathname || "";
-  const s = loc?.search || "";
-  const h = loc?.hash || "";
-  return `${p}${s}${h}`;
-}
-
-function setReturnPath(key, loc) {
-  try {
-    sessionStorage.setItem(key, fullPathFromLocation(loc));
-  } catch {}
-}
-
-function popReturnPath(key) {
-  try {
-    const v = sessionStorage.getItem(key);
-    sessionStorage.removeItem(key);
-    return v || "";
-  } catch {
-    return "";
-  }
-}
-
-function hasReturnPath(key) {
-  try {
-    return !!sessionStorage.getItem(key);
-  } catch {
-    return false;
-  }
-}
 
 /* =========================================================
    COMPONENT
@@ -235,18 +162,19 @@ export default function GlobalEscapeMenu() {
   const isMoveDex = location.pathname === "/movedex" || location.pathname.startsWith("/move/");
   const isControls = location.pathname.startsWith("/controls");
 
-  // ✅ Pokedex detail route (bei dir sehr wahrscheinlich /pokemon/:id)
+  // ✅ Detail-Seiten (damit E/A: Detail -> Dex -> Dex schließen)
   const isPokemonDetail = location.pathname.startsWith("/pokemon/");
-  const isPokedexAny = isPokedex || location.pathname.startsWith("/pokedex/") || isPokemonDetail;
+  const isMoveDetail = location.pathname.startsWith("/move/");
 
-  // MoveDex Any: /movedex oder /move/:id
-  const isMoveList = location.pathname === "/movedex";
-  const isMoveAny = isMoveList || location.pathname.startsWith("/move/");
+  // ✅ "Return-to" Speicher für echtes Toggle (E/A)
+  const POKEDEX_RETURN_KEY = "app_return_to_pokedex_v1";
+  const MOVEDEX_RETURN_KEY = "app_return_to_movedex_v1";
+  const LAST_NON_POKEDEX_KEY = "app_last_non_pokedex_v1";
+  const LAST_NON_MOVEDEX_KEY = "app_last_non_movedex_v1";
 
-  // Duo/Soullink Context
-  const isVersusInDuo = location.pathname.includes("/versus");
-  const activeDuoRoomId = (localStorage.getItem("activeDuoRoomId") || "").trim();
-  const isSoullinkContext = !!activeDuoRoomId && !isVersusInDuo;
+  function currentFullPath() {
+    return `${location.pathname}${location.search || ""}${location.hash || ""}`;
+  }
 
   function smartBack() {
     if (window.history.length > 1) nav(-1);
@@ -258,6 +186,30 @@ export default function GlobalEscapeMenu() {
     if (location.pathname.startsWith("/versus")) return "/versus";
     return "/duo";
   }, [location.pathname]);
+
+  // ✅ Merke dir jeweils die "letzte normale Seite" (außerhalb von Dex-Flächen),
+  // damit E/A auf Detail-Seiten korrekt: Detail -> Dex -> schließen (zur normalen Seite)
+  useEffect(() => {
+    const path = currentFullPath();
+
+    // Pokedex-Fläche: /pokedex + /pokemon/:id (Detail zählt zur Dex-Fläche)
+    if (!isPokedex && !isPokemonDetail) {
+      try {
+        sessionStorage.setItem(LAST_NON_POKEDEX_KEY, path);
+      } catch {
+        // ignore
+      }
+    }
+
+    // MoveDex-Fläche: /movedex + /move/:id
+    if (location.pathname !== "/movedex" && !isMoveDetail) {
+      try {
+        sessionStorage.setItem(LAST_NON_MOVEDEX_KEY, path);
+      } catch {
+        // ignore
+      }
+    }
+  }, [location.pathname, location.search, location.hash, isPokedex, isPokemonDetail, isMoveDetail]);
 
   // Audio apply + listeners
   useEffect(() => {
@@ -321,6 +273,7 @@ export default function GlobalEscapeMenu() {
   const defBuckets = useMemo(() => {
     if (!defTypes.length) return null;
 
+    // gewünschte Reihenfolge später in UI: 4x, 2x, 1/2, 1/4, immun
     const out = { "4x": [], "2x": [], "0.5x": [], "0.25x": [], "0x": [], "1x": [] };
 
     for (const a of TYPES) {
@@ -375,16 +328,12 @@ export default function GlobalEscapeMenu() {
           background: active
             ? "linear-gradient(135deg, rgba(120,220,255,0.22), rgba(120,220,255,0.08))"
             : "rgba(255,255,255,0.06)",
-          boxShadow: active
-            ? "0 0 0 2px rgba(120,220,255,0.15), 0 6px 18px rgba(120,220,255,0.35)"
-            : "none",
+          boxShadow: active ? "0 0 0 2px rgba(120,220,255,0.15), 0 6px 18px rgba(120,220,255,0.35)" : "none",
           transform: active ? "scale(1.03)" : "scale(1)",
           transition: "all 120ms ease",
           color: "white",
           cursor: "pointer",
           fontWeight: 950,
-          width: "100%",
-          justifyContent: "flex-start",
         }}
         title={TYPE_LABELS_DE[t] || t}
       >
@@ -455,6 +404,9 @@ export default function GlobalEscapeMenu() {
   // ✅ Global hotkeys (auch wenn Menü zu ist)
   useEffect(() => {
     function onGlobalHotkeys(e) {
+      // ✅ kein Auto-repeat (sonst togglet es sofort wieder zurück)
+      if (e.repeat) return;
+
       const hk = loadHotkeys();
       const g = hk?.general || {};
       const s = hk?.soullink || {};
@@ -471,7 +423,7 @@ export default function GlobalEscapeMenu() {
       // ✅ Ab hier: wenn Fokus in Input/Textarea/ContentEditable -> GAR NICHTS triggern
       if (isTypingTarget(document.activeElement)) return;
 
-      // ✅ Soullink Hotkeys (jetzt auch blockiert beim Tippen)
+      // Soullink Hotkeys
       if (s.goTeam && comboMatches(e, s.goTeam)) {
         e.preventDefault();
         e.stopPropagation();
@@ -485,6 +437,29 @@ export default function GlobalEscapeMenu() {
         e.stopPropagation();
         if (location.pathname.startsWith("/guide")) smartBack();
         else nav("/guide");
+        return;
+      }
+
+      // ✅ Level-Cap Hotkeys (EncounterTable hört auf Events)
+      if (g.nextLevelCap && comboMatches(e, g.nextLevelCap)) {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          window.dispatchEvent(new CustomEvent("appLevelCapNext"));
+        } catch {
+          // ignore
+        }
+        return;
+      }
+
+      if (g.prevLevelCap && comboMatches(e, g.prevLevelCap)) {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          window.dispatchEvent(new CustomEvent("appLevelCapPrev"));
+        } catch {
+          // ignore
+        }
         return;
       }
 
@@ -512,50 +487,71 @@ export default function GlobalEscapeMenu() {
         return;
       }
 
-      // ✅ POKEDEX toggle (Detail -> Liste, Liste -> schließen zur Origin)
+      // ✅ POKEDEX TOGGLE (E):
+      // - von Pokemon-Detail: E -> /pokedex (Return-To = letzte Non-Dex Seite)
+      // - auf /pokedex: E -> schließen (zur Return-To/letzte Non-Dex Seite)
+      // - von überall sonst: E -> /pokedex (Return-To = aktuelle Seite)
       if (g.openPokedex && comboMatches(e, g.openPokedex)) {
         e.preventDefault();
         e.stopPropagation();
 
-        // Wenn wir GAR NICHT im Dex sind: Origin merken + zur Liste
-        if (!isPokedexAny) {
-          setReturnPath(RETURN_KEYS.pokedex, location);
+        if (isPokedex) {
+          const ret =
+            sessionStorage.getItem(POKEDEX_RETURN_KEY) ||
+            sessionStorage.getItem(LAST_NON_POKEDEX_KEY);
+
+          sessionStorage.removeItem(POKEDEX_RETURN_KEY);
+
+          if (ret) nav(ret);
+          else smartBack();
+          return;
+        }
+
+        if (isPokemonDetail) {
+          const lastNon = sessionStorage.getItem(LAST_NON_POKEDEX_KEY) || "/";
+          sessionStorage.setItem(POKEDEX_RETURN_KEY, lastNon);
           nav("/pokedex");
           return;
         }
 
-        // Wenn wir im Dex sind aber NICHT auf der Liste: zur Liste
-        if (!isPokedex) {
-          nav("/pokedex");
-          return;
-        }
-
-        // Wenn wir auf der Liste sind: komplett schließen -> zurück zur Origin (wenn vorhanden)
-        const ret = popReturnPath(RETURN_KEYS.pokedex);
-        if (ret) nav(ret);
-        else smartBack();
+        // normal öffnen von irgendwo
+        sessionStorage.setItem(POKEDEX_RETURN_KEY, currentFullPath());
+        nav("/pokedex");
         return;
       }
 
-      // ✅ MOVEDEX toggle (Detail -> Liste, Liste -> schließen zur Origin)
+      // ✅ MOVEDEX TOGGLE (A):
+      // - von Move-Detail: A -> /movedex (Return-To = letzte Non-MoveDex Seite)
+      // - auf /movedex: A -> schließen (zur Return-To/letzte Non-MoveDex Seite)
+      // - von überall sonst: A -> /movedex (Return-To = aktuelle Seite)
       if (g.openMoveDex && comboMatches(e, g.openMoveDex)) {
         e.preventDefault();
         e.stopPropagation();
 
-        if (!isMoveAny) {
-          setReturnPath(RETURN_KEYS.movedex, location);
+        const onMoveDexSurface = location.pathname === "/movedex";
+
+        if (onMoveDexSurface) {
+          const ret =
+            sessionStorage.getItem(MOVEDEX_RETURN_KEY) ||
+            sessionStorage.getItem(LAST_NON_MOVEDEX_KEY);
+
+          sessionStorage.removeItem(MOVEDEX_RETURN_KEY);
+
+          if (ret) nav(ret);
+          else smartBack();
+          return;
+        }
+
+        if (isMoveDetail) {
+          const lastNon = sessionStorage.getItem(LAST_NON_MOVEDEX_KEY) || "/";
+          sessionStorage.setItem(MOVEDEX_RETURN_KEY, lastNon);
           nav("/movedex");
           return;
         }
 
-        if (!isMoveList) {
-          nav("/movedex");
-          return;
-        }
-
-        const ret = popReturnPath(RETURN_KEYS.movedex);
-        if (ret) nav(ret);
-        else smartBack();
+        // normal öffnen von irgendwo
+        sessionStorage.setItem(MOVEDEX_RETURN_KEY, currentFullPath());
+        nav("/movedex");
         return;
       }
 
@@ -569,12 +565,35 @@ export default function GlobalEscapeMenu() {
 
     window.addEventListener("keydown", onGlobalHotkeys, { capture: true });
     return () => window.removeEventListener("keydown", onGlobalHotkeys, { capture: true });
-  }, [open, nav, audio, lobbyPath, location, isPokedexAny, isPokedex, isMoveAny, isMoveList, isSoullinkContext]);
+  }, [
+    open,
+    nav,
+    audio,
+    lobbyPath,
+    isPokedex,
+    isMoveDex,
+    isPokemonDetail,
+    isMoveDetail,
+    location.pathname,
+    location.search,
+    location.hash,
+  ]);
 
   // ESC toggles menu; wenn Dock offen -> ESC schließt Dock zuerst
   useEffect(() => {
     function onKeyDown(e) {
       if (e.key !== "Escape") return;
+
+      // ✅ wenn man tippt: nix machen
+      if (isTypingTarget(document.activeElement)) return;
+
+      // ✅ Controls mit ESC schließen
+      if (isControls) {
+        e.preventDefault();
+        e.stopPropagation();
+        smartBack();
+        return;
+      }
 
       if (typeDockOpen) {
         e.preventDefault();
@@ -588,13 +607,12 @@ export default function GlobalEscapeMenu() {
         return;
       }
 
-      // Controls Seite: ESC Menu trotzdem ok
       setOpen((v) => !v);
     }
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isPokedex, isMoveDex, nav, typeDockOpen]);
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+  }, [isPokedex, isMoveDex, isControls, nav, typeDockOpen]);
 
   const volumePct = Math.round((audio.volume ?? 0) * 100);
 
@@ -610,7 +628,7 @@ export default function GlobalEscapeMenu() {
     <>
       <style>{HIDE_SCROLL_CSS}</style>
 
-      {/* ✅ Dock: rechts */}
+      {/* ✅ Dock: klein rechts, immer sichtbar wenn typeDockOpen */}
       {typeDockOpen && (
         <div style={dockWrap}>
           <div style={dockHeader}>
@@ -671,19 +689,9 @@ export default function GlobalEscapeMenu() {
           {typeMode === "atk" && (
             <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
               <div style={{ opacity: 0.85, fontWeight: 900 }}>Atk (mehrere):</div>
-
-              {/* ✅ ausgewählte Atk-Typen sichtbar */}
-              <div style={{ opacity: 0.8, fontWeight: 900, fontSize: 12 }}>
-                {atkTypes.length > 0 ? `Atk: ${atkTypes.map((t) => TYPE_LABELS_DE[t]).join(", ")}` : "Atk: -"}
-              </div>
-
               <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                  gap: 8,
-                  alignItems: "stretch",
-                }}
+                className="tm-scroll"
+                style={{ display: "flex", flexWrap: "wrap", gap: 8, maxHeight: 160, overflow: "auto" }}
               >
                 {TYPES.map((t) => (
                   <TypePill key={t} t={t} active={atkTypes.includes(t)} onClick={() => toggleAtk(t)} />
@@ -716,7 +724,6 @@ export default function GlobalEscapeMenu() {
           }}
         >
           <div style={panel} onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
               <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: 0.2 }}>Pause-Menü</div>
               <button
@@ -732,7 +739,6 @@ export default function GlobalEscapeMenu() {
               </button>
             </div>
 
-            {/* Main actions */}
             <div style={{ display: "grid", gap: 10 }}>
               <button
                 style={btnBlue}
@@ -786,7 +792,6 @@ export default function GlobalEscapeMenu() {
                 </div>
               )}
 
-              {/* Type calculator inside menu */}
               <button
                 style={btnBlue}
                 onClick={() => {
@@ -817,7 +822,11 @@ export default function GlobalEscapeMenu() {
                       Reset
                     </button>
 
-                    <button style={btnTab} onClick={() => setTypeDockOpen((v) => !v)} title="Dock rechts öffnen/schließen">
+                    <button
+                      style={btnTab}
+                      onClick={() => setTypeDockOpen((v) => !v)}
+                      title="Dock rechts öffnen/schließen"
+                    >
                       Dock
                     </button>
                   </div>
@@ -896,19 +905,22 @@ export default function GlobalEscapeMenu() {
               </button>
             </div>
 
-            {/* Audio */}
             <div style={section}>
               <div style={sectionTitle}>Audio</div>
 
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                <button style={audio.muted ? btnMuted : btnOrange} onClick={() => setMuted(!audio.muted)} title="Stumm / Ton an">
+                <button
+                  style={audio.muted ? btnMuted : btnOrange}
+                  onClick={() => setMuted(!audio.muted)}
+                  title="Stumm / Ton an"
+                >
                   {audio.muted ? "Stumm" : "Ton an"}
                 </button>
 
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.85 }}>
                     <span>Lautstärke</span>
-                    <span>{volumePct}%</span>
+                    <span>{Math.round((audio.volume ?? 0) * 100)}%</span>
                   </div>
 
                   <input
@@ -923,7 +935,6 @@ export default function GlobalEscapeMenu() {
               </div>
             </div>
 
-            {/* Draft-only */}
             {inDraft && (
               <div style={section}>
                 <div style={sectionTitle}>Draft</div>
@@ -1056,9 +1067,8 @@ const btnTab = {
 
 const btnTabActive = {
   ...btnTab,
-  border: "2px solid rgba(120,220,255,0.85)",
-  background: "linear-gradient(135deg, rgba(120,220,255,0.18), rgba(120,220,255,0.06))",
-  boxShadow: "0 0 0 2px rgba(120,220,255,0.15), 0 10px 26px rgba(120,220,255,0.25)",
+  border: "1px solid rgba(255,255,255,0.22)",
+  background: "rgba(255,255,255,0.10)",
 };
 
 /* ✅ Dock styles */
@@ -1069,7 +1079,7 @@ const dockWrap = {
   width: "min(520px, 94vw)",
   height: "calc(93vh - 110px)",
   maxHeight: "calc(100vh - 110px)",
-  overflow: "auto",
+  overflow: "hidden",
   borderRadius: 16,
   border: "1px solid rgba(255,255,255,0.14)",
   background: "rgba(10,10,16,0.88)",

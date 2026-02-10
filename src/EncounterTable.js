@@ -188,23 +188,77 @@ function EncounterTable() {
     return `guidecheck_save_${activeSave}_gen_${gen}`;
   }, [isDuo, activeDuoRoomId, activeSave, gen]);
 
+  const idForLevelCap = (cap) => `${cap.order}|${cap.name}|${cap.level}`;
+
+  function readLevelCapProgress() {
+    if (!levelCapsProgressKey) return { levelcaps: [] };
+    try {
+      const raw = localStorage.getItem(levelCapsProgressKey);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const arr = Array.isArray(parsed?.levelcaps) ? parsed.levelcaps : [];
+      return { ...parsed, levelcaps: arr };
+    } catch {
+      return { levelcaps: [] };
+    }
+  }
+
+  function writeLevelCapProgress(nextObj) {
+    if (!levelCapsProgressKey) return;
+    try {
+      localStorage.setItem(levelCapsProgressKey, JSON.stringify(nextObj));
+    } catch {
+      // ignore
+    }
+  }
+
   const [currentLevelCap, setCurrentLevelCap] = useState(null); // { order, name, location, level }
 
   const computeCurrentLevelCap = () => {
     if (!gen || !levelCaps.length) return null;
     try {
-      const raw = levelCapsProgressKey ? localStorage.getItem(levelCapsProgressKey) : null;
-      const parsed = raw ? JSON.parse(raw) : null;
-      const doneArr = Array.isArray(parsed?.levelcaps) ? parsed.levelcaps : [];
-      const done = new Set(doneArr);
+      const progress = readLevelCapProgress();
+      const done = new Set(progress.levelcaps || []);
 
-      const idFor = (cap) => `${cap.order}|${cap.name}|${cap.level}`;
-
-      const next = levelCaps.find((cap) => !done.has(idFor(cap)));
+      const next = levelCaps.find((cap) => !done.has(idForLevelCap(cap)));
       return next || levelCaps[levelCaps.length - 1];
     } catch {
       return levelCaps[0] || null;
     }
+  };
+
+  const markNextLevelCapDone = () => {
+    if (!levelCaps.length) return;
+
+    const cur = computeCurrentLevelCap();
+    if (!cur) return;
+
+    const progress = readLevelCapProgress();
+    const done = Array.isArray(progress.levelcaps) ? [...progress.levelcaps] : [];
+    const id = idForLevelCap(cur);
+
+    if (!done.includes(id)) done.push(id);
+    writeLevelCapProgress({ ...progress, levelcaps: done });
+
+    // UI aktualisieren
+    setCurrentLevelCap(computeCurrentLevelCap());
+  };
+
+  const undoLastLevelCap = () => {
+    if (!levelCaps.length) return;
+
+    const progress = readLevelCapProgress();
+    const doneArr = Array.isArray(progress.levelcaps) ? progress.levelcaps : [];
+    const doneSet = new Set(doneArr);
+
+    // letztes DONE (höchste order)
+    const lastDone = [...levelCaps].reverse().find((cap) => doneSet.has(idForLevelCap(cap)));
+    if (!lastDone) return;
+
+    const id = idForLevelCap(lastDone);
+    const nextArr = doneArr.filter((x) => x !== id);
+
+    writeLevelCapProgress({ ...progress, levelcaps: nextArr });
+    setCurrentLevelCap(computeCurrentLevelCap());
   };
 
   useEffect(() => {
@@ -217,6 +271,19 @@ function EncounterTable() {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, [gen, levelCapsProgressKey, levelCaps.length]);
+
+  // ✅ Hotkeys via GlobalEscapeMenu (K/L) -> custom events
+  useEffect(() => {
+    const onNext = () => markNextLevelCapDone();
+    const onPrev = () => undoLastLevelCap();
+
+    window.addEventListener("appLevelCapNext", onNext);
+    window.addEventListener("appLevelCapPrev", onPrev);
+    return () => {
+      window.removeEventListener("appLevelCapNext", onNext);
+      window.removeEventListener("appLevelCapPrev", onPrev);
+    };
+  }, [levelCapsProgressKey, levelCaps.length, gen]);
 
   // ===== Slot-Namen =====
   const [slotNames, setSlotNames] = useState(() =>
@@ -357,12 +424,11 @@ function EncounterTable() {
     }
 
     if (field === "status") {
-  for (let i = 1; i <= slotCount; i++) updated[location][`status${i}`] = value;
-  if (value !== "Entkommen" && value !== "Besiegt") {
-    updated[location].sinner = "";
-  }
-}
-
+      for (let i = 1; i <= slotCount; i++) updated[location][`status${i}`] = value;
+      if (value !== "Entkommen" && value !== "Besiegt") {
+        updated[location].sinner = "";
+      }
+    }
 
     setEncounters(updated);
     try {
@@ -585,6 +651,7 @@ function EncounterTable() {
               {currentLevelCap.order}. {currentLevelCap.name}
               {currentLevelCap.location ? ` — ${currentLevelCap.location}` : ""}
             </div>
+            <div style={{ opacity: 0.75, fontSize: 12, marginTop: 6 }}>Hotkeys: K = abhaken, L = rückgängig</div>
           </div>
         )}
 
@@ -730,32 +797,31 @@ function EncounterTable() {
                           {/* ✅ Sprite: Klick -> interne Pokédex-Seite */}
                           {selected && dexId && (
                             <button
-  type="button"
-  onClick={() => {
-    const idToUse =
-      formKey && dexId && MEGA_FORM_IDS[Number(dexId)]?.[formKey]
-        ? MEGA_FORM_IDS[Number(dexId)][formKey]
-        : Number(dexId);
+                              type="button"
+                              onClick={() => {
+                                const idToUse =
+                                  formKey && dexId && MEGA_FORM_IDS[Number(dexId)]?.[formKey]
+                                    ? MEGA_FORM_IDS[Number(dexId)][formKey]
+                                    : Number(dexId);
 
-    if (idToUse) navigate(`/pokemon/${idToUse}`);
-  }}
-  title={`Info öffnen: ${selected}${formKey ? ` (${megaLabel(formKey)})` : ""}`}
-  style={{
-    border: "none",
-    background: "transparent",
-    padding: 0,
-    cursor: "pointer",
-    display: "inline-flex",
-    alignItems: "center",
-  }}
->
-  <img
-    src={sprite || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexId}.png`}
-    alt={selected}
-    style={{ height: "60px" }}
-  />
-</button>
-
+                                if (idToUse) navigate(`/pokemon/${idToUse}`);
+                              }}
+                              title={`Info öffnen: ${selected}${formKey ? ` (${megaLabel(formKey)})` : ""}`}
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                padding: 0,
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                              }}
+                            >
+                              <img
+                                src={sprite || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexId}.png`}
+                                alt={selected}
+                                style={{ height: "60px" }}
+                              />
+                            </button>
                           )}
                         </div>
                       </td>
@@ -785,18 +851,17 @@ function EncounterTable() {
                       }}
                     >
                       {!sinnerEnabled ? (
-  <option value="">—</option>
-) : (
-  <>
-    <option value="">-</option>
-    {sinnerOptions.map((opt) => (
-      <option key={opt.key} value={opt.key}>
-        {opt.label}
-      </option>
-    ))}
-  </>
-)}
-
+                        <option value="">—</option>
+                      ) : (
+                        <>
+                          <option value="">-</option>
+                          {sinnerOptions.map((opt) => (
+                            <option key={opt.key} value={opt.key}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </>
+                      )}
                     </select>
                   </td>
                 </tr>
@@ -882,7 +947,7 @@ const topRightActions = {
 /* Level-Cap */
 const levelCapBanner = (dark) => ({
   margin: "10px auto 14px auto",
-  maxWidth: 300,
+  maxWidth: 320,
   padding: "10px 12px",
   borderRadius: 14,
   textAlign: "center",

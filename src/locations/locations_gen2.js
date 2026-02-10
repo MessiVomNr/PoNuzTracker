@@ -39,5 +39,17 @@ export default [
   "Route 26 (Gras)",
   "Route 23 (Gras)",
   "Siegesstraße (Höhle)",
-  "Silberberg (Innen)"
+  "Silberberg (Innen)",
+  "Fossil-1",
+  "Fossil-2",
+  "Fossil-3",
+  "Fossil-4",
+  "Fossil-5",
+  "Extra-1",
+  "Extra-2",
+  "Extra-3",
+  "Extra-4",
+  "Extra-5",
+  "Shiny",
+  "Mistmon of the Year"
 ];

@@ -48,5 +48,17 @@ export default [
   "Eiland-Scan (Poni)",
   "Ultra-Wurmloch (Ultrabiest)",
   "Siegesstraße von Alola",
-  "Pokémon-Liga"
+  "Pokémon-Liga",
+  "Fossil-1",
+  "Fossil-2",
+  "Fossil-3",
+  "Fossil-4",
+  "Fossil-5",
+  "Extra-1",
+  "Extra-2",
+  "Extra-3",
+  "Extra-4",
+  "Extra-5",
+  "Shiny",
+  "Mistmon of the Year"
 ];

@@ -37,8 +37,10 @@ const tabBtnActive = {
 };
 
 function Row({ title, value, onChange, conflict }) {
+  const hasValue = !!normalizeKeyCombo(value);
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 180px", gap: 10, alignItems: "center" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 180px 110px", gap: 10, alignItems: "center" }}>
       <div>
         <div style={{ fontWeight: 950 }}>{title}</div>
         {conflict ? (
@@ -52,6 +54,7 @@ function Row({ title, value, onChange, conflict }) {
 
       <input
         value={formatKeyForDisplay(value)}
+        placeholder="—"
         readOnly
         style={{
           padding: "10px 12px",
@@ -74,6 +77,30 @@ function Row({ title, value, onChange, conflict }) {
           onChange(combo);
         }}
       />
+
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onChange("");
+        }}
+        disabled={!hasValue}
+        title={hasValue ? "Hotkey löschen (unbelegt)" : "Bereits unbelegt"}
+        style={{
+          padding: "10px 12px",
+          borderRadius: 12,
+          border: "1px solid rgba(255,255,255,0.14)",
+          background: hasValue ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.02)",
+          color: "white",
+          cursor: hasValue ? "pointer" : "not-allowed",
+          fontWeight: 950,
+          opacity: hasValue ? 1 : 0.45,
+          textAlign: "center",
+        }}
+      >
+        Löschen
+      </button>
     </div>
   );
 }
