@@ -55,11 +55,26 @@ function readDraftCtx() {
 
 /* =========================================================
    TYPE CALCULATOR (self-contained)
-   - Standard Gen 6+ Typechart (inkl. Fee)
 ========================================================= */
 const TYPES = [
-  "normal","fire","water","electric","grass","ice","fighting","poison","ground",
-  "flying","psychic","bug","rock","ghost","dragon","dark","steel","fairy"
+  "normal",
+  "fire",
+  "water",
+  "electric",
+  "grass",
+  "ice",
+  "fighting",
+  "poison",
+  "ground",
+  "flying",
+  "psychic",
+  "bug",
+  "rock",
+  "ghost",
+  "dragon",
+  "dark",
+  "steel",
+  "fairy",
 ];
 
 const TYPE_LABELS_DE = {
@@ -83,33 +98,65 @@ const TYPE_LABELS_DE = {
   fairy: "Fee",
 };
 
-// Effectiveness map: attackType -> defenseType -> multiplier
+// attackType -> defenseType -> multiplier
 const CHART = {
-  normal:  { rock:0.5, ghost:0, steel:0.5 },
-  fire:    { fire:0.5, water:0.5, grass:2, ice:2, bug:2, rock:0.5, dragon:0.5, steel:2 },
-  water:   { fire:2, water:0.5, grass:0.5, ground:2, rock:2, dragon:0.5 },
-  electric:{ water:2, electric:0.5, grass:0.5, ground:0, flying:2, dragon:0.5 },
-  grass:   { fire:0.5, water:2, grass:0.5, poison:0.5, ground:2, flying:0.5, bug:0.5, rock:2, dragon:0.5, steel:0.5 },
-  ice:     { fire:0.5, water:0.5, grass:2, ice:0.5, ground:2, flying:2, dragon:2, steel:0.5 },
-  fighting:{ normal:2, ice:2, rock:2, dark:2, steel:2, poison:0.5, flying:0.5, psychic:0.5, bug:0.5, fairy:0.5, ghost:0 },
-  poison:  { grass:2, fairy:2, poison:0.5, ground:0.5, rock:0.5, ghost:0.5, steel:0 },
-  ground:  { fire:2, electric:2, grass:0.5, poison:2, flying:0, bug:0.5, rock:2, steel:2 },
-  flying:  { electric:0.5, grass:2, fighting:2, bug:2, rock:0.5, steel:0.5 },
-  psychic: { fighting:2, poison:2, psychic:0.5, dark:0, steel:0.5 },
-  bug:     { fire:0.5, grass:2, fighting:0.5, poison:0.5, flying:0.5, psychic:2, ghost:0.5, dark:2, steel:0.5, fairy:0.5 },
-  rock:    { fire:2, ice:2, flying:2, bug:2, fighting:0.5, ground:0.5, steel:0.5 },
-  ghost:   { normal:0, psychic:2, ghost:2, dark:0.5 },
-  dragon:  { dragon:2, steel:0.5, fairy:0 },
-  dark:    { psychic:2, ghost:2, fighting:0.5, dark:0.5, fairy:0.5 },
-  steel:   { ice:2, rock:2, fairy:2, fire:0.5, water:0.5, electric:0.5, steel:0.5 },
-  fairy:   { fighting:2, dragon:2, dark:2, fire:0.5, poison:0.5, steel:0.5 },
+  normal: { rock: 0.5, ghost: 0, steel: 0.5 },
+  fire: { fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 },
+  water: { fire: 2, water: 0.5, grass: 0.5, ground: 2, rock: 2, dragon: 0.5 },
+  electric: { water: 2, electric: 0.5, grass: 0.5, ground: 0, flying: 2, dragon: 0.5 },
+  grass: {
+    fire: 0.5,
+    water: 2,
+    grass: 0.5,
+    poison: 0.5,
+    ground: 2,
+    flying: 0.5,
+    bug: 0.5,
+    rock: 2,
+    dragon: 0.5,
+    steel: 0.5,
+  },
+  ice: { fire: 0.5, water: 0.5, grass: 2, ice: 0.5, ground: 2, flying: 2, dragon: 2, steel: 0.5 },
+  fighting: {
+    normal: 2,
+    ice: 2,
+    rock: 2,
+    dark: 2,
+    steel: 2,
+    poison: 0.5,
+    flying: 0.5,
+    psychic: 0.5,
+    bug: 0.5,
+    fairy: 0.5,
+    ghost: 0,
+  },
+  poison: { grass: 2, fairy: 2, poison: 0.5, ground: 0.5, rock: 0.5, ghost: 0.5, steel: 0 },
+  ground: { fire: 2, electric: 2, grass: 0.5, poison: 2, flying: 0, bug: 0.5, rock: 2, steel: 2 },
+  flying: { electric: 0.5, grass: 2, fighting: 2, bug: 2, rock: 0.5, steel: 0.5 },
+  psychic: { fighting: 2, poison: 2, psychic: 0.5, dark: 0, steel: 0.5 },
+  bug: {
+    fire: 0.5,
+    grass: 2,
+    fighting: 0.5,
+    poison: 0.5,
+    flying: 0.5,
+    psychic: 2,
+    ghost: 0.5,
+    dark: 2,
+    steel: 0.5,
+    fairy: 0.5,
+  },
+  rock: { fire: 2, ice: 2, flying: 2, bug: 2, fighting: 0.5, ground: 0.5, steel: 0.5 },
+  ghost: { normal: 0, psychic: 2, ghost: 2, dark: 0.5 },
+  dragon: { dragon: 2, steel: 0.5, fairy: 0 },
+  dark: { psychic: 2, ghost: 2, fighting: 0.5, dark: 0.5, fairy: 0.5 },
+  steel: { ice: 2, rock: 2, fairy: 2, fire: 0.5, water: 0.5, electric: 0.5, steel: 0.5 },
+  fairy: { fighting: 2, dragon: 2, dark: 2, fire: 0.5, poison: 0.5, steel: 0.5 },
 };
 
 function mult(att, def) {
-  const a = String(att || "").toLowerCase();
-  const d = String(def || "").toLowerCase();
-  const row = CHART[a] || {};
-  return row[d] ?? 1;
+  const row = CHART[String(att || "").toLowerCase()] || {};
+  return row[String(def || "").toLowerCase()] ?? 1;
 }
 
 function typeIconUrl(typeKey) {
@@ -117,46 +164,54 @@ function typeIconUrl(typeKey) {
   return `https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t}.svg`;
 }
 
-function fmtMult(x) {
-  if (x === 0) return "0×";
-  if (x === 0.25) return "¼×";
-  if (x === 0.5) return "½×";
-  if (x === 1) return "1×";
-  if (x === 2) return "2×";
-  if (x === 4) return "4×";
-  return `${x}×`;
-}
-
 /* Scrollbar hide helper (scrollbar bleibt nutzbar) */
 const HIDE_SCROLL_CSS = `
 .tm-scroll { scrollbar-width: none; -ms-overflow-style: none; }
 .tm-scroll::-webkit-scrollbar { width: 0px; height: 0px; }
-
-@keyframes tmPulse {
-  0% {
-    box-shadow:
-      inset 0 0 0 2px rgba(255,255,255,0.35),
-      0 0 0 1px rgba(161,76,255,0.35),
-      0 0 18px rgba(161,76,255,0.35),
-      0 0 28px rgba(0,242,254,0.18);
-  }
-  50% {
-    box-shadow:
-      inset 0 0 0 2px rgba(255,255,255,0.55),
-      0 0 0 1px rgba(161,76,255,0.55),
-      0 0 26px rgba(161,76,255,0.55),
-      0 0 40px rgba(0,242,254,0.28);
-  }
-  100% {
-    box-shadow:
-      inset 0 0 0 2px rgba(255,255,255,0.35),
-      0 0 0 1px rgba(161,76,255,0.35),
-      0 0 18px rgba(161,76,255,0.35),
-      0 0 28px rgba(0,242,254,0.18);
-  }
-}
 `;
 
+/* =========================================================
+   POKEDEX / MOVEDEX "RETURN ORIGIN" (hotkey toggle)
+========================================================= */
+const RETURN_KEYS = {
+  pokedex: "app_return_before_pokedex_v1",
+  movedex: "app_return_before_movedex_v1",
+};
+
+function fullPathFromLocation(loc) {
+  const p = loc?.pathname || "";
+  const s = loc?.search || "";
+  const h = loc?.hash || "";
+  return `${p}${s}${h}`;
+}
+
+function setReturnPath(key, loc) {
+  try {
+    sessionStorage.setItem(key, fullPathFromLocation(loc));
+  } catch {}
+}
+
+function popReturnPath(key) {
+  try {
+    const v = sessionStorage.getItem(key);
+    sessionStorage.removeItem(key);
+    return v || "";
+  } catch {
+    return "";
+  }
+}
+
+function hasReturnPath(key) {
+  try {
+    return !!sessionStorage.getItem(key);
+  } catch {
+    return false;
+  }
+}
+
+/* =========================================================
+   COMPONENT
+========================================================= */
 export default function GlobalEscapeMenu() {
   const nav = useNavigate();
   const location = useLocation();
@@ -167,27 +222,31 @@ export default function GlobalEscapeMenu() {
 
   const [dexOpen, setDexOpen] = useState(false);
 
-  // Types calculator
+  // Type calculator (im Menü)
   const [typeOpen, setTypeOpen] = useState(false);
-  const [typeMode, setTypeMode] = useState("def"); // "def" | "atk" | "table"
-  const [defTypes, setDefTypes] = useState([]);    // up to 2
-  const [atkTypes, setAtkTypes] = useState([]);    // multiple
+  const [typeMode, setTypeMode] = useState("def"); // "def" | "atk"
+  const [defTypes, setDefTypes] = useState([]); // up to 2
+  const [atkTypes, setAtkTypes] = useState([]); // multiple
 
-  // Table zoom + highlight (row/col)
-  const [tableZoomOpen, setTableZoomOpen] = useState(false);
-  const [tableSelAtk, setTableSelAtk] = useState(null); // row (atk)
-  const [tableSelDef, setTableSelDef] = useState(null); // col (def)
+  // ✅ Type calculator Dock (global, auch wenn Menü zu ist)
+  const [typeDockOpen, setTypeDockOpen] = useState(false);
 
   const isPokedex = location.pathname === "/pokedex";
   const isMoveDex = location.pathname === "/movedex" || location.pathname.startsWith("/move/");
   const isControls = location.pathname.startsWith("/controls");
 
-  // Soullink/Duo Context:
-// Bei dir ist Duo oft NICHT in der URL, sondern über localStorage aktiv
-const isVersusInDuo = location.pathname.includes("/versus");
-const activeDuoRoomId = (localStorage.getItem("activeDuoRoomId") || "").trim();
-const isSoullinkContext = !!activeDuoRoomId && !isVersusInDuo;
+  // ✅ Pokedex detail route (bei dir sehr wahrscheinlich /pokemon/:id)
+  const isPokemonDetail = location.pathname.startsWith("/pokemon/");
+  const isPokedexAny = isPokedex || location.pathname.startsWith("/pokedex/") || isPokemonDetail;
 
+  // MoveDex Any: /movedex oder /move/:id
+  const isMoveList = location.pathname === "/movedex";
+  const isMoveAny = isMoveList || location.pathname.startsWith("/move/");
+
+  // Duo/Soullink Context
+  const isVersusInDuo = location.pathname.includes("/versus");
+  const activeDuoRoomId = (localStorage.getItem("activeDuoRoomId") || "").trim();
+  const isSoullinkContext = !!activeDuoRoomId && !isVersusInDuo;
 
   function smartBack() {
     if (window.history.length > 1) nav(-1);
@@ -200,7 +259,7 @@ const isSoullinkContext = !!activeDuoRoomId && !isVersusInDuo;
     return "/duo";
   }, [location.pathname]);
 
-  // Audio beim Mount anwenden + Listener
+  // Audio apply + listeners
   useEffect(() => {
     applyAudioToMediaEls(audio);
     window.__APP_AUDIO__ = audio;
@@ -226,126 +285,6 @@ const isSoullinkContext = !!activeDuoRoomId && !isVersusInDuo;
     };
   }, []);
 
-  // ESC / global hotkeys (ohne Menü offen)
-  // ESC / global hotkeys (ohne Menü offen)
-useEffect(() => {
-  function onGlobalHotkeys(e) {
-    if (open) return;
-    if (isControls) return;
-
-    const hk = loadHotkeys();
-    const g = hk?.general || {};
-    const s = hk?.soullink || {};
-
-    // ✅ Soullink (Duo) Hotkeys zuerst (damit sie auch bei Fokus in Selects funktionieren)
-    if (s.goTeam && comboMatches(e, s.goTeam)) {
-  e.preventDefault();
-  e.stopPropagation();
-
-  if (location.pathname.startsWith("/team")) {
-    smartBack();
-  } else {
-    nav("/team");
-  }
-
-  return;
-}
-
-if (s.goGuide && comboMatches(e, s.goGuide)) {
-  e.preventDefault();
-  e.stopPropagation();
-
-  if (location.pathname.startsWith("/guide")) {
-    smartBack();
-  } else {
-    nav("/guide");
-  }
-
-  return;
-}
-
-
-    // Danach erst: Tippen blocken (damit normale Hotkeys nicht beim Schreiben triggern)
-    if (isTypingTarget(document.activeElement)) return;
-
-    if (g.goHome && comboMatches(e, g.goHome)) {
-      e.preventDefault();
-      e.stopPropagation();
-      nav("/");
-      return;
-    }
-
-    if (g.goLobby && comboMatches(e, g.goLobby)) {
-      e.preventDefault();
-      e.stopPropagation();
-      nav(lobbyPath);
-      return;
-    }
-
-    if (g.goBack && comboMatches(e, g.goBack)) {
-      e.preventDefault();
-      e.stopPropagation();
-      smartBack();
-      return;
-    }
-
-    if (g.openPokedex && comboMatches(e, g.openPokedex)) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (isPokedex) smartBack();
-      else nav("/pokedex");
-      return;
-    }
-
-    if (g.openMoveDex && comboMatches(e, g.openMoveDex)) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (isMoveDex) smartBack();
-      else nav("/movedex");
-      return;
-    }
-
-    if (g.toggleMute && comboMatches(e, g.toggleMute)) {
-      e.preventDefault();
-      e.stopPropagation();
-      setMuted(!(audio?.muted));
-      return;
-    }
-  }
-
-  // ✅ capture: true damit react-select / inputs es nicht "wegfangen"
-  window.addEventListener("keydown", onGlobalHotkeys, { capture: true });
-  return () => window.removeEventListener("keydown", onGlobalHotkeys, { capture: true });
-}, [open, isControls, nav, audio, lobbyPath, isPokedex, isMoveDex, isSoullinkContext]);
-
-
-  // ESC Handler (Menü togglen / Overlay-Pages schließen)
-  useEffect(() => {
-    function onKeyDown(e) {
-      if (e.key !== "Escape") return;
-
-      // wenn große Typentabelle offen: ESC schließt erst diese
-      if (open && tableZoomOpen) {
-        e.preventDefault();
-        setTableZoomOpen(false);
-        return;
-      }
-
-      if (isPokedex || isMoveDex) {
-        if (window.history.length > 1) nav(-1);
-        else nav("/");
-        return;
-      }
-
-      setOpen((v) => !v);
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isPokedex, isMoveDex, nav, open, tableZoomOpen]);
-
-  const volumePct = Math.round((audio.volume ?? 0) * 100);
-
   const setMuted = (muted) => {
     const next = { ...audio, muted: !!muted };
     setAudio(next);
@@ -365,17 +304,12 @@ if (s.goGuide && comboMatches(e, s.goGuide)) {
     emitAudioChanged(next);
   };
 
-  const inDraft = !!draftCtx?.inDraft;
-  const canRestart = !!draftCtx?.canRestart;
-  const restartFn = draftCtx?.restart;
-  const leaveTo = draftCtx?.leaveTo || lobbyPath;
-
   // ===== Type calculator logic =====
   function toggleDef(t) {
     setDefTypes((prev) => {
       const has = prev.includes(t);
       if (has) return prev.filter((x) => x !== t);
-      if (prev.length >= 2) return [prev[1], t]; // keep last 1, add new
+      if (prev.length >= 2) return [prev[1], t];
       return [...prev, t];
     });
   }
@@ -387,7 +321,7 @@ if (s.goGuide && comboMatches(e, s.goGuide)) {
   const defBuckets = useMemo(() => {
     if (!defTypes.length) return null;
 
-    const out = { "4x": [], "2x": [], "1x": [], "0.5x": [], "0.25x": [], "0x": [] };
+    const out = { "4x": [], "2x": [], "0.5x": [], "0.25x": [], "0x": [], "1x": [] };
 
     for (const a of TYPES) {
       let m = 1;
@@ -400,7 +334,8 @@ if (s.goGuide && comboMatches(e, s.goGuide)) {
       else if (m === 2) out["2x"].push(a);
       else if (m === 4) out["4x"].push(a);
       else {
-        out[`${m}x`] = (out[`${m}x`] || []).concat([a]);
+        const k = `${m}x`;
+        out[k] = (out[k] || []).concat([a]);
       }
     }
 
@@ -434,20 +369,22 @@ if (s.goGuide && comboMatches(e, s.goGuide)) {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "8px 10px",
-          borderRadius: 12,
-          border: active
-            ? "1px solid rgba(255,255,255,0.32)"
-            : "1px solid rgba(255,255,255,0.14)",
+          padding: "9px 11px",
+          borderRadius: 14,
+          border: active ? "2px solid rgba(120,220,255,0.85)" : "1px solid rgba(255,255,255,0.14)",
           background: active
-            ? "linear-gradient(135deg, rgba(161,76,255,0.35), rgba(255,76,160,0.22))"
+            ? "linear-gradient(135deg, rgba(120,220,255,0.22), rgba(120,220,255,0.08))"
             : "rgba(255,255,255,0.06)",
-          boxShadow: active ? "0 0 0 2px rgba(161,76,255,0.18)" : "none",
+          boxShadow: active
+            ? "0 0 0 2px rgba(120,220,255,0.15), 0 6px 18px rgba(120,220,255,0.35)"
+            : "none",
+          transform: active ? "scale(1.03)" : "scale(1)",
+          transition: "all 120ms ease",
           color: "white",
           cursor: "pointer",
-          fontWeight: 900,
-          transform: active ? "scale(1.02)" : "scale(1.0)",
-          transition: "120ms ease",
+          fontWeight: 950,
+          width: "100%",
+          justifyContent: "flex-start",
         }}
         title={TYPE_LABELS_DE[t] || t}
       >
@@ -455,8 +392,8 @@ if (s.goGuide && comboMatches(e, s.goGuide)) {
           src={typeIconUrl(t)}
           alt={t}
           style={{
-            width: 22,
-            height: 22,
+            width: 20,
+            height: 20,
             borderRadius: 8,
             padding: 3,
             background: "rgba(0,0,0,0.45)",
@@ -496,8 +433,8 @@ if (s.goGuide && comboMatches(e, s.goGuide)) {
                 src={typeIconUrl(t)}
                 alt={t}
                 style={{
-                  width: 20,
-                  height: 20,
+                  width: 18,
+                  height: 18,
                   borderRadius: 8,
                   padding: 3,
                   background: "rgba(0,0,0,0.45)",
@@ -515,537 +452,510 @@ if (s.goGuide && comboMatches(e, s.goGuide)) {
     );
   }
 
-  function openBigTable() {
-    setTableZoomOpen(true);
-    // optional: wenn noch nichts gewählt ist, lassen wir null
-  }
+  // ✅ Global hotkeys (auch wenn Menü zu ist)
+  useEffect(() => {
+    function onGlobalHotkeys(e) {
+      const hk = loadHotkeys();
+      const g = hk?.general || {};
+      const s = hk?.soullink || {};
 
-  function cellStyle({ a, d }) {
-    const rowOn = tableSelAtk && tableSelAtk === a;
-    const colOn = tableSelDef && tableSelDef === d;
-    const both = rowOn && colOn;
+      // ✅ Typenrechner-Dock: überall, aber NICHT wenn man tippt
+      if (g.openTypeCalculator && comboMatches(e, g.openTypeCalculator)) {
+        if (isTypingTarget(document.activeElement)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setTypeDockOpen((v) => !v);
+        return;
+      }
 
-    const base = { ...td };
+      // ✅ Ab hier: wenn Fokus in Input/Textarea/ContentEditable -> GAR NICHTS triggern
+      if (isTypingTarget(document.activeElement)) return;
 
-    if (both) {
-      return {
-        ...base,
-        background:
-          "radial-gradient(circle at 30% 25%, rgba(255,255,255,0.18), transparent 55%)," +
-          "linear-gradient(135deg, rgba(161,76,255,0.55), rgba(0,242,254,0.28))",
-        borderBottom: "1px solid rgba(255,255,255,0.18)",
-        boxShadow:
-          "inset 0 0 0 2px rgba(255,255,255,0.42)," +
-          "0 0 0 1px rgba(161,76,255,0.45)," +
-          "0 0 22px rgba(161,76,255,0.45)," +
-          "0 0 36px rgba(0,242,254,0.22)",
-        fontWeight: 950,
-        textShadow: "0 0 10px rgba(255,255,255,0.22)",
-        animation: "tmPulse 1.4s ease-in-out infinite",
-      };
+      // ✅ Soullink Hotkeys (jetzt auch blockiert beim Tippen)
+      if (s.goTeam && comboMatches(e, s.goTeam)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (location.pathname.startsWith("/team")) smartBack();
+        else nav("/team");
+        return;
+      }
+
+      if (s.goGuide && comboMatches(e, s.goGuide)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (location.pathname.startsWith("/guide")) smartBack();
+        else nav("/guide");
+        return;
+      }
+
+      // Menü darf offen sein: dann keine weiteren global nav-hotkeys
+      if (open) return;
+
+      if (g.goHome && comboMatches(e, g.goHome)) {
+        e.preventDefault();
+        e.stopPropagation();
+        nav("/");
+        return;
+      }
+
+      if (g.goLobby && comboMatches(e, g.goLobby)) {
+        e.preventDefault();
+        e.stopPropagation();
+        nav(lobbyPath);
+        return;
+      }
+
+      if (g.goBack && comboMatches(e, g.goBack)) {
+        e.preventDefault();
+        e.stopPropagation();
+        smartBack();
+        return;
+      }
+
+      // ✅ POKEDEX toggle (Detail -> Liste, Liste -> schließen zur Origin)
+      if (g.openPokedex && comboMatches(e, g.openPokedex)) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Wenn wir GAR NICHT im Dex sind: Origin merken + zur Liste
+        if (!isPokedexAny) {
+          setReturnPath(RETURN_KEYS.pokedex, location);
+          nav("/pokedex");
+          return;
+        }
+
+        // Wenn wir im Dex sind aber NICHT auf der Liste: zur Liste
+        if (!isPokedex) {
+          nav("/pokedex");
+          return;
+        }
+
+        // Wenn wir auf der Liste sind: komplett schließen -> zurück zur Origin (wenn vorhanden)
+        const ret = popReturnPath(RETURN_KEYS.pokedex);
+        if (ret) nav(ret);
+        else smartBack();
+        return;
+      }
+
+      // ✅ MOVEDEX toggle (Detail -> Liste, Liste -> schließen zur Origin)
+      if (g.openMoveDex && comboMatches(e, g.openMoveDex)) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!isMoveAny) {
+          setReturnPath(RETURN_KEYS.movedex, location);
+          nav("/movedex");
+          return;
+        }
+
+        if (!isMoveList) {
+          nav("/movedex");
+          return;
+        }
+
+        const ret = popReturnPath(RETURN_KEYS.movedex);
+        if (ret) nav(ret);
+        else smartBack();
+        return;
+      }
+
+      if (g.toggleMute && comboMatches(e, g.toggleMute)) {
+        e.preventDefault();
+        e.stopPropagation();
+        setMuted(!(audio?.muted));
+        return;
+      }
     }
 
-    if (rowOn || colOn) {
-      return {
-        ...base,
-        background: "rgba(117, 117, 117, 0.34)",
-        borderBottom: "1px solid rgba(255,255,255,0.12)",
-      };
+    window.addEventListener("keydown", onGlobalHotkeys, { capture: true });
+    return () => window.removeEventListener("keydown", onGlobalHotkeys, { capture: true });
+  }, [open, nav, audio, lobbyPath, location, isPokedexAny, isPokedex, isMoveAny, isMoveList, isSoullinkContext]);
+
+  // ESC toggles menu; wenn Dock offen -> ESC schließt Dock zuerst
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key !== "Escape") return;
+
+      if (typeDockOpen) {
+        e.preventDefault();
+        setTypeDockOpen(false);
+        return;
+      }
+
+      if (isPokedex || isMoveDex) {
+        if (window.history.length > 1) nav(-1);
+        else nav("/");
+        return;
+      }
+
+      // Controls Seite: ESC Menu trotzdem ok
+      setOpen((v) => !v);
     }
 
-    return base;
-  }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isPokedex, isMoveDex, nav, typeDockOpen]);
 
-  function headStyleActive(isActive, baseStyle) {
-    if (!isActive) return baseStyle;
-    return {
-      ...baseStyle,
-      background: "rgba(65, 84, 255, 0.22)",
-      boxShadow: "inset 0 0 0 2px rgba(255,255,255,0.18)",
-    };
-  }
+  const volumePct = Math.round((audio.volume ?? 0) * 100);
 
-  if (!open) return null;
+  const inDraft = !!draftCtx?.inDraft;
+  const canRestart = !!draftCtx?.canRestart;
+  const restartFn = draftCtx?.restart;
+  const leaveTo = draftCtx?.leaveTo || lobbyPath;
+
+  // ✅ Wenn weder Menü offen noch Dock offen: nichts rendern
+  if (!open && !typeDockOpen) return null;
 
   return (
-    <div
-      style={overlay}
-      onClick={() => {
-        setOpen(false);
-        setDexOpen(false);
-        setTypeOpen(false);
-        setTableZoomOpen(false);
-      }}
-    >
+    <>
       <style>{HIDE_SCROLL_CSS}</style>
 
-      <div style={panel} onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-          <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: 0.2 }}>Pause-Menü</div>
-          <button
-            style={btnIcon}
-            onClick={() => {
-              setOpen(false);
-              setDexOpen(false);
-              setTypeOpen(false);
-              setTableZoomOpen(false);
-            }}
-            title="Schließen (ESC)"
-          >
-            ✕
-          </button>
-        </div>
+      {/* ✅ Dock: rechts */}
+      {typeDockOpen && (
+        <div style={dockWrap}>
+          <div style={dockHeader}>
+            <div style={{ fontWeight: 950 }}>Typenrechner</div>
+            <button style={dockClose} onClick={() => setTypeDockOpen(false)} title="Schließen">
+              ✕
+            </button>
+          </div>
 
-        {/* Main actions */}
-        <div style={{ display: "grid", gap: 10 }}>
-          <button
-            style={btnBlue}
-            onClick={() => {
-              setOpen(false);
-              nav("/");
-            }}
-          >
-            Startbildschirm
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button style={typeMode === "def" ? btnTabActive : btnTab} onClick={() => setTypeMode("def")}>
+              Def
+            </button>
+            <button style={typeMode === "atk" ? btnTabActive : btnTab} onClick={() => setTypeMode("atk")}>
+              Atk
+            </button>
+            <button
+              style={btnTab}
+              onClick={() => {
+                setDefTypes([]);
+                setAtkTypes([]);
+              }}
+              title="Reset"
+            >
+              Reset
+            </button>
+          </div>
 
-          <button
-            style={btnGreen}
-            onClick={() => {
-              setOpen(false);
-              nav(lobbyPath);
-            }}
-          >
-            Zur Lobby
-          </button>
-
-          <button style={btnPurple} onClick={() => setDexOpen((v) => !v)}>
-            Dex
-          </button>
-
-          {dexOpen && (
-            <div style={{ display: "grid", gap: 8, paddingLeft: 10 }}>
-              <button
-                style={btnGhost}
-                onClick={() => {
-                  setOpen(false);
-                  setDexOpen(false);
-                  setTypeOpen(false);
-                  setTableZoomOpen(false);
-                  nav("/pokedex");
+          {typeMode === "def" && (
+            <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                  gap: 8,
+                  alignItems: "stretch",
                 }}
               >
-                Pokédex
-              </button>
+                {TYPES.map((t) => (
+                  <TypePill key={t} t={t} active={defTypes.includes(t)} onClick={() => toggleDef(t)} />
+                ))}
+              </div>
 
-              <button
-                style={btnGhost}
-                onClick={() => {
-                  setOpen(false);
-                  setDexOpen(false);
-                  setTypeOpen(false);
-                  setTableZoomOpen(false);
-                  nav("/movedex");
-                }}
-              >
-                MoveDex
-              </button>
+              {defTypes.length > 0 ? (
+                <div style={{ display: "grid", gap: 12 }}>
+                  <Bucket title="4×" items={defBuckets?.["4x"]} />
+                  <Bucket title="2×" items={defBuckets?.["2x"]} />
+                  <Bucket title="½×" items={defBuckets?.["0.5x"]} />
+                  <Bucket title="¼×" items={defBuckets?.["0.25x"]} />
+                  <Bucket title="Immun (0×)" items={defBuckets?.["0x"]} />
+                </div>
+              ) : (
+                <div style={{ opacity: 0.75 }}>Wähle 1–2 Def-Typen.</div>
+              )}
             </div>
           )}
 
-          {/* Type calculator */}
-          <button
-            style={btnBlue}
-            onClick={() => {
-              setTypeOpen((v) => !v);
-              setDexOpen(false);
-            }}
-          >
-            Typenrechner
-          </button>
+          {typeMode === "atk" && (
+            <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+              <div style={{ opacity: 0.85, fontWeight: 900 }}>Atk (mehrere):</div>
 
-          {typeOpen && (
-            <div style={{ ...subPanel }}>
-              {/* Mode buttons */}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  style={typeMode === "def" ? btnTabActive : btnTab}
-                  onClick={() => setTypeMode("def")}
-                >
-                  Verteidigung
-                </button>
-                <button
-                  style={typeMode === "atk" ? btnTabActive : btnTab}
-                  onClick={() => setTypeMode("atk")}
-                >
-                  Angriff
-                </button>
-                <button
-                  style={typeMode === "table" ? btnTabActive : btnTab}
-                  onClick={() => setTypeMode("table")}
-                  title="Normale Typentabelle"
-                >
-                  Typentabelle
-                </button>
-
-                <button
-                  style={btnTab}
-                  onClick={() => {
-                    setDefTypes([]);
-                    setAtkTypes([]);
-                    setTableSelAtk(null);
-                    setTableSelDef(null);
-                  }}
-                  title="Reset"
-                >
-                  Reset
-                </button>
+              {/* ✅ ausgewählte Atk-Typen sichtbar */}
+              <div style={{ opacity: 0.8, fontWeight: 900, fontSize: 12 }}>
+                {atkTypes.length > 0 ? `Atk: ${atkTypes.map((t) => TYPE_LABELS_DE[t]).join(", ")}` : "Atk: -"}
               </div>
 
-              {/* DEF MODE */}
-              {typeMode === "def" && (
-                <div style={{ display: "grid", gap: 10 }}>
-                  <div style={{ fontWeight: 950, opacity: 0.9 }}>
-                    Verteidigungstypen wählen (1–2)
-                  </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                  gap: 8,
+                  alignItems: "stretch",
+                }}
+              >
+                {TYPES.map((t) => (
+                  <TypePill key={t} t={t} active={atkTypes.includes(t)} onClick={() => toggleAtk(t)} />
+                ))}
+              </div>
 
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {TYPES.map((t) => (
-                      <TypePill
-                        key={t}
-                        t={t}
-                        active={defTypes.includes(t)}
-                        onClick={() => toggleDef(t)}
-                      />
-                    ))}
-                  </div>
+              {atkTypes.length > 0 ? (
+                <div style={{ display: "grid", gap: 12 }}>
+                  <Bucket title="Super (≥2×)" items={atkCoverage?.super} />
+                  <Bucket title="Neutral (1×)" items={atkCoverage?.neutral} />
+                  <Bucket title="Resist (½×/¼×)" items={atkCoverage?.resist} />
+                  <Bucket title="Immun (0×)" items={atkCoverage?.immune} />
+                </div>
+              ) : (
+                <div style={{ opacity: 0.75 }}>Wähle mindestens 1 Atk-Typ.</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-                  {defTypes.length > 0 ? (
-                    <div style={{ display: "grid", gap: 12 }}>
-                      <div style={{ opacity: 0.85, fontWeight: 900 }}>
-                        Def: {defTypes.map((t) => TYPE_LABELS_DE[t]).join(" / ")}
-                      </div>
+      {/* ✅ Pause-Menü Overlay */}
+      {open && (
+        <div
+          style={overlay}
+          onClick={() => {
+            setOpen(false);
+            setDexOpen(false);
+            setTypeOpen(false);
+          }}
+        >
+          <div style={panel} onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+              <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: 0.2 }}>Pause-Menü</div>
+              <button
+                style={btnIcon}
+                onClick={() => {
+                  setOpen(false);
+                  setDexOpen(false);
+                  setTypeOpen(false);
+                }}
+                title="Schließen (ESC)"
+              >
+                ✕
+              </button>
+            </div>
 
-                      <Bucket title="4× Schwäche" items={defBuckets?.["4x"]} />
-                      <Bucket title="2× Schwäche" items={defBuckets?.["2x"]} />
-                      <Bucket title="½× Resist" items={defBuckets?.["0.5x"]} />
-                      <Bucket title="¼× Resist" items={defBuckets?.["0.25x"]} />
-                      <Bucket title="Immun (0×)" items={defBuckets?.["0x"]} />
-                    </div>
-                  ) : (
-                    <div style={{ opacity: 0.75 }}>
-                      Wähle mindestens 1 Verteidigungstyp.
-                    </div>
-                  )}
+            {/* Main actions */}
+            <div style={{ display: "grid", gap: 10 }}>
+              <button
+                style={btnBlue}
+                onClick={() => {
+                  setOpen(false);
+                  nav("/");
+                }}
+              >
+                Startbildschirm
+              </button>
+
+              <button
+                style={btnGreen}
+                onClick={() => {
+                  setOpen(false);
+                  nav(lobbyPath);
+                }}
+              >
+                Zur Lobby
+              </button>
+
+              <button style={btnPurple} onClick={() => setDexOpen((v) => !v)}>
+                Dex
+              </button>
+
+              {dexOpen && (
+                <div style={{ display: "grid", gap: 8, paddingLeft: 10 }}>
+                  <button
+                    style={btnGhost}
+                    onClick={() => {
+                      setOpen(false);
+                      setDexOpen(false);
+                      setTypeOpen(false);
+                      nav("/pokedex");
+                    }}
+                  >
+                    Pokédex
+                  </button>
+
+                  <button
+                    style={btnGhost}
+                    onClick={() => {
+                      setOpen(false);
+                      setDexOpen(false);
+                      setTypeOpen(false);
+                      nav("/movedex");
+                    }}
+                  >
+                    MoveDex
+                  </button>
                 </div>
               )}
 
-              {/* ATK MODE */}
-              {typeMode === "atk" && (
-                <div style={{ display: "grid", gap: 10 }}>
-                  <div style={{ fontWeight: 950, opacity: 0.9 }}>
-                    Angriffstypen wählen (mehrere möglich)
-                  </div>
+              {/* Type calculator inside menu */}
+              <button
+                style={btnBlue}
+                onClick={() => {
+                  setTypeOpen((v) => !v);
+                  setDexOpen(false);
+                }}
+              >
+                Typenrechner
+              </button>
 
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {TYPES.map((t) => (
-                      <TypePill
-                        key={t}
-                        t={t}
-                        active={atkTypes.includes(t)}
-                        onClick={() => toggleAtk(t)}
-                      />
-                    ))}
-                  </div>
-
-                  {atkTypes.length > 0 ? (
-                    <div style={{ display: "grid", gap: 12 }}>
-                      <div style={{ opacity: 0.85, fontWeight: 900 }}>
-                        Atk: {atkTypes.map((t) => TYPE_LABELS_DE[t]).join(", ")}
-                      </div>
-
-                      <Bucket title="Coverage: Super effektiv (≥2×)" items={atkCoverage?.super} />
-                      <Bucket title="Neutral (1×)" items={atkCoverage?.neutral} />
-                      <Bucket title="Nicht sehr effektiv (½×/¼×)" items={atkCoverage?.resist} />
-                      <Bucket title="Keine Wirkung (0×)" items={atkCoverage?.immune} />
-
-                      <div style={{ opacity: 0.8, fontSize: 12 }}>
-                        Tipp: Wenn du sehen willst „wo du nichts hast“, schau auf Neutral/Resist/Immune.
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ opacity: 0.75 }}>
-                      Wähle mindestens 1 Angriffstyp.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* TABLE MODE */}
-              {typeMode === "table" && (
-                <div style={{ display: "grid", gap: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-                    <div style={{ fontWeight: 950, opacity: 0.9 }}>Typentabelle</div>
-
+              {typeOpen && (
+                <div style={{ ...subPanel }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button style={typeMode === "def" ? btnTabActive : btnTab} onClick={() => setTypeMode("def")}>
+                      Verteidigung
+                    </button>
+                    <button style={typeMode === "atk" ? btnTabActive : btnTab} onClick={() => setTypeMode("atk")}>
+                      Angriff
+                    </button>
                     <button
                       style={btnTab}
-                      onClick={() => openBigTable()}
-                      title="Groß öffnen"
+                      onClick={() => {
+                        setDefTypes([]);
+                        setAtkTypes([]);
+                      }}
+                      title="Reset"
                     >
-                      Groß öffnen
+                      Reset
+                    </button>
+
+                    <button style={btnTab} onClick={() => setTypeDockOpen((v) => !v)} title="Dock rechts öffnen/schließen">
+                      Dock
                     </button>
                   </div>
 
-                  {/* small table (click to enlarge) */}
-                  <div
-                    className="tm-scroll"
-                    style={{
-                      overflow: "auto",
-                      maxHeight: 360,
-                      borderRadius: 14,
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      cursor: "zoom-in",
-                    }}
-                    onClick={() => openBigTable()}
-                    title="Klicken zum Vergrößern"
-                  >
-                    <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 720 }}>
-                      <thead>
-                        <tr>
-                          <th style={th}>Atk \\ Def</th>
-                          {TYPES.map((d) => (
-                            <th key={d} style={th} title={TYPE_LABELS_DE[d]}>
-                              {TYPE_LABELS_DE[d]}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {TYPES.map((a) => (
-                          <tr key={a}>
-                            <td style={rowHead} title={TYPE_LABELS_DE[a]}>
-                              {TYPE_LABELS_DE[a]}
-                            </td>
-                            {TYPES.map((d) => {
-                              const m = mult(a, d);
-                              return (
-                                <td
-                                  key={d}
-                                  style={td}
-                                  title={`${TYPE_LABELS_DE[a]} vs ${TYPE_LABELS_DE[d]} = ${fmtMult(m)}`}
-                                >
-                                  {fmtMult(m)}
-                                </td>
-                              );
-                            })}
-                          </tr>
+                  {typeMode === "def" && (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <div style={{ fontWeight: 950, opacity: 0.9 }}>Verteidigungstypen wählen (1–2)</div>
+
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {TYPES.map((t) => (
+                          <TypePill key={t} t={t} active={defTypes.includes(t)} onClick={() => toggleDef(t)} />
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      </div>
+
+                      {defTypes.length > 0 ? (
+                        <div style={{ display: "grid", gap: 12 }}>
+                          <Bucket title="4× Schwäche" items={defBuckets?.["4x"]} />
+                          <Bucket title="2× Schwäche" items={defBuckets?.["2x"]} />
+                          <Bucket title="½× Resist" items={defBuckets?.["0.5x"]} />
+                          <Bucket title="¼× Resist" items={defBuckets?.["0.25x"]} />
+                          <Bucket title="Immun (0×)" items={defBuckets?.["0x"]} />
+                        </div>
+                      ) : (
+                        <div style={{ opacity: 0.75 }}>Wähle mindestens 1 Verteidigungstyp.</div>
+                      )}
+                    </div>
+                  )}
+
+                  {typeMode === "atk" && (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <div style={{ fontWeight: 950, opacity: 0.9 }}>Angriffstypen wählen (mehrere möglich)</div>
+
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {TYPES.map((t) => (
+                          <TypePill key={t} t={t} active={atkTypes.includes(t)} onClick={() => toggleAtk(t)} />
+                        ))}
+                      </div>
+
+                      {atkTypes.length > 0 ? (
+                        <div style={{ display: "grid", gap: 12 }}>
+                          <Bucket title="Coverage: Super effektiv (≥2×)" items={atkCoverage?.super} />
+                          <Bucket title="Neutral (1×)" items={atkCoverage?.neutral} />
+                          <Bucket title="Nicht sehr effektiv (½×/¼×)" items={atkCoverage?.resist} />
+                          <Bucket title="Keine Wirkung (0×)" items={atkCoverage?.immune} />
+                        </div>
+                      ) : (
+                        <div style={{ opacity: 0.75 }}>Wähle mindestens 1 Angriffstyp.</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          <button
-            style={btnBlue}
-            onClick={() => {
-              setOpen(false);
-              setDexOpen(false);
-              setTypeOpen(false);
-              setTableZoomOpen(false);
-              nav("/controls");
-            }}
-          >
-            Steuerung
-          </button>
-
-          <button
-            style={btnGhost}
-            onClick={() => {
-              setOpen(false);
-              setDexOpen(false);
-              setTypeOpen(false);
-              setTableZoomOpen(false);
-              smartBack();
-            }}
-          >
-            Zurück
-          </button>
-        </div>
-
-        {/* Audio */}
-        <div style={section}>
-          <div style={sectionTitle}>Audio</div>
-
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button
-              style={audio.muted ? btnMuted : btnOrange}
-              onClick={() => setMuted(!audio.muted)}
-              title="Stumm / Ton an"
-            >
-              {audio.muted ? "Stumm" : "Ton an"}
-            </button>
-
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.85 }}>
-                <span>Lautstärke</span>
-                <span>{volumePct}%</span>
-              </div>
-
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={volumePct}
-                onChange={(e) => setVolumePct(e.target.value)}
-                style={{ width: "100%" }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Draft-only section */}
-        {inDraft && (
-          <div style={section}>
-            <div style={sectionTitle}>Draft</div>
-
-            <button
-              style={btnRed}
-              onClick={() => {
-                setOpen(false);
-                nav(leaveTo);
-              }}
-            >
-              Draft verlassen
-            </button>
-
-            {canRestart && (
               <button
-                style={btnDanger}
+                style={btnBlue}
                 onClick={() => {
                   setOpen(false);
-                  if (typeof restartFn === "function") restartFn();
+                  setDexOpen(false);
+                  setTypeOpen(false);
+                  nav("/controls");
                 }}
-                title="Nur Admin/Host"
               >
-                Draft neu starten (Admin)
+                Steuerung
               </button>
-            )}
-          </div>
-        )}
-      </div>
 
-      {/* ===== BIG TABLE OVERLAY ===== */}
-      {tableZoomOpen && (
-        <div
-          style={bigOverlay}
-          onClick={() => setTableZoomOpen(false)}
-        >
-          <div
-            style={bigPanel}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-              <div style={{ fontSize: 16, fontWeight: 950, opacity: 0.95 }}>
-                Typentabelle (groß) — Zeile/Spalte anklicken zum Markieren
+              <button
+                style={btnGhost}
+                onClick={() => {
+                  setOpen(false);
+                  setDexOpen(false);
+                  setTypeOpen(false);
+                  smartBack();
+                }}
+              >
+                Zurück
+              </button>
+            </div>
+
+            {/* Audio */}
+            <div style={section}>
+              <div style={sectionTitle}>Audio</div>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <button style={audio.muted ? btnMuted : btnOrange} onClick={() => setMuted(!audio.muted)} title="Stumm / Ton an">
+                  {audio.muted ? "Stumm" : "Ton an"}
+                </button>
+
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.85 }}>
+                    <span>Lautstärke</span>
+                    <span>{volumePct}%</span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={volumePct}
+                    onChange={(e) => setVolumePct(e.target.value)}
+                    style={{ width: "100%" }}
+                  />
+                </div>
               </div>
+            </div>
 
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            {/* Draft-only */}
+            {inDraft && (
+              <div style={section}>
+                <div style={sectionTitle}>Draft</div>
+
                 <button
-                  style={btnTab}
+                  style={btnRed}
                   onClick={() => {
-                    setTableSelAtk(null);
-                    setTableSelDef(null);
+                    setOpen(false);
+                    nav(leaveTo);
                   }}
-                  title="Markierung zurücksetzen"
                 >
-                  Markierung reset
+                  Draft verlassen
                 </button>
-                <button
-                  style={btnIcon}
-                  onClick={() => setTableZoomOpen(false)}
-                  title="Schließen (ESC)"
-                >
-                  ✕
-                </button>
+
+                {canRestart && (
+                  <button
+                    style={btnDanger}
+                    onClick={() => {
+                      setOpen(false);
+                      if (typeof restartFn === "function") restartFn();
+                    }}
+                    title="Nur Admin/Host"
+                  >
+                    Draft neu starten (Admin)
+                  </button>
+                )}
               </div>
-            </div>
-
-            <div style={{ opacity: 0.75, fontSize: 12, marginTop: 6 }}>
-              Auswahl: Atk {tableSelAtk ? TYPE_LABELS_DE[tableSelAtk] : "-"} / Def {tableSelDef ? TYPE_LABELS_DE[tableSelDef] : "-"}
-            </div>
-
-            <div
-              className="tm-scroll"
-              style={{
-                marginTop: 10,
-                overflow: "auto",
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.12)",
-                height: "calc(86vh - 120px)",
-                background: "rgba(0,0,0,0.20)",
-              }}
-            >
-              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 980 }}>
-                <thead>
-                  <tr>
-                    <th style={thBig}>Atk \\ Def</th>
-                    {TYPES.map((d) => {
-                      const active = tableSelDef === d;
-                      return (
-                        <th
-                          key={d}
-                          style={headStyleActive(active, thBig)}
-                          title={TYPE_LABELS_DE[d]}
-                          onClick={() => setTableSelDef((prev) => (prev === d ? null : d))}
-                        >
-                          {TYPE_LABELS_DE[d]}
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {TYPES.map((a) => {
-                    const rowActive = tableSelAtk === a;
-                    return (
-                      <tr key={a}>
-                        <td
-                          style={headStyleActive(rowActive, rowHeadBig)}
-                          title={TYPE_LABELS_DE[a]}
-                          onClick={() => setTableSelAtk((prev) => (prev === a ? null : a))}
-                        >
-                          {TYPE_LABELS_DE[a]}
-                        </td>
-
-                        {TYPES.map((d) => {
-                          const m = mult(a, d);
-                          return (
-                            <td
-                              key={d}
-                              style={cellStyle({ a, d })}
-                              title={`${TYPE_LABELS_DE[a]} vs ${TYPE_LABELS_DE[d]} = ${fmtMult(m)}`}
-                              onClick={() => {
-                                setTableSelAtk(a);
-                                setTableSelDef(d);
-                              }}
-                            >
-                              {fmtMult(m)}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            )}
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -1121,48 +1031,19 @@ const btnIcon = {
   fontWeight: 900,
 };
 
-const btnGhost = {
-  ...baseBtn,
-  background: "rgba(255,255,255,0.06)",
-};
-
-const btnBlue = {
-  ...baseBtn,
-  background: "linear-gradient(135deg, rgba(79,172,254,0.35), rgba(0,242,254,0.18))",
-};
-
-const btnGreen = {
-  ...baseBtn,
-  background: "linear-gradient(135deg, rgba(67,233,123,0.30), rgba(56,249,215,0.16))",
-};
-
-const btnPurple = {
-  ...baseBtn,
-  background: "linear-gradient(135deg, rgba(161,140,209,0.32), rgba(251,194,235,0.16))",
-};
-
-const btnOrange = {
-  ...baseBtn,
-  background: "linear-gradient(135deg, rgba(255,183,77,0.30), rgba(255,140,0,0.16))",
-};
-
-const btnMuted = {
-  ...baseBtn,
-  background: "rgba(255,255,255,0.06)",
-};
-
-const btnRed = {
-  ...baseBtn,
-  background: "linear-gradient(135deg, rgba(255,65,108,0.22), rgba(255,75,43,0.12))",
-};
-
+const btnGhost = { ...baseBtn, background: "rgba(255,255,255,0.06)" };
+const btnBlue = { ...baseBtn, background: "linear-gradient(135deg, rgba(79,172,254,0.35), rgba(0,242,254,0.18))" };
+const btnGreen = { ...baseBtn, background: "linear-gradient(135deg, rgba(67,233,123,0.30), rgba(56,249,215,0.16))" };
+const btnPurple = { ...baseBtn, background: "linear-gradient(135deg, rgba(161,140,209,0.32), rgba(251,194,235,0.16))" };
+const btnOrange = { ...baseBtn, background: "linear-gradient(135deg, rgba(255,183,77,0.30), rgba(255,140,0,0.16))" };
+const btnMuted = { ...baseBtn, background: "rgba(255,255,255,0.06)" };
+const btnRed = { ...baseBtn, background: "linear-gradient(135deg, rgba(255,65,108,0.22), rgba(255,75,43,0.12))" };
 const btnDanger = {
   ...baseBtn,
   background: "linear-gradient(135deg, rgba(255,65,108,0.32), rgba(255,75,43,0.18))",
   border: "1px solid rgba(255,120,120,0.28)",
 };
 
-// tabs inside type calculator
 const btnTab = {
   padding: "8px 10px",
   borderRadius: 12,
@@ -1175,93 +1056,44 @@ const btnTab = {
 
 const btnTabActive = {
   ...btnTab,
-  border: "1px solid rgba(255,255,255,0.22)",
-  background: "rgba(255,255,255,0.10)",
+  border: "2px solid rgba(120,220,255,0.85)",
+  background: "linear-gradient(135deg, rgba(120,220,255,0.18), rgba(120,220,255,0.06))",
+  boxShadow: "0 0 0 2px rgba(120,220,255,0.15), 0 10px 26px rgba(120,220,255,0.25)",
 };
 
-// table styles (small)
-const th = {
-  position: "sticky",
-  top: 0,
-  zIndex: 2,
-  background: "rgba(10,10,16,0.92)",
-  borderBottom: "1px solid rgba(255,255,255,0.14)",
-  padding: 8,
-  fontSize: 12,
-  textAlign: "left",
-  whiteSpace: "nowrap",
-};
-
-const rowHead = {
-  position: "sticky",
-  left: 0,
-  zIndex: 1,
-  background: "rgba(10,10,16,0.92)",
-  borderRight: "1px solid rgba(255,255,255,0.10)",
-  borderBottom: "1px solid rgba(255,255,255,0.10)",
-  padding: 8,
-  fontSize: 12,
-  fontWeight: 950,
-  whiteSpace: "nowrap",
-};
-
-const td = {
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
-  padding: 8,
-  fontSize: 12,
-  opacity: 0.95,
-  whiteSpace: "nowrap",
-};
-
-/* ===== big table overlay styles ===== */
-const bigOverlay = {
+/* ✅ Dock styles */
+const dockWrap = {
   position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.66)",
-  backdropFilter: "blur(10px)",
-  zIndex: 100000,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 16,
-};
-
-const bigPanel = {
-  width: "min(1120px, 96vw)",
-  height: "min(86vh, 900px)",
-  borderRadius: 18,
+  right: 14,
+  top: 86,
+  width: "min(520px, 94vw)",
+  height: "calc(93vh - 110px)",
+  maxHeight: "calc(100vh - 110px)",
+  overflow: "auto",
+  borderRadius: 16,
   border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(10,10,16,0.90)",
+  background: "rgba(10,10,16,0.88)",
   boxShadow: "0 30px 90px rgba(0,0,0,0.70)",
-  padding: 14,
+  padding: 12,
   color: "white",
+  zIndex: 99998,
+  backdropFilter: "blur(10px)",
+};
+
+const dockHeader = {
   display: "flex",
-  flexDirection: "column",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 10,
+  marginBottom: 8,
 };
 
-const thBig = {
-  position: "sticky",
-  top: 0,
-  zIndex: 3,
-  background: "rgba(10,10,16,0.95)",
-  borderBottom: "1px solid rgba(255,255,255,0.14)",
-  padding: 10,
-  fontSize: 13,
-  textAlign: "left",
-  whiteSpace: "nowrap",
+const dockClose = {
+  padding: "6px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.06)",
+  color: "white",
   cursor: "pointer",
-};
-
-const rowHeadBig = {
-  position: "sticky",
-  left: 0,
-  zIndex: 2,
-  background: "rgba(10,10,16,0.95)",
-  borderRight: "1px solid rgba(255,255,255,0.10)",
-  borderBottom: "1px solid rgba(255, 255, 255, 0.27)",
-  padding: 10,
-  fontSize: 13,
-  fontWeight: 950,
-  whiteSpace: "nowrap",
-  cursor: "pointer",
+  fontWeight: 900,
 };

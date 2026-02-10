@@ -642,7 +642,7 @@ function EncounterTable() {
                         onClick={() => editSlotName(i)}
                         title="Spaltenname bearbeiten"
                         style={{
-                          padding: "2px 8px",
+                          padding: "2px 4px",
                           borderRadius: 8,
                           fontSize: 12,
                           lineHeight: 1.2,
@@ -882,7 +882,7 @@ const topRightActions = {
 /* Level-Cap */
 const levelCapBanner = (dark) => ({
   margin: "10px auto 14px auto",
-  maxWidth: 520,
+  maxWidth: 300,
   padding: "10px 12px",
   borderRadius: 14,
   textAlign: "center",
@@ -923,7 +923,7 @@ const spriteBtn = {
 /* ✅ Sünden-Zähler Box */
 const sinnerStatsBox = (dark) => ({
   margin: "10px auto 14px auto",
-  maxWidth: 980,
+  maxWidth: 500,
   padding: "12px 14px",
   borderRadius: 16,
   textAlign: "center",

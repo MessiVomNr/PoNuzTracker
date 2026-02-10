@@ -1,10 +1,12 @@
 // src/utils/hotkeys.js
+
 export const HOTKEYS_KEY = "app_hotkeys_v1";
 
 export const DEFAULT_HOTKEYS = {
   general: {
     openPokedex: "E",
     openMoveDex: "A",
+    openTypeCalculator: "Q",
     toggleMute: "M",
     menuToggle: "Esc",
     goHome: "H",
@@ -20,149 +22,260 @@ export const DEFAULT_HOTKEYS = {
     togglePause: "P",
   },
 
-  // NEU: Soullink/Duo-spezifische Hotkeys
   soullink: {
-    goTeam: "",
-    goGuide: "",
+    goTeam: "1",
+    goGuide: "2",
   },
 };
+
+/* =========================================================
+   Helpers: normalize + compare key combos
+========================================================= */
+
+const MOD_ALIASES = {
+  control: "Ctrl",
+  ctrl: "Ctrl",
+  shift: "Shift",
+  alt: "Alt",
+  option: "Alt",
+  meta: "Meta",
+  cmd: "Meta",
+  command: "Meta",
+};
+
+const KEY_ALIASES = {
+  escape: "Esc",
+  esc: "Esc",
+  " ": "Space",
+  space: "Space",
+  spacebar: "Space",
+  backspace: "Backspace",
+  del: "Delete",
+  delete: "Delete",
+  return: "Enter",
+  enter: "Enter",
+  arrowup: "ArrowUp",
+  arrowdown: "ArrowDown",
+  arrowleft: "ArrowLeft",
+  arrowright: "ArrowRight",
+};
+
+function capWord(s) {
+  if (!s) return s;
+  return s.length === 1 ? s.toUpperCase() : s[0].toUpperCase() + s.slice(1);
+}
+
+function normalizeKeyName(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const low = s.toLowerCase();
+
+  if (MOD_ALIASES[low]) return MOD_ALIASES[low];
+  if (KEY_ALIASES[low]) return KEY_ALIASES[low];
+
+  // F1..F24
+  if (/^f\d{1,2}$/i.test(s)) return s.toUpperCase();
+
+  // Arrow keys etc.
+  if (/^arrow(up|down|left|right)$/i.test(s)) return capWord(low);
+
+  // Single letters / digits
+  if (s.length === 1) return s.toUpperCase();
+
+  return capWord(low);
+}
+
+function sortMods(mods) {
+  // feste Reihenfolge
+  const order = { Ctrl: 1, Shift: 2, Alt: 3, Meta: 4 };
+  return mods.slice().sort((a, b) => (order[a] || 99) - (order[b] || 99));
+}
+
+export function normalizeKeyCombo(combo) {
+  const raw = String(combo || "").trim();
+  if (!raw) return "";
+
+  // Unterstützung für "Ctrl+K", "Ctrl + Shift + k", "Backspace"
+  const parts = raw
+    .split("+")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const mods = [];
+  let key = "";
+
+  for (const p of parts) {
+    const n = normalizeKeyName(p);
+    if (!n) continue;
+
+    if (n === "Ctrl" || n === "Shift" || n === "Alt" || n === "Meta") {
+      if (!mods.includes(n)) mods.push(n);
+    } else {
+      key = n; // letzter gewinnt
+    }
+  }
+
+  // Falls nur "Ctrl" eingetragen wurde (kein Key), ist es ungültig
+  if (!key) return "";
+
+  const sorted = sortMods(mods);
+  return [...sorted, key].join("+");
+}
+
+export function normalizeKeyComboFromEvent(e) {
+  if (!e) return "";
+  const mods = [];
+  if (e.ctrlKey) mods.push("Ctrl");
+  if (e.shiftKey) mods.push("Shift");
+  if (e.altKey) mods.push("Alt");
+  if (e.metaKey) mods.push("Meta");
+
+  const keyRaw = e.key;
+
+  // Wenn nur Mod gedrückt wurde: ignorieren
+  const kLow = String(keyRaw || "").toLowerCase();
+  if (kLow === "control" || kLow === "shift" || kLow === "alt" || kLow === "meta") return "";
+
+  const key = normalizeKeyName(keyRaw);
+  if (!key) return "";
+
+  const sorted = sortMods(mods);
+  return [...sorted, key].join("+");
+}
+
+export function comboMatches(e, binding) {
+  const want = normalizeKeyCombo(binding);
+  if (!want) return false;
+
+  const got = normalizeKeyComboFromEvent(e);
+  if (!got) return false;
+
+  return got === want;
+}
+
+/* =========================================================
+   Typing target detection
+========================================================= */
+
+export function isTypingTarget(targetOrEl) {
+  // erlaubt: isTypingTarget(e) oder isTypingTarget(document.activeElement)
+  const el = targetOrEl?.target ? targetOrEl.target : targetOrEl;
+
+  if (!el) return false;
+
+  const tag = String(el.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+
+  // contenteditable
+  if (el.isContentEditable) return true;
+
+  // Role textbox (z.B. manche UI libs)
+  const role = String(el.getAttribute?.("role") || "").toLowerCase();
+  if (role === "textbox" || role === "combobox") return true;
+
+  return false;
+}
+
+/* =========================================================
+   Legacy helper (falls du es noch irgendwo nutzt)
+========================================================= */
+export function matchHotkey(e, hotkey) {
+  // legacy: single-key matching
+  const want = normalizeKeyCombo(hotkey);
+  if (!want) return false;
+
+  // wenn binding nur ein Key ohne Mods ist: vergleichen wir nur e.key normalisiert
+  if (!want.includes("+")) {
+    const key = normalizeKeyName(e?.key);
+    return key === want;
+  }
+
+  return comboMatches(e, want);
+}
+
+/* =========================================================
+   Storage
+========================================================= */
 
 export function loadHotkeys() {
   try {
     const raw = localStorage.getItem(HOTKEYS_KEY);
-    if (!raw) return DEFAULT_HOTKEYS;
+    if (!raw) return structuredClone(DEFAULT_HOTKEYS);
     const parsed = JSON.parse(raw);
-    return mergeDefaults(DEFAULT_HOTKEYS, parsed);
+
+    // merge defaults
+    return {
+      general: { ...DEFAULT_HOTKEYS.general, ...(parsed.general || {}) },
+      draft: { ...DEFAULT_HOTKEYS.draft, ...(parsed.draft || {}) },
+      soullink: { ...DEFAULT_HOTKEYS.soullink, ...(parsed.soullink || {}) },
+    };
   } catch {
-    return DEFAULT_HOTKEYS;
+    return structuredClone(DEFAULT_HOTKEYS);
   }
 }
 
 export function saveHotkeys(next) {
-  localStorage.setItem(HOTKEYS_KEY, JSON.stringify(next));
+  try {
+    localStorage.setItem(HOTKEYS_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
 }
 
-function mergeDefaults(def, v) {
-  if (!v || typeof v !== "object") return def;
-  const out = Array.isArray(def) ? [...def] : { ...def };
-
-  for (const k of Object.keys(def)) {
-    if (def[k] && typeof def[k] === "object" && !Array.isArray(def[k])) {
-      out[k] = mergeDefaults(def[k], v[k]);
-    } else {
-      out[k] = v[k] ?? def[k];
-    }
-  }
-
-  // Keep any extra keys user had
-  for (const k of Object.keys(v)) {
-    if (!(k in out)) out[k] = v[k];
-  }
-
-  return out;
+/* =========================================================
+   UI helpers
+========================================================= */
+export function formatKeyForDisplay(combo) {
+  const c = normalizeKeyCombo(combo);
+  if (!c) return "";
+  return c
+    .replace(/\bCtrl\b/g, "Strg")
+    .replace(/\bShift\b/g, "Shift")
+    .replace(/\bAlt\b/g, "Alt")
+    .replace(/\bMeta\b/g, "Cmd")
+    .replace(/\bBackspace\b/g, "Backspace")
+    .replace(/\bEsc\b/g, "Esc")
+    .replace(/\bSpace\b/g, "Leertaste");
 }
 
-export function flattenHotkeys(hk) {
-  const out = [];
-  const general = hk?.general || {};
-  const draft = hk?.draft || {};
-  const soullink = hk?.soullink || {};
-
-  for (const [k, v] of Object.entries(general)) {
-    if (!v) continue;
-    out.push({ section: "general", key: k, combo: String(v) });
-  }
-  for (const [k, v] of Object.entries(draft)) {
-    if (!v) continue;
-    out.push({ section: "draft", key: k, combo: String(v) });
-  }
-  for (const [k, v] of Object.entries(soullink)) {
-    if (!v) continue;
-    out.push({ section: "soullink", key: k, combo: String(v) });
-  }
-
-  return out;
-}
-
-export function findConflict(hk, nextCombo, where) {
-  // where: { section: "general"|"draft"|"soullink", key: "openMoveDex" ... }
-  const want = String(nextCombo || "").trim().toLowerCase();
-  if (!want) return null;
-
-  const all = flattenHotkeys(hk);
-  return (
-    all.find((x) => {
-      if (x.section === where.section && x.key === where.key) return false;
-      return String(x.combo).trim().toLowerCase() === want;
-    }) || null
-  );
-}
-
-export function labelHotkey(section, key) {
-  const labels = {
+export function labelHotkey(scope, key) {
+  const map = {
     general: {
-      openPokedex: "Dex öffnen",
-      openMoveDex: "MoveDex öffnen",
-      toggleMute: "Mute / Unmute",
-      menuToggle: "Menü öffnen",
-      goHome: "Startbildschirm",
+      openPokedex: "Pokédex öffnen/schließen",
+      openMoveDex: "MoveDex öffnen/schließen",
+      openTypeCalculator: "Typenrechner öffnen/schließen",
+      toggleMute: "Mute umschalten",
+      menuToggle: "Pause-Menü (ESC)",
+      goHome: "Zum Start",
       goLobby: "Zur Lobby",
       goBack: "Zurück",
     },
     draft: {
-      bidSubmit: "Bieten",
-      allIn: "All-in",
+      bidSubmit: "Gebot bestätigen",
+      allIn: "All-In",
       plus100: "+100",
       minus100: "-100",
-      togglePause: "Pause/Fortfahren",
+      togglePause: "Pause (Draft)",
     },
     soullink: {
-      goTeam: "Team öffnen",
-      goGuide: "Story-Guide öffnen",
+      goTeam: "Soullink: Team",
+      goGuide: "Soullink: Guide",
     },
   };
 
-  return labels?.[section]?.[key] || `${section}.${key}`;
+  return map?.[scope]?.[key] || `${scope}.${key}`;
 }
 
-export function isTypingTarget(el) {
-  if (!el) return false;
-  const tag = (el.tagName || "").toUpperCase();
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-  if (el.isContentEditable) return true;
-  return false;
-}
+export function findConflict(hotkeys, scope, key, value) {
+  const v = normalizeKeyCombo(value);
+  if (!v) return null;
 
-export function normalizeKeyComboFromEvent(e) {
-  // Single combo: Ctrl/Alt/Shift + Key
-  // We ignore Meta to keep it simple cross-platform; if you want, we can add it.
-  const parts = [];
-  if (e.ctrlKey) parts.push("Ctrl");
-  if (e.altKey) parts.push("Alt");
-  if (e.shiftKey) parts.push("Shift");
-
-  const k = (e.key || "").trim();
-
-  // Normalize some keys
-  const key =
-    k === " "
-      ? "Space"
-      : k === "Escape"
-      ? "Esc"
-      : k.length === 1
-      ? k.toUpperCase()
-      : k;
-
-  // Disallow modifier-only
-  if (key === "Control" || key === "Shift" || key === "Alt") return "";
-
-  parts.push(key);
-  return parts.join("+");
-}
-
-export function comboMatches(e, combo) {
-  const want = String(combo || "").trim();
-  if (!want) return false;
-  const got = normalizeKeyComboFromEvent(e);
-  return got.toLowerCase() === want.toLowerCase();
+  for (const s of Object.keys(hotkeys || {})) {
+    for (const k of Object.keys(hotkeys?.[s] || {})) {
+      if (s === scope && k === key) continue;
+      const other = normalizeKeyCombo(hotkeys?.[s]?.[k]);
+      if (other && other === v) return { scope: s, key: k };
+    }
+  }
+  return null;
 }

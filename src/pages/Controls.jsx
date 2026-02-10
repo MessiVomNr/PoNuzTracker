@@ -1,142 +1,137 @@
 // src/pages/Controls.jsx
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   DEFAULT_HOTKEYS,
   loadHotkeys,
   saveHotkeys,
   normalizeKeyComboFromEvent,
+  normalizeKeyCombo,
+  isTypingTarget,
   findConflict,
+  formatKeyForDisplay,
   labelHotkey,
 } from "../utils/hotkeys";
 
-function KeyBindInput({ value, onChange }) {
-  const [listening, setListening] = useState(false);
+const card = {
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(0, 0, 0, 0.55)",
+  borderRadius: 14,
+  padding: 14,
+  color: "white",
+};
 
-  useEffect(() => {
-    if (!listening) return;
+const tabRow = { display: "flex", gap: 10, flexWrap: "wrap" };
+const tabBtn = {
+  padding: "8px 10px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.06)",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 900,
+};
+const tabBtnActive = {
+  ...tabBtn,
+  background: "rgba(255,255,255,0.12)",
+  border: "1px solid rgba(255,255,255,0.22)",
+};
 
-    function onKeyDown(e) {
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (e.key === "Escape") {
-        setListening(false);
-        return;
-      }
-
-      const combo = normalizeKeyComboFromEvent(e);
-      if (!combo) return;
-
-      onChange(combo);
-      setListening(false);
-    }
-
-    window.addEventListener("keydown", onKeyDown, { capture: true });
-    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [listening, onChange]);
-
+function Row({ title, value, onChange, conflict }) {
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <input
-        value={value || ""}
-        readOnly
-        placeholder="Klicken & Taste drücken"
-        style={inp}
-        onFocus={() => setListening(true)}
-        onClick={() => setListening(true)}
-      />
-      <button style={btn} onClick={() => onChange("")} title="Bind löschen">
-        Löschen
-      </button>
-    </div>
-  );
-}
-
-function Row({ label, value, onChange, hint }) {
-  return (
-    <div style={row}>
-      <div style={{ display: "grid", gap: 4 }}>
-        <div style={{ fontWeight: 900 }}>{label}</div>
-        {!!hint && <div style={{ fontSize: 12, opacity: 0.75 }}>{hint}</div>}
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 180px", gap: 10, alignItems: "center" }}>
+      <div>
+        <div style={{ fontWeight: 950 }}>{title}</div>
+        {conflict ? (
+          <div style={{ marginTop: 4, fontSize: 12, color: "rgba(255,120,120,0.95)" }}>
+            Konflikt mit: {labelHotkey(conflict.scope, conflict.key)}
+          </div>
+        ) : (
+          <div style={{ marginTop: 4, fontSize: 12, opacity: 0.7 }}> </div>
+        )}
       </div>
-      <KeyBindInput value={value} onChange={onChange} />
+
+      <input
+        value={formatKeyForDisplay(value)}
+        readOnly
+        style={{
+          padding: "10px 12px",
+          borderRadius: 12,
+          border: "1px solid rgba(255,255,255,0.14)",
+          background: "rgba(0,0,0,0.35)",
+          color: "white",
+          fontWeight: 900,
+          outline: "none",
+        }}
+        onKeyDown={(e) => {
+          // Fokus im Input ist hier ok, weil wir aufnehmen wollen
+          e.preventDefault();
+          e.stopPropagation();
+
+          const combo = normalizeKeyComboFromEvent(e);
+          if (!combo) return; // reine Mod-Taste ignorieren
+
+          // Escape kann man über Menü-Toggle binden, aber hier erlauben wir es auch
+          onChange(combo);
+        }}
+      />
     </div>
   );
 }
 
 export default function Controls() {
-  const nav = useNavigate();
   const [hk, setHk] = useState(() => loadHotkeys());
-  const [conflictMsg, setConflictMsg] = useState("");
   const [tab, setTab] = useState("general"); // "general" | "draft" | "soullink"
 
-  function setHotkeyChecked(section, key, combo) {
-    const next = {
-      ...hk,
-      [section]: { ...(hk[section] || {}), [key]: combo },
-    };
-
-    const conflict = findConflict(next, combo, { section, key });
-    if (conflict) {
-      setConflictMsg(`Taste "${combo}" ist bereits belegt für: ${labelHotkey(conflict.section, conflict.key)}`);
-      return;
-    }
-
-    setConflictMsg("");
-    setHk(next);
-  }
-
   useEffect(() => {
-    function onEsc(e) {
-      if (e.key !== "Escape") return;
-      nav(-1);
-    }
-
-    window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
-  }, [nav]);
-
-  useEffect(() => saveHotkeys(hk), [hk]);
+    // wenn jemand in anderen Tabs speichert: hier neu lesen
+    setHk(loadHotkeys());
+  }, []);
 
   const general = hk.general || DEFAULT_HOTKEYS.general;
   const draft = hk.draft || DEFAULT_HOTKEYS.draft;
   const soullink = hk.soullink || DEFAULT_HOTKEYS.soullink;
 
+  function setHotkeyChecked(scope, key, value) {
+    const v = normalizeKeyCombo(value);
+    const next = {
+      ...hk,
+      [scope]: { ...(hk[scope] || {}), [key]: v },
+    };
+    setHk(next);
+    saveHotkeys(next);
+  }
+
+  const conflicts = useMemo(() => {
+    const out = {};
+    for (const scope of Object.keys(hk || {})) {
+      for (const key of Object.keys(hk?.[scope] || {})) {
+        const val = hk?.[scope]?.[key];
+        const c = findConflict(hk, scope, key, val);
+        if (c) out[`${scope}.${key}`] = c;
+      }
+    }
+    return out;
+  }, [hk]);
+
+  // Optional: globaler Keydown-Blocker, damit man beim Tippen nicht versehentlich navigiert
+  useEffect(() => {
+    function stopIfTyping(e) {
+      if (!isTypingTarget(e)) return;
+      // nichts
+    }
+    window.addEventListener("keydown", stopIfTyping, { capture: true });
+    return () => window.removeEventListener("keydown", stopIfTyping, { capture: true });
+  }, []);
+
   return (
-    <div style={wrap}>
-      <div style={card}>
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 950 }}>Steuerung</div>
-
-            {conflictMsg && (
-              <div
-                style={{
-                  marginTop: 10,
-                  padding: 10,
-                  borderRadius: 12,
-                  border: "1px solid rgba(255,120,120,0.4)",
-                  background: "rgba(255,65,108,0.18)",
-                }}
-              >
-                {conflictMsg}
-              </div>
-            )}
-
-            <div style={{ opacity: 0.8, marginTop: 6 }}>
-              Hotkeys gelten nur, wenn du <b>nicht</b> in einem Textfeld bist.
-            </div>
-          </div>
-
-          <button style={btn} onClick={() => nav(-1)}>
-            Zurück
-          </button>
+    <div style={{ padding: 16, maxWidth: 980, margin: "0 auto" }}>
+      <div style={{ ...card }}>
+        <div style={{ fontSize: 20, fontWeight: 950 }}>Steuerung</div>
+        <div style={{ marginTop: 6, opacity: 0.8, fontSize: 13 }}>
+          Klicke ins Feld und drücke die gewünschte Tastenkombi (z.B. Strg+K). Nochmal überschreibt.
         </div>
 
-        {/* Tabs */}
-        <div style={tabsRow}>
+        <div style={{ marginTop: 14, ...tabRow }}>
           <button style={tab === "general" ? tabBtnActive : tabBtn} onClick={() => setTab("general")}>
             Allgemein
           </button>
@@ -146,220 +141,107 @@ export default function Controls() {
           <button style={tab === "soullink" ? tabBtnActive : tabBtn} onClick={() => setTab("soullink")}>
             Soullink
           </button>
-
-          <div style={{ flex: 1 }} />
-
-          <button
-            style={btnDangerSmall}
-            onClick={() => {
-              setHk(DEFAULT_HOTKEYS);
-              saveHotkeys(DEFAULT_HOTKEYS);
-              setConflictMsg("");
-            }}
-            title="Auf Standard zurücksetzen"
-          >
-            Reset
-          </button>
-        </div>
-
-        {/* Content */}
-        {tab === "general" && (
-          <div style={section}>
-            <div style={h2}>Allgemein</div>
-
-            <Row
-              label="Pokédex öffnen"
-              value={general.openPokedex}
-              onChange={(v) => setHotkeyChecked("general", "openPokedex", v)}
-            />
-
-            <Row
-              label="MoveDex öffnen"
-              value={general.openMoveDex}
-              onChange={(v) => setHotkeyChecked("general", "openMoveDex", v)}
-            />
-
-            <Row
-              label="Menü öffnen/schließen"
-              value={general.menuToggle}
-              onChange={(v) => setHotkeyChecked("general", "menuToggle", v)}
-            />
-
-            <Row
-              label="Startbildschirm"
-              value={general.goHome}
-              onChange={(v) => setHotkeyChecked("general", "goHome", v)}
-            />
-
-            <Row
-              label="Zur Lobby"
-              value={general.goLobby}
-              onChange={(v) => setHotkeyChecked("general", "goLobby", v)}
-            />
-
-            <Row
-              label="Zurück (1 Schritt)"
-              value={general.goBack}
-              onChange={(v) => setHotkeyChecked("general", "goBack", v)}
-            />
-
-            <Row
-              label="Mute / Unmute"
-              value={general.toggleMute}
-              onChange={(v) => setHotkeyChecked("general", "toggleMute", v)}
-            />
-          </div>
-        )}
-
-        {tab === "draft" && (
-          <div style={section}>
-            <div style={h2}>Draft</div>
-
-            <Row
-              label="Bieten / Submit"
-              value={draft.bidSubmit}
-              onChange={(v) => setHotkeyChecked("draft", "bidSubmit", v)}
-            />
-
-            <Row
-              label="All-in"
-              value={draft.allIn}
-              onChange={(v) => setHotkeyChecked("draft", "allIn", v)}
-            />
-
-            <Row
-              label="+100"
-              value={draft.plus100}
-              onChange={(v) => setHotkeyChecked("draft", "plus100", v)}
-            />
-
-            <Row
-              label="-100"
-              value={draft.minus100}
-              onChange={(v) => setHotkeyChecked("draft", "minus100", v)}
-            />
-
-            <Row
-              label="Pause/Fortfahren"
-              value={draft.togglePause}
-              onChange={(v) => setHotkeyChecked("draft", "togglePause", v)}
-            />
-          </div>
-        )}
-
-        {tab === "soullink" && (
-          <div style={section}>
-            <div style={h2}>Soullink</div>
-
-            <Row
-              label="Team öffnen"
-              value={soullink.goTeam}
-              onChange={(v) => setHotkeyChecked("soullink", "goTeam", v)}
-            />
-
-            <Row
-              label="Story-Guide öffnen"
-              value={soullink.goGuide}
-              onChange={(v) => setHotkeyChecked("soullink", "goGuide", v)}
-            />
-          </div>
-        )}
-
-        {/* Footer hint */}
-        <div style={{ marginTop: 12, opacity: 0.7, fontSize: 12 }}>
-          Tipp: Klicke ins Feld und drücke die gewünschte Taste/Kombination.
         </div>
       </div>
+
+      {tab === "general" && (
+        <div style={{ ...card, marginTop: 12, display: "grid", gap: 12 }}>
+          <Row
+            title={labelHotkey("general", "openPokedex")}
+            value={general.openPokedex}
+            conflict={conflicts["general.openPokedex"]}
+            onChange={(v) => setHotkeyChecked("general", "openPokedex", v)}
+          />
+          <Row
+            title={labelHotkey("general", "openMoveDex")}
+            value={general.openMoveDex}
+            conflict={conflicts["general.openMoveDex"]}
+            onChange={(v) => setHotkeyChecked("general", "openMoveDex", v)}
+          />
+          <Row
+            title={labelHotkey("general", "openTypeCalculator")}
+            value={general.openTypeCalculator}
+            conflict={conflicts["general.openTypeCalculator"]}
+            onChange={(v) => setHotkeyChecked("general", "openTypeCalculator", v)}
+          />
+          <Row
+            title={labelHotkey("general", "toggleMute")}
+            value={general.toggleMute}
+            conflict={conflicts["general.toggleMute"]}
+            onChange={(v) => setHotkeyChecked("general", "toggleMute", v)}
+          />
+          <Row
+            title={labelHotkey("general", "goHome")}
+            value={general.goHome}
+            conflict={conflicts["general.goHome"]}
+            onChange={(v) => setHotkeyChecked("general", "goHome", v)}
+          />
+          <Row
+            title={labelHotkey("general", "goLobby")}
+            value={general.goLobby}
+            conflict={conflicts["general.goLobby"]}
+            onChange={(v) => setHotkeyChecked("general", "goLobby", v)}
+          />
+          <Row
+            title={labelHotkey("general", "goBack")}
+            value={general.goBack}
+            conflict={conflicts["general.goBack"]}
+            onChange={(v) => setHotkeyChecked("general", "goBack", v)}
+          />
+        </div>
+      )}
+
+      {tab === "draft" && (
+        <div style={{ ...card, marginTop: 12, display: "grid", gap: 12 }}>
+          <Row
+            title={labelHotkey("draft", "bidSubmit")}
+            value={draft.bidSubmit}
+            conflict={conflicts["draft.bidSubmit"]}
+            onChange={(v) => setHotkeyChecked("draft", "bidSubmit", v)}
+          />
+          <Row
+            title={labelHotkey("draft", "allIn")}
+            value={draft.allIn}
+            conflict={conflicts["draft.allIn"]}
+            onChange={(v) => setHotkeyChecked("draft", "allIn", v)}
+          />
+          <Row
+            title={labelHotkey("draft", "plus100")}
+            value={draft.plus100}
+            conflict={conflicts["draft.plus100"]}
+            onChange={(v) => setHotkeyChecked("draft", "plus100", v)}
+          />
+          <Row
+            title={labelHotkey("draft", "minus100")}
+            value={draft.minus100}
+            conflict={conflicts["draft.minus100"]}
+            onChange={(v) => setHotkeyChecked("draft", "minus100", v)}
+          />
+          <Row
+            title={labelHotkey("draft", "togglePause")}
+            value={draft.togglePause}
+            conflict={conflicts["draft.togglePause"]}
+            onChange={(v) => setHotkeyChecked("draft", "togglePause", v)}
+          />
+        </div>
+      )}
+
+      {tab === "soullink" && (
+        <div style={{ ...card, marginTop: 12, display: "grid", gap: 12 }}>
+          <Row
+            title={labelHotkey("soullink", "goTeam")}
+            value={soullink.goTeam}
+            conflict={conflicts["soullink.goTeam"]}
+            onChange={(v) => setHotkeyChecked("soullink", "goTeam", v)}
+          />
+          <Row
+            title={labelHotkey("soullink", "goGuide")}
+            value={soullink.goGuide}
+            conflict={conflicts["soullink.goGuide"]}
+            onChange={(v) => setHotkeyChecked("soullink", "goGuide", v)}
+          />
+        </div>
+      )}
     </div>
   );
 }
-
-/* =========================
-   Styles
-========================= */
-const wrap = { minHeight: "100vh", padding: 16, color: "white" };
-
-const card = {
-  maxWidth: 900,
-  margin: "0 auto",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(10,10,16,0.82)",
-  boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
-  padding: 16,
-};
-
-const tabsRow = {
-  marginTop: 14,
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  flexWrap: "wrap",
-  paddingTop: 12,
-  borderTop: "1px solid rgba(255,255,255,0.12)",
-};
-
-const tabBtn = {
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
-  fontWeight: 950,
-  cursor: "pointer",
-};
-
-const tabBtnActive = {
-  ...tabBtn,
-  border: "1px solid rgba(255,255,255,0.26)",
-  background: "linear-gradient(135deg, rgba(79,172,254,0.28), rgba(0,242,254,0.14))",
-};
-
-const section = {
-  marginTop: 14,
-  paddingTop: 12,
-  display: "grid",
-  gap: 10,
-};
-
-const h2 = { fontWeight: 950, opacity: 0.9 };
-
-const row = {
-  display: "grid",
-  gap: 8,
-  padding: 10,
-  borderRadius: 14,
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.12)",
-};
-
-const inp = {
-  flex: 1,
-  minWidth: 240,
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(10,10,16,0.7)",
-  color: "white",
-  fontWeight: 900,
-};
-
-const btn = {
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.08)",
-  color: "white",
-  fontWeight: 900,
-  cursor: "pointer",
-};
-
-const btnDangerSmall = {
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,120,120,0.28)",
-  background: "linear-gradient(135deg, rgba(255,65,108,0.32), rgba(255,75,43,0.18))",
-  color: "white",
-  fontWeight: 950,
-  cursor: "pointer",
-};
