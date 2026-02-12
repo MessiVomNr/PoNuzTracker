@@ -20,6 +20,9 @@ const moveNameCache = new Map(); // legacy: moveUrl -> germanName
 const moveInfoCache = new Map(); // moveUrl -> { nameDe, typeKey }
 const speciesNameDeCache = new Map(); // speciesId -> germanName
 
+// ✅ NEU: Ability Cache
+const abilityInfoCache = new Map(); // abilityUrl -> { nameDe, effectDe, isHidden }
+
 function getLocalizedName(namesArr, lang = "de") {
   const arr = Array.isArray(namesArr) ? namesArr : [];
   const hit = arr.find((n) => n?.language?.name === lang);
@@ -102,6 +105,110 @@ async function fetchTypeNameDe(typeUrl) {
     const json = await res.json();
     const de = getLocalizedName(json?.names, "de");
     return de || cap(json?.name);
+  } catch {
+    return null;
+  }
+}
+
+// ✅ NEU: Ability Info (DE Name + DE Effect, Fallback EN)
+function looksTooEnglish(s) {
+  const t = String(s || "").toLowerCase();
+  if (!t) return false;
+  // grober Heuristik-Check: wenn diese Tokens vorkommen, ist es oft "halb-englisch"
+  const bad = ["weather", "water", "attack", "defense", "special", "speed", "hp", "chance", "switch", "move"];
+  let hits = 0;
+  for (const w of bad) if (t.includes(w)) hits++;
+  return hits >= 2; // ab 2 Treffern lieber anderen Text nehmen
+}
+
+function normalizeGermanText(s) {
+  let t = String(s || "")
+    .replace(/\s+/g, " ")
+    .replace(/\f/g, " ")
+    .trim();
+
+  // PokeAPI Flavor Text hat gern komische Zeilenumbrüche / Steuerzeichen
+  t = t.replace(/[\u0000-\u001F]+/g, " ").replace(/\s+/g, " ").trim();
+
+  // Mini-Glossar: häufige "englische Reste" in DE-Texten
+  const repl = [
+    [/\bweather\b/gi, "Wetter"],
+    [/\bwater\b/gi, "Wasser"],
+    [/\bfire\b/gi, "Feuer"],
+    [/\bgrass\b/gi, "Pflanze"],
+    [/\belectric\b/gi, "Elektro"],
+    [/\bice\b/gi, "Eis"],
+    [/\bfighting\b/gi, "Kampf"],
+    [/\bpoison\b/gi, "Gift"],
+    [/\bground\b/gi, "Boden"],
+    [/\bflying\b/gi, "Flug"],
+    [/\bpsychic\b/gi, "Psycho"],
+    [/\bbug\b/gi, "Käfer"],
+    [/\brock\b/gi, "Gestein"],
+    [/\bghost\b/gi, "Geist"],
+    [/\bdragon\b/gi, "Drache"],
+    [/\bdark\b/gi, "Unlicht"],
+    [/\bsteel\b/gi, "Stahl"],
+    [/\bfairy\b/gi, "Fee"],
+
+    [/\bHP\b/g, "KP"],
+    [/\battack\b/gi, "Angriff"],
+    [/\bdefense\b/gi, "Verteidigung"],
+    [/\bspecial attack\b/gi, "Spezial-Angriff"],
+    [/\bspecial defense\b/gi, "Spezial-Verteidigung"],
+    [/\bspeed\b/gi, "Initiative"],
+    [/\bmove(s)?\b/gi, "Attacke$1"],
+  ];
+
+  for (const [rgx, to] of repl) t = t.replace(rgx, to);
+
+  return t;
+}
+
+function pickAbilityEffect(abilityJson) {
+  const eff = Array.isArray(abilityJson?.effect_entries) ? abilityJson.effect_entries : [];
+  const flavors = Array.isArray(abilityJson?.flavor_text_entries) ? abilityJson.flavor_text_entries : [];
+
+  const deShort = eff.find((e) => e?.language?.name === "de")?.short_effect || "";
+  const enShort = eff.find((e) => e?.language?.name === "en")?.short_effect || "";
+
+  const deFlavor = flavors.find((e) => e?.language?.name === "de")?.flavor_text || "";
+  const enFlavor = flavors.find((e) => e?.language?.name === "en")?.flavor_text || "";
+
+  // Priorität:
+  // 1) DE short_effect, wenn nicht "zu englisch"
+  // 2) DE flavor_text (oft natürlicher)
+  // 3) EN short_effect
+  // 4) EN flavor_text
+  let chosen = deShort && !looksTooEnglish(deShort) ? deShort : "";
+  if (!chosen) chosen = deFlavor || "";
+  if (!chosen) chosen = enShort || "";
+  if (!chosen) chosen = enFlavor || "";
+
+  return normalizeGermanText(chosen);
+}
+
+
+async function fetchAbilityInfoDe(abilityUrl, isHidden) {
+  if (!abilityUrl) return null;
+
+  // Cache-Key muss isHidden NICHT enthalten, weil Name/Effect gleich bleiben
+  if (abilityInfoCache.has(abilityUrl)) {
+    const cached = abilityInfoCache.get(abilityUrl);
+    return { ...cached, isHidden: !!isHidden };
+  }
+
+  try {
+    const res = await fetch(abilityUrl);
+    if (!res.ok) return null;
+    const json = await res.json();
+
+    const nameDe = getLocalizedName(json?.names, "de") || cap(json?.name);
+    const effectDe = pickAbilityEffect(json);
+
+    const packed = { nameDe, effectDe, isHidden: !!isHidden };
+    abilityInfoCache.set(abilityUrl, packed);
+    return packed;
   } catch {
     return null;
   }
@@ -266,7 +373,19 @@ function timerBallMult(gen, turnsPassed) {
   const t = Math.max(0, Math.floor(Number(turnsPassed) || 0));
   if (gen <= 4) return Math.min(4, 1 + t / 10);
 
-  const table = [1, 5325 / 4096, 6554 / 4096, 7783 / 4096, 9012 / 4096, 10241 / 4096, 11470 / 4096, 12699 / 4096, 13928 / 4096, 15157 / 4096, 4];
+  const table = [
+    1,
+    5325 / 4096,
+    6554 / 4096,
+    7783 / 4096,
+    9012 / 4096,
+    10241 / 4096,
+    11470 / 4096,
+    12699 / 4096,
+    13928 / 4096,
+    15157 / 4096,
+    4,
+  ];
   return t >= 10 ? 4 : table[t] || 1;
 }
 
@@ -449,6 +568,10 @@ export default function PokemonInfo() {
   // ✅ Typ-Matchups
   const [matchups, setMatchups] = useState(null);
 
+  // ✅ NEU: Abilities
+  // abilityUrl -> { nameDe, effectDe, isHidden }
+  const [abilityInfoByUrl, setAbilityInfoByUrl] = useState({});
+
   // ✅ Background/Body darf NICHT scrollen
   useEffect(() => {
     const prevHtml = document.documentElement.style.overflow;
@@ -540,6 +663,48 @@ export default function PokemonInfo() {
       alive = false;
     };
   }, [pokemon]);
+
+  // ✅ NEU: Abilities laden (Name DE + Effekt)
+  useEffect(() => {
+    let alive = true;
+
+    async function run() {
+      const ab = Array.isArray(pokemon?.abilities) ? pokemon.abilities : [];
+      const sorted = ab.slice().sort((a, b) => (a?.slot ?? 0) - (b?.slot ?? 0));
+
+      const urls = sorted
+        .map((a) => ({
+          url: a?.ability?.url,
+          isHidden: !!a?.is_hidden,
+        }))
+        .filter((x) => !!x.url);
+
+      if (urls.length === 0) return;
+
+      const missing = urls.filter((x) => !abilityInfoByUrl[x.url]);
+      if (missing.length === 0) return;
+
+      const pairs = await mapInBatches(missing, 8, async (x) => {
+        const info = await fetchAbilityInfoDe(x.url, x.isHidden);
+        return [x.url, info];
+      });
+
+      if (!alive) return;
+
+      setAbilityInfoByUrl((prev) => {
+        const next = { ...prev };
+        for (const [u, info] of pairs) {
+          if (info) next[u] = info;
+        }
+        return next;
+      });
+    }
+
+    if (pokemon) run();
+    return () => {
+      alive = false;
+    };
+  }, [pokemon, abilityInfoByUrl]);
 
   // ✅ Typ-Matchups
   useEffect(() => {
@@ -894,35 +1059,11 @@ export default function PokemonInfo() {
     padding: 14,
   };
 
-  const row = { display: "flex", gap: 16, flexWrap: "wrap" };
-
-  const btn = {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.25)",
-    color: "white",
-    cursor: "pointer",
-  };
-
-  // ✅ NEU: 2-Spalten-Layout (links Content, rechts Sidebar mit Moves + Entwicklung)
-  const contentGrid = {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 360px",
-    gap: 12,
-    alignItems: "start",
-    marginTop: 12,
-  };
-
-  const sidebarStack = {
-    display: "grid",
-    gap: 12,
-    alignContent: "start",
-  };
-
-  const stickySidebar = {
-    position: "sticky",
-    top: 12,
+  const hideBox = {
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(0,0,0,0.35)",
+    borderRadius: 14,
+    padding: 12,
   };
 
   return (
@@ -996,657 +1137,714 @@ export default function PokemonInfo() {
           <div style={{ marginTop: 12, ...card, borderColor: "rgba(255,80,80,0.35)" }}>{err}</div>
         )}
 
-       {!loading && !err && pokemon && species && (
-  <div
-    style={{
-  ...card,
-  marginTop: 12,
-  padding: 22,                // vorher 16
-  borderRadius: 18,
-  background: "rgba(0,0,0,0.68)",
-  border: "1px solid rgba(255,255,255,0.14)",
-  boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
-  backdropFilter: "blur(6px)",
-  width: "min(1400px, 96vw)", // NEU: macht die Box groß
-  marginLeft: "auto",
-  marginRight: "auto",
-}}
-
-  >
-    {/* ===== 3-Spalten Master-Layout (alles in EINER schwarzen Box) ===== */}
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(360px, 1fr) minmax(360px, 1fr) minmax(420px, 1fr)",
-        gap: 14,
-        alignItems: "start",
-      }}
-    >
-      {/* ================= LEFT: POKEMON + STATS ================= */}
-      <div style={{ minWidth: 0 }}>
-        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ width: 170 }}>
-            {compactSprite(pokemon) ? (
-              <img
-                src={compactSprite(pokemon)}
-                alt={pokemon?.name || "pokemon"}
-                style={{ width: 170, height: 170, objectFit: "contain" }}
-              />
-            ) : (
-              <div style={{ width: 170, height: 170, opacity: 0.6 }}>Kein Bild</div>
-            )}
-          </div>
-
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <div style={{ fontSize: 22, fontWeight: 900 }}>
-              {getLocalizedName(species?.names, "de") || cap(pokemon?.name)}{" "}
-              <span style={{ opacity: 0.6, fontWeight: 700 }}>#{id}</span>
-            </div>
-
-            {/* Types */}
-            {typeKeys.length > 0 && (
-              <div style={{ ...typeIconRow, justifyContent: "flex-start" }}>
-                {typeKeys.map((t) => (
-                  <img
-                    key={t}
-                    src={`https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t}.svg`}
-                    alt={t}
-                    title={TYPE_LABELS_DE[t] ?? t}
-                    style={{ ...typeIcon, width: 26, height: 26 }}
-                    onError={(e) => {
-                      e.currentTarget.src = `https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/${t}.svg`;
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Catchrate + Rechner */}
+        {!loading && !err && pokemon && species && (
+          <div
+            style={{
+              ...card,
+              marginTop: 12,
+              padding: 22,
+              borderRadius: 18,
+              background: "rgba(0,0,0,0.68)",
+              border: "1px solid rgba(255,255,255,0.14)",
+              boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
+              backdropFilter: "blur(6px)",
+              width: "min(1400px, 96vw)",
+              marginLeft: "auto",
+              marginRight: "auto",
+            }}
+          >
+            {/* ===== 3-Spalten Master-Layout (alles in EINER schwarzen Box) ===== */}
             <div
               style={{
-                marginTop: 10,
-                opacity: 0.92,
-                display: "flex",
-                gap: 10,
-                alignItems: "center",
-                flexWrap: "wrap",
+                display: "grid",
+                gridTemplateColumns: "minmax(360px, 1fr) minmax(360px, 1fr) minmax(420px, 1fr)",
+                gap: 14,
+                alignItems: "start",
               }}
             >
-              <div>
-                {basePokeballChance !== null ? <>Fangchance: {basePokeballChance}%</> : <>Catchrate: {catchRate ?? "-"}</>}
-              </div>
+              {/* ================= LEFT: POKEMON + STATS ================= */}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+                  <div style={{ width: 170 }}>
+                    {compactSprite(pokemon) ? (
+                      <img
+                        src={compactSprite(pokemon)}
+                        alt={pokemon?.name || "pokemon"}
+                        style={{ width: 170, height: 170, objectFit: "contain" }}
+                      />
+                    ) : (
+                      <div style={{ width: 170, height: 170, opacity: 0.6 }}>Kein Bild</div>
+                    )}
+                  </div>
 
-              <button
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(255,255,255,0.14)",
-                  background: "rgba(255,255,255,0.06)",
-                  color: "white",
-                  cursor: "pointer",
-                  fontWeight: 900,
-                }}
-                onClick={() => setShowCatchCalc(true)}
-              >
-                Rechner öffnen
-              </button>
-            </div>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <div style={{ fontSize: 22, fontWeight: 900 }}>
+                      {getLocalizedName(species?.names, "de") || cap(pokemon?.name)}{" "}
+                      <span style={{ opacity: 0.6, fontWeight: 700 }}>#{id}</span>
+                    </div>
 
-            {/* Gen */}
-            <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ opacity: 0.9, fontWeight: 800 }}>Gen:</div>
-              <select
-                value={selectedGen}
-                onChange={(e) => setSelectedGen(Number(e.target.value))}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(255,255,255,0.14)",
-                  background: "rgba(20,20,20,0.95)",
-                  color: "white",
-                  cursor: "pointer",
-                  outline: "none",
-                  appearance: "none",
-                  fontWeight: 900,
-                }}
-              >
-                {availableGens.map((g) => (
-                  <option key={g} value={g} style={{ background: "#1a1a1a", color: "white" }}>
-                    Gen {g}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Level Simulation */}
-            <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ opacity: 0.9, fontWeight: 800 }}>Level:</div>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={simLevel}
-                onChange={(e) => setSimLevel(e.target.value)}
-                disabled={!useSimulation}
-                style={{
-                  width: 74,
-                  padding: 6,
-                  borderRadius: 8,
-                  background: "rgba(0,0,0,0.3)",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  color: "white",
-                  opacity: useSimulation ? 1 : 0.5,
-                  fontWeight: 900,
-                }}
-              />
-              <button
-                onClick={() => setUseSimulation((v) => !v)}
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(255,255,255,0.14)",
-                  background: useSimulation ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.06)",
-                  color: "white",
-                  cursor: "pointer",
-                  fontWeight: 900,
-                }}
-                title="Umschalten zwischen Basisdaten und Level-Simulation"
-              >
-                {useSimulation ? "Basis anzeigen" : "Levelwerte anzeigen"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
-          {Object.entries(activeStats).map(([k, v]) => (
-            <div
-              key={k}
-              style={{
-                border: "1px solid rgba(255,255,255,0.10)",
-                background: "rgba(0,0,0,0.35)",
-                borderRadius: 14,
-                padding: 10,
-              }}
-            >
-              <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>{k}</div>
-              <div style={{ fontSize: 18, fontWeight: 950 }}>{v}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ================= MID: MATCHUPS ================= */}
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 950, fontSize: 14, marginBottom: 10 }}>Typ-Matchups</div>
-
-        {(() => {
-          // --- Typen Reihenfolge & Chart (Gen 6/7 komplett) ---
-          const ALL_TYPES = [
-            "normal",
-            "fire",
-            "water",
-            "electric",
-            "grass",
-            "ice",
-            "fighting",
-            "poison",
-            "ground",
-            "flying",
-            "psychic",
-            "bug",
-            "rock",
-            "ghost",
-            "dragon",
-            "dark",
-            "steel",
-            "fairy",
-          ];
-
-          // attackType -> { defendType: multiplier }
-          const CHART = {
-            normal: { rock: 0.5, ghost: 0, steel: 0.5 },
-            fire: { fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 },
-            water: { fire: 2, water: 0.5, grass: 0.5, ground: 2, rock: 2, dragon: 0.5 },
-            electric: { water: 2, electric: 0.5, grass: 0.5, ground: 0, flying: 2, dragon: 0.5 },
-            grass: { fire: 0.5, water: 2, grass: 0.5, poison: 0.5, ground: 2, flying: 0.5, bug: 0.5, rock: 2, dragon: 0.5, steel: 0.5 },
-            ice: { fire: 0.5, water: 0.5, grass: 2, ground: 2, flying: 2, dragon: 2, steel: 0.5, ice: 0.5 },
-            fighting: { normal: 2, ice: 2, rock: 2, dark: 2, steel: 2, poison: 0.5, flying: 0.5, psychic: 0.5, bug: 0.5, fairy: 0.5, ghost: 0 },
-            poison: { grass: 2, fairy: 2, poison: 0.5, ground: 0.5, rock: 0.5, ghost: 0.5, steel: 0 },
-            ground: { fire: 2, electric: 2, grass: 0.5, poison: 2, flying: 0, bug: 0.5, rock: 2, steel: 2 },
-            flying: { grass: 2, fighting: 2, bug: 2, electric: 0.5, rock: 0.5, steel: 0.5 },
-            psychic: { fighting: 2, poison: 2, psychic: 0.5, steel: 0.5, dark: 0 },
-            bug: { grass: 2, psychic: 2, dark: 2, fire: 0.5, fighting: 0.5, poison: 0.5, flying: 0.5, ghost: 0.5, steel: 0.5, fairy: 0.5 },
-            rock: { fire: 2, ice: 2, flying: 2, bug: 2, fighting: 0.5, ground: 0.5, steel: 0.5 },
-            ghost: { psychic: 2, ghost: 2, dark: 0.5, normal: 0 },
-            dragon: { dragon: 2, steel: 0.5, fairy: 0 },
-            dark: { psychic: 2, ghost: 2, fighting: 0.5, dark: 0.5, fairy: 0.5 },
-            steel: { ice: 2, rock: 2, fairy: 2, fire: 0.5, water: 0.5, electric: 0.5, steel: 0.5 },
-            fairy: { fighting: 2, dragon: 2, dark: 2, fire: 0.5, poison: 0.5, steel: 0.5 },
-          };
-
-          const defenders = (typeKeys || []).slice(0, 2);
-
-          function getMult(attType, defType) {
-            const row = CHART[attType] || {};
-            const v = row[defType];
-            return Number.isFinite(v) ? v : 1;
-          }
-
-          const byMult = { 4: [], 2: [], 0.5: [], 0.25: [], 0: [] };
-
-          for (const atk of ALL_TYPES) {
-            let mult = 1;
-            for (const def of defenders) mult *= getMult(atk, def);
-            // clamp to typical set
-            if (mult === 4) byMult[4].push(atk);
-            else if (mult === 2) byMult[2].push(atk);
-            else if (mult === 0.5) byMult[0.5].push(atk);
-            else if (mult === 0.25) byMult[0.25].push(atk);
-            else if (mult === 0) byMult[0].push(atk);
-          }
-
-          const rows = [
-            ["Starke Schwäche (×4)", byMult[4]],
-            ["Schwäche (×2)", byMult[2]],
-            ["Resistenz (×½)", byMult[0.5]],
-            ["Starke Resistenz (×¼)", byMult[0.25]],
-            ["Immunitäten", byMult[0]],
-          ];
-
-          return (
-            <div style={{ display: "grid", gap: 12 }}>
-              {rows.map(([label, arr]) => (
-                <div key={label}>
-                  <div style={{ opacity: 0.9, fontWeight: 900, marginBottom: 6 }}>{label}</div>
-                  {arr.length === 0 ? (
-                    <div style={{ opacity: 0.55, fontSize: 12 }}>—</div>
-                  ) : (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {arr.map((t) => (
-                        <div
-                          key={t}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "6px 10px",
-                            borderRadius: 999,
-                            border: "1px solid rgba(255,255,255,0.14)",
-                            background: "rgba(255,255,255,0.06)",
-                            fontWeight: 900,
-                          }}
-                        >
+                    {/* Types */}
+                    {typeKeys.length > 0 && (
+                      <div style={{ ...typeIconRow, justifyContent: "flex-start" }}>
+                        {typeKeys.map((t) => (
                           <img
+                            key={t}
                             src={`https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t}.svg`}
                             alt={t}
                             title={TYPE_LABELS_DE[t] ?? t}
-                            style={{ ...typeIcon, width: 20, height: 20, padding: 2 }}
+                            style={{ ...typeIcon, width: 26, height: 26 }}
                             onError={(e) => {
                               e.currentTarget.src = `https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/${t}.svg`;
                             }}
                           />
-                          <span style={{ fontSize: 12, opacity: 0.95 }}>{TYPE_LABELS_DE[t] ?? t}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* ✅ NEU: Fähigkeiten */}
+                    <div style={{ marginTop: 12, ...hideBox }}>
+                      <div style={{ fontWeight: 950, marginBottom: 8 }}>Fähigkeiten</div>
+
+                      {(() => {
+                        const ab = Array.isArray(pokemon?.abilities) ? pokemon.abilities : [];
+                        const sorted = ab.slice().sort((a, b) => (a?.slot ?? 0) - (b?.slot ?? 0));
+
+                        if (sorted.length === 0) return <div style={{ opacity: 0.75 }}>Keine Daten</div>;
+
+                        return (
+                          <div style={{ display: "grid", gap: 10 }}>
+                            {sorted.map((a, idx) => {
+                              const url = a?.ability?.url;
+                              const isHidden = !!a?.is_hidden;
+
+                              const info = url ? abilityInfoByUrl[url] : null;
+                              const nameDe = info?.nameDe || cap(a?.ability?.name);
+                              const effect = info?.effectDe || "";
+
+                              return (
+                                <div
+                                  key={`${url || a?.ability?.name || "ab"}-${idx}`}
+                                  style={{
+                                    border: "1px solid rgba(255,255,255,0.10)",
+                                    background: "rgba(0,0,0,0.28)",
+                                    borderRadius: 12,
+                                    padding: "10px 10px",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+                                    <div style={{ fontWeight: 950 }}>
+                                      {nameDe} {isHidden ? <span style={{ opacity: 0.8 }}>(V)</span> : null}
+                                    </div>
+                                    {!info && (
+                                      <div style={{ fontSize: 12, opacity: 0.6 }}>
+                                        Lade…
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {effect ? (
+                                    <div style={{ marginTop: 6, fontSize: 13, opacity: 0.9, lineHeight: 1.35 }}>
+                                      {effect}
+                                    </div>
+                                  ) : (
+                                    <div style={{ marginTop: 6, fontSize: 12, opacity: 0.65 }}>
+                                      Keine Beschreibung verfügbar.
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Catchrate + Rechner */}
+                    <div
+                      style={{
+                        marginTop: 10,
+                        opacity: 0.92,
+                        display: "flex",
+                        gap: 10,
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div>
+                        {basePokeballChance !== null ? (
+                          <>Fangchance: {basePokeballChance}%</>
+                        ) : (
+                          <>Catchrate: {catchRate ?? "-"}</>
+                        )}
+                      </div>
+
+                      <button
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 10,
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          background: "rgba(255,255,255,0.06)",
+                          color: "white",
+                          cursor: "pointer",
+                          fontWeight: 900,
+                        }}
+                        onClick={() => setShowCatchCalc(true)}
+                      >
+                        Rechner öffnen
+                      </button>
+                    </div>
+
+                    {/* Gen */}
+                    <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <div style={{ opacity: 0.9, fontWeight: 800 }}>Gen:</div>
+                      <select
+                        value={selectedGen}
+                        onChange={(e) => setSelectedGen(Number(e.target.value))}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 10,
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          background: "rgba(20,20,20,0.95)",
+                          color: "white",
+                          cursor: "pointer",
+                          outline: "none",
+                          appearance: "none",
+                          fontWeight: 900,
+                        }}
+                      >
+                        {availableGens.map((g) => (
+                          <option key={g} value={g} style={{ background: "#1a1a1a", color: "white" }}>
+                            Gen {g}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Level Simulation */}
+                    <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <div style={{ opacity: 0.9, fontWeight: 800 }}>Level:</div>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={simLevel}
+                        onChange={(e) => setSimLevel(e.target.value)}
+                        disabled={!useSimulation}
+                        style={{
+                          width: 74,
+                          padding: 6,
+                          borderRadius: 8,
+                          background: "rgba(0,0,0,0.3)",
+                          border: "1px solid rgba(255,255,255,0.15)",
+                          color: "white",
+                          opacity: useSimulation ? 1 : 0.5,
+                          fontWeight: 900,
+                        }}
+                      />
+                      <button
+                        onClick={() => setUseSimulation((v) => !v)}
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: 10,
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          background: useSimulation ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.06)",
+                          color: "white",
+                          cursor: "pointer",
+                          fontWeight: 900,
+                        }}
+                        title="Umschalten zwischen Basisdaten und Level-Simulation"
+                      >
+                        {useSimulation ? "Basis anzeigen" : "Levelwerte anzeigen"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stats Grid */}
+                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+                  {Object.entries(activeStats).map(([k, v]) => (
+                    <div
+                      key={k}
+                      style={{
+                        border: "1px solid rgba(255,255,255,0.10)",
+                        background: "rgba(0,0,0,0.35)",
+                        borderRadius: 14,
+                        padding: 10,
+                      }}
+                    >
+                      <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>{k}</div>
+                      <div style={{ fontSize: 18, fontWeight: 950 }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ================= MID: MATCHUPS ================= */}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 950, fontSize: 14, marginBottom: 10 }}>Typ-Matchups</div>
+
+                {(() => {
+                  const ALL_TYPES = [
+                    "normal",
+                    "fire",
+                    "water",
+                    "electric",
+                    "grass",
+                    "ice",
+                    "fighting",
+                    "poison",
+                    "ground",
+                    "flying",
+                    "psychic",
+                    "bug",
+                    "rock",
+                    "ghost",
+                    "dragon",
+                    "dark",
+                    "steel",
+                    "fairy",
+                  ];
+
+                  const CHART = {
+                    normal: { rock: 0.5, ghost: 0, steel: 0.5 },
+                    fire: { fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 },
+                    water: { fire: 2, water: 0.5, grass: 0.5, ground: 2, rock: 2, dragon: 0.5 },
+                    electric: { water: 2, electric: 0.5, grass: 0.5, ground: 0, flying: 2, dragon: 0.5 },
+                    grass: { fire: 0.5, water: 2, grass: 0.5, poison: 0.5, ground: 2, flying: 0.5, bug: 0.5, rock: 2, dragon: 0.5, steel: 0.5 },
+                    ice: { fire: 0.5, water: 0.5, grass: 2, ground: 2, flying: 2, dragon: 2, steel: 0.5, ice: 0.5 },
+                    fighting: { normal: 2, ice: 2, rock: 2, dark: 2, steel: 2, poison: 0.5, flying: 0.5, psychic: 0.5, bug: 0.5, fairy: 0.5, ghost: 0 },
+                    poison: { grass: 2, fairy: 2, poison: 0.5, ground: 0.5, rock: 0.5, ghost: 0.5, steel: 0 },
+                    ground: { fire: 2, electric: 2, grass: 0.5, poison: 2, flying: 0, bug: 0.5, rock: 2, steel: 2 },
+                    flying: { grass: 2, fighting: 2, bug: 2, electric: 0.5, rock: 0.5, steel: 0.5 },
+                    psychic: { fighting: 2, poison: 2, psychic: 0.5, steel: 0.5, dark: 0 },
+                    bug: { grass: 2, psychic: 2, dark: 2, fire: 0.5, fighting: 0.5, poison: 0.5, flying: 0.5, ghost: 0.5, steel: 0.5, fairy: 0.5 },
+                    rock: { fire: 2, ice: 2, flying: 2, bug: 2, fighting: 0.5, ground: 0.5, steel: 0.5 },
+                    ghost: { psychic: 2, ghost: 2, dark: 0.5, normal: 0 },
+                    dragon: { dragon: 2, steel: 0.5, fairy: 0 },
+                    dark: { psychic: 2, ghost: 2, fighting: 0.5, dark: 0.5, fairy: 0.5 },
+                    steel: { ice: 2, rock: 2, fairy: 2, fire: 0.5, water: 0.5, electric: 0.5, steel: 0.5 },
+                    fairy: { fighting: 2, dragon: 2, dark: 2, fire: 0.5, poison: 0.5, steel: 0.5 },
+                  };
+
+                  const defenders = (typeKeys || []).slice(0, 2);
+
+                  function getMult(attType, defType) {
+                    const row = CHART[attType] || {};
+                    const v = row[defType];
+                    return Number.isFinite(v) ? v : 1;
+                  }
+
+                  const byMult = { 4: [], 2: [], 0.5: [], 0.25: [], 0: [] };
+
+                  for (const atk of ALL_TYPES) {
+                    let mult = 1;
+                    for (const def of defenders) mult *= getMult(atk, def);
+                    if (mult === 4) byMult[4].push(atk);
+                    else if (mult === 2) byMult[2].push(atk);
+                    else if (mult === 0.5) byMult[0.5].push(atk);
+                    else if (mult === 0.25) byMult[0.25].push(atk);
+                    else if (mult === 0) byMult[0].push(atk);
+                  }
+
+                  const rows = [
+                    ["Starke Schwäche (×4)", byMult[4]],
+                    ["Schwäche (×2)", byMult[2]],
+                    ["Resistenz (×½)", byMult[0.5]],
+                    ["Starke Resistenz (×¼)", byMult[0.25]],
+                    ["Immunitäten", byMult[0]],
+                  ];
+
+                  return (
+                    <div style={{ display: "grid", gap: 12 }}>
+                      {rows.map(([label, arr]) => (
+                        <div key={label}>
+                          <div style={{ opacity: 0.9, fontWeight: 900, marginBottom: 6 }}>{label}</div>
+                          {arr.length === 0 ? (
+                            <div style={{ opacity: 0.55, fontSize: 12 }}>—</div>
+                          ) : (
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              {arr.map((t) => (
+                                <div
+                                  key={t}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    padding: "6px 10px",
+                                    borderRadius: 999,
+                                    border: "1px solid rgba(255,255,255,0.14)",
+                                    background: "rgba(255,255,255,0.06)",
+                                    fontWeight: 900,
+                                  }}
+                                >
+                                  <img
+                                    src={`https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t}.svg`}
+                                    alt={t}
+                                    title={TYPE_LABELS_DE[t] ?? t}
+                                    style={{ ...typeIcon, width: 20, height: 20, padding: 2 }}
+                                    onError={(e) => {
+                                      e.currentTarget.src = `https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/${t}.svg`;
+                                    }}
+                                  />
+                                  <span style={{ fontSize: 12, opacity: 0.95 }}>{TYPE_LABELS_DE[t] ?? t}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-      </div>
+                  );
+                })()}
+              </div>
 
-      {/* ================= RIGHT: MOVES + EVO (unten rechts) ================= */}
-      <div style={{ minWidth: 0, display: "grid", gap: 12 }}>
-        {/* Moves */}
-        <div
-          style={{
-            border: "1px solid rgba(255,255,255,0.12)",
-            background: "rgba(0,0,0,0.35)",
-            borderRadius: 14,
-            padding: 12,
-          }}
-        >
-          <div style={{ fontWeight: 950, marginBottom: 8 }}>Level-Up Moves</div>
-
-          <div
-            className="hide-scrollbar"
-            style={{
-              ...hideScrollbar,
-              maxHeight: "44vh",
-              overflowY: "auto",
-              paddingRight: 6,
-            }}
-          >
-            {activeMoves.length === 0 && <div style={{ opacity: 0.75 }}>Keine Daten</div>}
-
-            {activeMoves.map((m, idx) => {
-              // Erwartet: moveNameDeByUrl[url] = { nameDe, typeKey }
-              const info = moveNameDeByUrl?.[m.url];
-              const moveName = info?.nameDe || moveNameDeByUrl?.[m.url] || m.name;
-              const t = info?.typeKey || "";
-
-              return (
+              {/* ================= RIGHT: MOVES + EVO (unten rechts) ================= */}
+              <div style={{ minWidth: 0, display: "grid", gap: 12 }}>
+                {/* Moves */}
                 <div
-                  key={`${m.level}-${m.name}-${idx}`}
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "6px 0",
-                    borderBottom: "1px solid rgba(255,255,255,0.08)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    background: "rgba(0,0,0,0.35)",
+                    borderRadius: 14,
+                    padding: 12,
                   }}
                 >
-                  <div style={{ opacity: 0.92, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                    <div style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {moveName}
+                  <div style={{ fontWeight: 950, marginBottom: 8 }}>Level-Up Moves</div>
+
+                  <div
+                    className="hide-scrollbar"
+                    style={{
+                      ...hideScrollbar,
+                      maxHeight: "44vh",
+                      overflowY: "auto",
+                      paddingRight: 6,
+                    }}
+                  >
+                    {activeMoves.length === 0 && <div style={{ opacity: 0.75 }}>Keine Daten</div>}
+
+                    {activeMoves.map((m, idx) => {
+                      const info = moveNameDeByUrl?.[m.url];
+                      const moveName = info?.nameDe || moveNameDeByUrl?.[m.url] || m.name;
+                      const t = info?.typeKey || "";
+
+                      return (
+                        <div
+                          key={`${m.level}-${m.name}-${idx}`}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "6px 0",
+                            borderBottom: "1px solid rgba(255,255,255,0.08)",
+                          }}
+                        >
+                          <div style={{ opacity: 0.92, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                            <div style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {moveName}
+                            </div>
+
+                            {!!t && (
+                              <img
+                                src={`https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t}.svg`}
+                                alt={t}
+                                title={TYPE_LABELS_DE[t] ?? t}
+                                style={{ ...typeIcon, width: 22, height: 22, padding: 2 }}
+                                onError={(e) => {
+                                  e.currentTarget.src = `https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/${t}.svg`;
+                                }}
+                              />
+                            )}
+                          </div>
+
+                          <div style={{ opacity: 0.7, whiteSpace: "nowrap", fontWeight: 900 }}>Lv {m.level}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Evo unten rechts */}
+                {evoList.length > 0 && (
+                  <div
+                    style={{
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      background: "rgba(0,0,0,0.35)",
+                      borderRadius: 14,
+                      padding: 12,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                      <div style={{ fontWeight: 950, fontSize: 14 }}>Entwicklung</div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          opacity: 0.75,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {getLocalizedName(species?.names, "de") || cap(pokemon?.name)}
+                      </div>
                     </div>
 
-                    {!!t && (
-                      <img
-                        src={`https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t}.svg`}
-                        alt={t}
-                        title={TYPE_LABELS_DE[t] ?? t}
-                        style={{ ...typeIcon, width: 22, height: 22, padding: 2 }}
-                        onError={(e) => {
-                          e.currentTarget.src = `https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/${t}.svg`;
-                        }}
-                      />
-                    )}
+                    <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
+
+                    <div className="hide-scrollbar" style={{ ...hideScrollbar, overflowY: "auto", maxHeight: "28vh", paddingRight: 6 }}>
+                      {evoList.map((e) => (
+                        <div
+                          key={e.id || e.fallbackName}
+                          onClick={() => e.id && nav(`/pokemon/${e.id}`)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            padding: "10px 10px",
+                            borderRadius: 14,
+                            marginBottom: 10,
+                            border: "1px solid rgba(255,255,255,0.16)",
+                            background: "rgba(255,255,255,0.07)",
+                            cursor: e.id ? "pointer" : "default",
+                          }}
+                          title={e.id ? "Öffnen" : ""}
+                        >
+                          <img
+                            src={artworkFromDexId(e.id)}
+                            alt={e.fallbackName}
+                            style={{
+                              width: 46,
+                              height: 46,
+                              objectFit: "contain",
+                              filter: "drop-shadow(0 10px 18px rgba(0,0,0,0.5))",
+                            }}
+                          />
+
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 950, fontSize: 14, lineHeight: 1.1 }}>
+                              {evoNameDeById[e.id] || e.fallbackName}
+                            </div>
+
+                            {Array.isArray(e.details) && e.details.length > 0 ? (
+                              e.details.map((d, i) => (
+                                <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>
+                                  {evoRequirementDe(d)}
+                                </div>
+                              ))
+                            ) : (
+                              <div style={{ fontSize: 12, opacity: 0.65, marginTop: 4 }}>Basisform</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-
-                  <div style={{ opacity: 0.7, whiteSpace: "nowrap", fontWeight: 900 }}>Lv {m.level}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Evo unten rechts */}
-        {evoList.length > 0 && (
-          <div
-            style={{
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "rgba(0,0,0,0.35)",
-              borderRadius: 14,
-              padding: 12,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <div style={{ fontWeight: 950, fontSize: 14 }}>Entwicklung</div>
-              <div
-                style={{
-                  fontSize: 12,
-                  opacity: 0.75,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {getLocalizedName(species?.names, "de") || cap(pokemon?.name)}
+                )}
               </div>
             </div>
 
-            <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
-
-            <div className="hide-scrollbar" style={{ ...hideScrollbar, overflowY: "auto", maxHeight: "28vh", paddingRight: 6 }}>
-              {evoList.map((e) => (
+            {/* ✅ Catchrate Rechner Modal (DEIN EXISTIERENDER CODE) */}
+            {showCatchCalc && (
+              <div
+                onClick={() => setShowCatchCalc(false)}
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(0,0,0,0.55)",
+                  backdropFilter: "blur(8px)",
+                  zIndex: 99999,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 14,
+                }}
+              >
                 <div
-                  key={e.id || e.fallbackName}
-                  onClick={() => e.id && nav(`/pokemon/${e.id}`)}
+                  onClick={(e) => e.stopPropagation()}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "10px 10px",
-                    borderRadius: 14,
-                    marginBottom: 10,
-                    border: "1px solid rgba(255,255,255,0.16)",
-                    background: "rgba(255,255,255,0.07)",
-                    cursor: e.id ? "pointer" : "default",
+                    width: "min(520px, 94vw)",
+                    borderRadius: 18,
+                    border: "1px solid rgba(255,255,255,0.14)",
+                    background: "rgba(10,10,16,0.88)",
+                    boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
+                    padding: 14,
+                    color: "white",
                   }}
-                  title={e.id ? "Öffnen" : ""}
                 >
-                  <img
-                    src={artworkFromDexId(e.id)}
-                    alt={e.fallbackName}
-                    style={{
-                      width: 46,
-                      height: 46,
-                      objectFit: "contain",
-                      filter: "drop-shadow(0 10px 18px rgba(0,0,0,0.5))",
-                    }}
-                  />
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                    <div style={{ fontWeight: 950, fontSize: 16 }}>
+                      Catchrate Rechner – {getLocalizedName(species?.names, "de") || cap(pokemon?.name)}
+                    </div>
+                    <button
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: 12,
+                        border: "1px solid rgba(255,255,255,0.14)",
+                        background: "rgba(255,255,255,0.06)",
+                        color: "white",
+                        cursor: "pointer",
+                        fontWeight: 900,
+                      }}
+                      onClick={() => setShowCatchCalc(false)}
+                      title="Schließen"
+                    >
+                      ✕
+                    </button>
+                  </div>
 
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 950, fontSize: 14, lineHeight: 1.1 }}>
-                      {evoNameDeById[e.id] || e.fallbackName}
+                  <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                    {/* Ball */}
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <div style={{ opacity: 0.85, fontWeight: 800 }}>Ball</div>
+                      <select
+                        className="pinfo-select"
+                        value={ccBall}
+                        onChange={(e) => setCcBall(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: 10,
+                          borderRadius: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {getBallsForGen(selectedGen).map((b) => (
+                          <option key={b.key} value={b.key}>
+                            {b.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
-                    {Array.isArray(e.details) && e.details.length > 0 ? (
-                      e.details.map((d, i) => (
-                        <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>
-                          {evoRequirementDe(d)}
-                        </div>
-                      ))
-                    ) : (
-                      <div style={{ fontSize: 12, opacity: 0.65, marginTop: 4 }}>Basisform</div>
+                    {/* Status */}
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <div style={{ opacity: 0.85, fontWeight: 800 }}>Status</div>
+                      <select
+                        className="pinfo-select"
+                        value={ccStatus}
+                        onChange={(e) => setCcStatus(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: 10,
+                          borderRadius: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        <option value="none">Kein Status</option>
+                        <option value="par">Paralyse</option>
+                        <option value="poison">Gift</option>
+                        <option value="burn">Verbrennung</option>
+                        <option value="sleep">Schlaf</option>
+                        <option value="freeze">Gefroren</option>
+                      </select>
+                    </div>
+
+                    {/* HP Balken */}
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <div style={{ opacity: 0.85, fontWeight: 800 }}>KP (Balken)</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.85 }}>
+                        <span>1%</span>
+                        <span>{ccHpPct}%</span>
+                        <span>100%</span>
+                      </div>
+                      <input
+                        className="pinfo-range"
+                        type="range"
+                        min="1"
+                        max="100"
+                        value={ccHpPct}
+                        onChange={(e) => setCcHpPct(Number(e.target.value))}
+                      />
+                    </div>
+
+                    {/* Zusatz-Optionen (gen-/ball-abhängig) */}
+                    {ccBall === "timer" && (
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <div style={{ opacity: 0.85, fontWeight: 800 }}>Runde im Kampf (Timerball)</div>
+                        {(() => {
+                          const maxRound = Number(selectedGen) <= 4 ? 31 : 11;
+                          const opts = [];
+                          for (let r = 1; r <= maxRound; r++) opts.push(r);
+                          return (
+                            <select
+                              className="pinfo-select"
+                              value={ccTurn}
+                              onChange={(e) => setCcTurn(Number(e.target.value))}
+                              style={{ width: "100%", padding: 10, borderRadius: 12, fontWeight: 800 }}
+                            >
+                              {opts.map((r) => (
+                                <option key={r} value={r}>
+                                  Runde {r}
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        })()}
+                        <div style={{ opacity: 0.75, fontSize: 12 }}>Hinweis: Ab der Maximal-Runde steigt der Effekt nicht weiter.</div>
+                      </div>
                     )}
+
+                    {ccBall === "quick" && (
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <div style={{ opacity: 0.85, fontWeight: 800 }}>Runde im Kampf (Flottball)</div>
+                        <select
+                          className="pinfo-select"
+                          value={ccTurn}
+                          onChange={(e) => setCcTurn(Number(e.target.value))}
+                          style={{ width: "100%", padding: 10, borderRadius: 12, fontWeight: 800 }}
+                        >
+                          <option value={1}>Runde 1 (Bonus aktiv)</option>
+                          <option value={2}>Runde 2+ (kein Bonus)</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {ccBall === "dusk" && (
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <div style={{ opacity: 0.85, fontWeight: 800 }}>Umgebung (Finsterball)</div>
+                        <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer" }}>
+                          <input type="checkbox" checked={ccDark} onChange={(e) => setCcDark(e.target.checked)} />
+                          Nacht / Höhle
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Ergebnis */}
+                    {(() => {
+                      const balls = getBallsForGen(selectedGen);
+                      const ball = balls.find((b) => b.key === ccBall) || balls[0];
+                      const captureRateLocal = species?.capture_rate ?? null;
+
+                      const chance = estimateCatchChanceGen3Plus({
+                        captureRate: Number(captureRateLocal),
+                        ballMult: getBallMultiplier(ball, { gen: selectedGen, turnNumber: ccTurn, isDark: ccDark }),
+                        statusBonus: getStatusBonus(ccStatus),
+                        hpPct: ccHpPct,
+                      });
+
+                      const pctText = formatCatchChance(chance);
+
+                      return (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            padding: 12,
+                            borderRadius: 14,
+                            border: "1px solid rgba(255,255,255,0.14)",
+                            background: "rgba(255,255,255,0.06)",
+                          }}
+                        >
+                          <div style={{ fontWeight: 950 }}>Erwartete Fangchance</div>
+                          <div style={{ fontSize: 28, fontWeight: 950, marginTop: 6 }}>{pctText}</div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>
-    </div>
-
-    {/* ✅ Catchrate Rechner Modal (DEIN EXISTIERENDER CODE) */}
-    {showCatchCalc && (
-      <div
-        onClick={() => setShowCatchCalc(false)}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.55)",
-          backdropFilter: "blur(8px)",
-          zIndex: 99999,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 14,
-        }}
-      >
-        <div
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            width: "min(520px, 94vw)",
-            borderRadius: 18,
-            border: "1px solid rgba(255,255,255,0.14)",
-            background: "rgba(10,10,16,0.88)",
-            boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
-            padding: 14,
-            color: "white",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-            <div style={{ fontWeight: 950, fontSize: 16 }}>
-              Catchrate Rechner – {getLocalizedName(species?.names, "de") || cap(pokemon?.name)}
-            </div>
-            <button
-              style={{
-                padding: "8px 10px",
-                borderRadius: 12,
-                border: "1px solid rgba(255,255,255,0.14)",
-                background: "rgba(255,255,255,0.06)",
-                color: "white",
-                cursor: "pointer",
-                fontWeight: 900,
-              }}
-              onClick={() => setShowCatchCalc(false)}
-              title="Schließen"
-            >
-              ✕
-            </button>
-          </div>
-
-          <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-            {/* Ball */}
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ opacity: 0.85, fontWeight: 800 }}>Ball</div>
-              <select
-                className="pinfo-select"
-                value={ccBall}
-                onChange={(e) => setCcBall(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: 10,
-                  borderRadius: 12,
-                  fontWeight: 800,
-                }}
-              >
-                {getBallsForGen(selectedGen).map((b) => (
-                  <option key={b.key} value={b.key}>
-                    {b.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Status */}
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ opacity: 0.85, fontWeight: 800 }}>Status</div>
-              <select
-                className="pinfo-select"
-                value={ccStatus}
-                onChange={(e) => setCcStatus(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: 10,
-                  borderRadius: 12,
-                  fontWeight: 800,
-                }}
-              >
-                <option value="none">Kein Status</option>
-                <option value="par">Paralyse</option>
-                <option value="poison">Gift</option>
-                <option value="burn">Verbrennung</option>
-                <option value="sleep">Schlaf</option>
-                <option value="freeze">Gefroren</option>
-              </select>
-            </div>
-
-            {/* HP Balken */}
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ opacity: 0.85, fontWeight: 800 }}>KP (Balken)</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.85 }}>
-                <span>1%</span>
-                <span>{ccHpPct}%</span>
-                <span>100%</span>
-              </div>
-              <input
-                className="pinfo-range"
-                type="range"
-                min="1"
-                max="100"
-                value={ccHpPct}
-                onChange={(e) => setCcHpPct(Number(e.target.value))}
-              />
-            </div>
-
-            {/* Zusatz-Optionen (gen-/ball-abhängig) */}
-            {ccBall === "timer" && (
-              <div style={{ display: "grid", gap: 6 }}>
-                <div style={{ opacity: 0.85, fontWeight: 800 }}>Runde im Kampf (Timerball)</div>
-                {(() => {
-                  const maxRound = Number(selectedGen) <= 4 ? 31 : 11; // max Effekt: Gen3–4 Runde 31, Gen5+ Runde 11
-                  const opts = [];
-                  for (let r = 1; r <= maxRound; r++) opts.push(r);
-                  return (
-                    <select
-                      className="pinfo-select"
-                      value={ccTurn}
-                      onChange={(e) => setCcTurn(Number(e.target.value))}
-                      style={{ width: "100%", padding: 10, borderRadius: 12, fontWeight: 800 }}
-                    >
-                      {opts.map((r) => (
-                        <option key={r} value={r}>
-                          Runde {r}
-                        </option>
-                      ))}
-                    </select>
-                  );
-                })()}
-                <div style={{ opacity: 0.75, fontSize: 12 }}>Hinweis: Ab der Maximal-Runde steigt der Effekt nicht weiter.</div>
-              </div>
-            )}
-
-            {ccBall === "quick" && (
-              <div style={{ display: "grid", gap: 6 }}>
-                <div style={{ opacity: 0.85, fontWeight: 800 }}>Runde im Kampf (Flottball)</div>
-                <select
-                  className="pinfo-select"
-                  value={ccTurn}
-                  onChange={(e) => setCcTurn(Number(e.target.value))}
-                  style={{ width: "100%", padding: 10, borderRadius: 12, fontWeight: 800 }}
-                >
-                  <option value={1}>Runde 1 (Bonus aktiv)</option>
-                  <option value={2}>Runde 2+ (kein Bonus)</option>
-                </select>
-              </div>
-            )}
-
-            {ccBall === "dusk" && (
-              <div style={{ display: "grid", gap: 6 }}>
-                <div style={{ opacity: 0.85, fontWeight: 800 }}>Umgebung (Finsterball)</div>
-                <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer" }}>
-                  <input type="checkbox" checked={ccDark} onChange={(e) => setCcDark(e.target.checked)} />
-                  Nacht / Höhle
-                </label>
-              </div>
-            )}
-
-            {/* Ergebnis */}
-            {(() => {
-              const balls = getBallsForGen(selectedGen);
-              const ball = balls.find((b) => b.key === ccBall) || balls[0];
-              const captureRateLocal = species?.capture_rate ?? null;
-
-              const chance = estimateCatchChanceGen3Plus({
-                captureRate: Number(captureRateLocal),
-                ballMult: getBallMultiplier(ball, { gen: selectedGen, turnNumber: ccTurn, isDark: ccDark }),
-                statusBonus: getStatusBonus(ccStatus),
-                hpPct: ccHpPct,
-              });
-
-              const pctText = formatCatchChance(chance);
-
-              return (
-                <div
-                  style={{
-                    marginTop: 6,
-                    padding: 12,
-                    borderRadius: 14,
-                    border: "1px solid rgba(255,255,255,0.14)",
-                    background: "rgba(255,255,255,0.06)",
-                  }}
-                >
-                  <div style={{ fontWeight: 950 }}>Erwartete Fangchance</div>
-                  <div style={{ fontSize: 28, fontWeight: 950, marginTop: 6 }}>{pctText}</div>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      </div>
-    )}
-  </div>
-)}
-    </div>
     </div>
   );
 }

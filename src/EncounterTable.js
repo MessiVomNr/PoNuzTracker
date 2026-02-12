@@ -651,7 +651,6 @@ function EncounterTable() {
               {currentLevelCap.order}. {currentLevelCap.name}
               {currentLevelCap.location ? ` — ${currentLevelCap.location}` : ""}
             </div>
-            <div style={{ opacity: 0.75, fontSize: 12, marginTop: 6 }}>Hotkeys: K = abhaken, L = rückgängig</div>
           </div>
         )}
 

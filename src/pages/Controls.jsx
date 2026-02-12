@@ -1,5 +1,6 @@
 // src/pages/Controls.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   DEFAULT_HOTKEYS,
   loadHotkeys,
@@ -66,14 +67,10 @@ function Row({ title, value, onChange, conflict }) {
           outline: "none",
         }}
         onKeyDown={(e) => {
-          // Fokus im Input ist hier ok, weil wir aufnehmen wollen
           e.preventDefault();
           e.stopPropagation();
-
           const combo = normalizeKeyComboFromEvent(e);
           if (!combo) return; // reine Mod-Taste ignorieren
-
-          // Escape kann man über Menü-Toggle binden, aber hier erlauben wir es auch
           onChange(combo);
         }}
       />
@@ -106,11 +103,12 @@ function Row({ title, value, onChange, conflict }) {
 }
 
 export default function Controls() {
+  const nav = useNavigate();
+
   const [hk, setHk] = useState(() => loadHotkeys());
   const [tab, setTab] = useState("general"); // "general" | "draft" | "soullink"
 
   useEffect(() => {
-    // wenn jemand in anderen Tabs speichert: hier neu lesen
     setHk(loadHotkeys());
   }, []);
 
@@ -140,11 +138,10 @@ export default function Controls() {
     return out;
   }, [hk]);
 
-  // Optional: globaler Keydown-Blocker, damit man beim Tippen nicht versehentlich navigiert
+  // optional: verhindert nix aktiv, aber lässt dir Platz, falls du später was hooken willst
   useEffect(() => {
     function stopIfTyping(e) {
       if (!isTypingTarget(e)) return;
-      // nichts
     }
     window.addEventListener("keydown", stopIfTyping, { capture: true });
     return () => window.removeEventListener("keydown", stopIfTyping, { capture: true });
@@ -153,7 +150,28 @@ export default function Controls() {
   return (
     <div style={{ padding: 16, maxWidth: 980, margin: "0 auto" }}>
       <div style={{ ...card }}>
-        <div style={{ fontSize: 20, fontWeight: 950 }}>Steuerung</div>
+        {/* ✅ Header mit Zurück-Button */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <div style={{ fontSize: 20, fontWeight: 950 }}>Steuerung</div>
+
+          <button
+            type="button"
+            onClick={() => nav(-1)}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: "rgba(255,255,255,0.06)",
+              color: "white",
+              cursor: "pointer",
+              fontWeight: 950,
+            }}
+            title="Schließen"
+          >
+            Zurück
+          </button>
+        </div>
+
         <div style={{ marginTop: 6, opacity: 0.8, fontSize: 13 }}>
           Klicke ins Feld und drücke die gewünschte Tastenkombi (z.B. Strg+K). Nochmal überschreibt.
         </div>
@@ -191,11 +209,32 @@ export default function Controls() {
             conflict={conflicts["general.openTypeCalculator"]}
             onChange={(v) => setHotkeyChecked("general", "openTypeCalculator", v)}
           />
+
+          {/* ✅ Level-Cap Hotkeys (K/L default, aber bindbar) */}
+          <Row
+            title={labelHotkey("general", "nextLevelCap")}
+            value={general.nextLevelCap}
+            conflict={conflicts["general.nextLevelCap"]}
+            onChange={(v) => setHotkeyChecked("general", "nextLevelCap", v)}
+          />
+          <Row
+            title={labelHotkey("general", "prevLevelCap")}
+            value={general.prevLevelCap}
+            conflict={conflicts["general.prevLevelCap"]}
+            onChange={(v) => setHotkeyChecked("general", "prevLevelCap", v)}
+          />
+
           <Row
             title={labelHotkey("general", "toggleMute")}
             value={general.toggleMute}
             conflict={conflicts["general.toggleMute"]}
             onChange={(v) => setHotkeyChecked("general", "toggleMute", v)}
+          />
+          <Row
+            title={labelHotkey("general", "menuToggle")}
+            value={general.menuToggle}
+            conflict={conflicts["general.menuToggle"]}
+            onChange={(v) => setHotkeyChecked("general", "menuToggle", v)}
           />
           <Row
             title={labelHotkey("general", "goHome")}
