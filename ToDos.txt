@@ -1,6 +1,4 @@
-okay hier ein paar dateien die relevant sein könnten für folgende themen. wenn ich aktuell e drücke öffne ich den dex, wenn ich dann auf ein pokemon gehe, bin ich auf der seite. mit e komme ich zurück zum dex und nochmal e aber wieder nur zum dex, ich möchte aber, das es so ist, das ich wenn man e drückt, man vom pokemon zum dex kommt und wenn man dann e drückt sich der dex wieder schließt. dasselbe soll für attacken so sein, und lass uns einen button einfügen bei den hotkeys, das man direkt bei der leevelcap das nächste 
-abhakt ohne das man es öffnen muss. bsp,: ich drücke k und dann wird das levelcap abgehakt 
-und automatisch bei der encounetr tabelle angepasst. und auch ein rückgängig button mit l wo 
-ich das levelcap wieder zurück mache. können wir beim pokedex oben links oder so einen filter 
-adden wo man auswählen kann welche gens er anzeigt. standartmäßig soll er alle anzeigen, 
-aber man kann auch nur gen 2 oder 2-4 oder so auswählen halt wie man braucht
+vorkämpfe bei arenen
+pam-pam entwicklung Z.B.
+
+TM`s

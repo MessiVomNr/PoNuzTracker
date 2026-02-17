@@ -70,6 +70,7 @@ export default [
   "Geheime Küste",
   "Prachtpolis",
   "Siegesstraße (Höhle)",
+  "Vogelencounter beim fliegen",
   "Lektroball (Static)",
   "Regice (Static)",
   "Registeel (Static)",

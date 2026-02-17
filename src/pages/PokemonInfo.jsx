@@ -20,7 +20,7 @@ const moveNameCache = new Map(); // legacy: moveUrl -> germanName
 const moveInfoCache = new Map(); // moveUrl -> { nameDe, typeKey }
 const speciesNameDeCache = new Map(); // speciesId -> germanName
 
-// ✅ NEU: Ability Cache
+// ✅ Ability Cache
 const abilityInfoCache = new Map(); // abilityUrl -> { nameDe, effectDe, isHidden }
 
 function getLocalizedName(namesArr, lang = "de") {
@@ -110,15 +110,14 @@ async function fetchTypeNameDe(typeUrl) {
   }
 }
 
-// ✅ NEU: Ability Info (DE Name + DE Effect, Fallback EN)
+// ✅ Ability Info (DE Name + DE Effect, Fallback EN)
 function looksTooEnglish(s) {
   const t = String(s || "").toLowerCase();
   if (!t) return false;
-  // grober Heuristik-Check: wenn diese Tokens vorkommen, ist es oft "halb-englisch"
   const bad = ["weather", "water", "attack", "defense", "special", "speed", "hp", "chance", "switch", "move"];
   let hits = 0;
   for (const w of bad) if (t.includes(w)) hits++;
-  return hits >= 2; // ab 2 Treffern lieber anderen Text nehmen
+  return hits >= 2;
 }
 
 function normalizeGermanText(s) {
@@ -127,10 +126,8 @@ function normalizeGermanText(s) {
     .replace(/\f/g, " ")
     .trim();
 
-  // PokeAPI Flavor Text hat gern komische Zeilenumbrüche / Steuerzeichen
   t = t.replace(/[\u0000-\u001F]+/g, " ").replace(/\s+/g, " ").trim();
 
-  // Mini-Glossar: häufige "englische Reste" in DE-Texten
   const repl = [
     [/\bweather\b/gi, "Wetter"],
     [/\bwater\b/gi, "Wasser"],
@@ -161,7 +158,6 @@ function normalizeGermanText(s) {
   ];
 
   for (const [rgx, to] of repl) t = t.replace(rgx, to);
-
   return t;
 }
 
@@ -175,11 +171,6 @@ function pickAbilityEffect(abilityJson) {
   const deFlavor = flavors.find((e) => e?.language?.name === "de")?.flavor_text || "";
   const enFlavor = flavors.find((e) => e?.language?.name === "en")?.flavor_text || "";
 
-  // Priorität:
-  // 1) DE short_effect, wenn nicht "zu englisch"
-  // 2) DE flavor_text (oft natürlicher)
-  // 3) EN short_effect
-  // 4) EN flavor_text
   let chosen = deShort && !looksTooEnglish(deShort) ? deShort : "";
   if (!chosen) chosen = deFlavor || "";
   if (!chosen) chosen = enShort || "";
@@ -188,11 +179,9 @@ function pickAbilityEffect(abilityJson) {
   return normalizeGermanText(chosen);
 }
 
-
 async function fetchAbilityInfoDe(abilityUrl, isHidden) {
   if (!abilityUrl) return null;
 
-  // Cache-Key muss isHidden NICHT enthalten, weil Name/Effect gleich bleiben
   if (abilityInfoCache.has(abilityUrl)) {
     const cached = abilityInfoCache.get(abilityUrl);
     return { ...cached, isHidden: !!isHidden };
@@ -219,7 +208,6 @@ async function mapInBatches(items, batchSize, fn) {
   const out = [];
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
-    // eslint-disable-next-line no-await-in-loop
     const r = await Promise.all(batch.map(fn));
     out.push(...r);
   }
@@ -235,6 +223,27 @@ function prettyName(s) {
 function artworkFromDexId(id) {
   if (!id) return null;
   return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+}
+
+const itemNameDeCache = {}; // key: "dusk-stone" -> "Finsterstein"
+
+async function getItemNameDe(itemKey) {
+  const key = String(itemKey || "").trim().toLowerCase();
+  if (!key) return null;
+  if (itemNameDeCache[key]) return itemNameDeCache[key];
+
+  try {
+    const res = await fetch(`https://pokeapi.co/api/v2/item/${encodeURIComponent(key)}`);
+    if (!res.ok) throw new Error("item fetch failed");
+    const data = await res.json();
+
+    const de = data?.names?.find((n) => n?.language?.name === "de")?.name;
+    itemNameDeCache[key] = de || prettyName(key);
+    return itemNameDeCache[key];
+  } catch {
+    itemNameDeCache[key] = prettyName(key);
+    return itemNameDeCache[key];
+  }
 }
 
 function evoRequirementDe(detail) {
@@ -472,27 +481,6 @@ function formatCatchChance(chance01) {
   return Math.round(p) + "%";
 }
 
-const itemNameDeCache = {}; // key: "dusk-stone" -> "Finsterstein"
-
-async function getItemNameDe(itemKey) {
-  const key = String(itemKey || "").trim().toLowerCase();
-  if (!key) return null;
-  if (itemNameDeCache[key]) return itemNameDeCache[key];
-
-  try {
-    const res = await fetch(`https://pokeapi.co/api/v2/item/${encodeURIComponent(key)}`);
-    if (!res.ok) throw new Error("item fetch failed");
-    const data = await res.json();
-
-    const de = data?.names?.find((n) => n?.language?.name === "de")?.name;
-    itemNameDeCache[key] = de || prettyName(key);
-    return itemNameDeCache[key];
-  } catch {
-    itemNameDeCache[key] = prettyName(key);
-    return itemNameDeCache[key];
-  }
-}
-
 /* =========================
    Typ-Matchups (Schwächen)
 ========================= */
@@ -530,11 +518,6 @@ function multToBucket(mult) {
   return "neutral";
 }
 
-function typeIconUrl(typeKey) {
-  const t = String(typeKey || "").toLowerCase();
-  return `https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t}.svg`;
-}
-
 export default function PokemonInfo() {
   const { dexId } = useParams();
   const nav = useNavigate();
@@ -568,8 +551,7 @@ export default function PokemonInfo() {
   // ✅ Typ-Matchups
   const [matchups, setMatchups] = useState(null);
 
-  // ✅ NEU: Abilities
-  // abilityUrl -> { nameDe, effectDe, isHidden }
+  // ✅ Abilities
   const [abilityInfoByUrl, setAbilityInfoByUrl] = useState({});
 
   // ✅ Background/Body darf NICHT scrollen
@@ -664,7 +646,7 @@ export default function PokemonInfo() {
     };
   }, [pokemon]);
 
-  // ✅ NEU: Abilities laden (Name DE + Effekt)
+  // ✅ Abilities laden (Name DE + Effekt)
   useEffect(() => {
     let alive = true;
 
@@ -1046,7 +1028,6 @@ export default function PokemonInfo() {
     overflow: "hidden",
   };
 
-  // ✅ bisschen weiter nach links: maxWidth leicht runter + kein extra “zu mittig”
   const page = {
     maxWidth: 1400,
     margin: "0 auto",
@@ -1128,6 +1109,23 @@ export default function PokemonInfo() {
             >
               Zurück
             </button>
+
+            {/* ✅ FIX: nav statt navigate + id sauber */}
+            <button
+              onClick={() => nav(`/compare/${id}`)}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.14)",
+                background: "rgba(0,0,0,0.25)",
+                color: "white",
+                cursor: "pointer",
+                fontWeight: 900,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Vergleichen
+            </button>
           </div>
         </div>
 
@@ -1201,7 +1199,7 @@ export default function PokemonInfo() {
                       </div>
                     )}
 
-                    {/* ✅ NEU: Fähigkeiten */}
+                    {/* ✅ Fähigkeiten */}
                     <div style={{ marginTop: 12, ...hideBox }}>
                       <div style={{ fontWeight: 950, marginBottom: 8 }}>Fähigkeiten</div>
 
@@ -1213,7 +1211,7 @@ export default function PokemonInfo() {
 
                         return (
                           <div style={{ display: "grid", gap: 10 }}>
-                            {sorted.map((a, idx) => {
+                            {sorted.map((a, idx2) => {
                               const url = a?.ability?.url;
                               const isHidden = !!a?.is_hidden;
 
@@ -1223,7 +1221,7 @@ export default function PokemonInfo() {
 
                               return (
                                 <div
-                                  key={`${url || a?.ability?.name || "ab"}-${idx}`}
+                                  key={`${url || a?.ability?.name || "ab"}-${idx2}`}
                                   style={{
                                     border: "1px solid rgba(255,255,255,0.10)",
                                     background: "rgba(0,0,0,0.28)",
@@ -1235,11 +1233,7 @@ export default function PokemonInfo() {
                                     <div style={{ fontWeight: 950 }}>
                                       {nameDe} {isHidden ? <span style={{ opacity: 0.8 }}>(V)</span> : null}
                                     </div>
-                                    {!info && (
-                                      <div style={{ fontSize: 12, opacity: 0.6 }}>
-                                        Lade…
-                                      </div>
-                                    )}
+                                    {!info && <div style={{ fontSize: 12, opacity: 0.6 }}>Lade…</div>}
                                   </div>
 
                                   {effect ? (
@@ -1271,11 +1265,7 @@ export default function PokemonInfo() {
                       }}
                     >
                       <div>
-                        {basePokeballChance !== null ? (
-                          <>Fangchance: {basePokeballChance}%</>
-                        ) : (
-                          <>Catchrate: {catchRate ?? "-"}</>
-                        )}
+                        {basePokeballChance !== null ? <>Fangchance: {basePokeballChance}%</> : <>Catchrate: {catchRate ?? "-"}</>}
                       </div>
 
                       <button
@@ -1498,7 +1488,7 @@ export default function PokemonInfo() {
                 })()}
               </div>
 
-              {/* ================= RIGHT: MOVES + EVO (unten rechts) ================= */}
+              {/* ================= RIGHT: MOVES + EVO ================= */}
               <div style={{ minWidth: 0, display: "grid", gap: 12 }}>
                 {/* Moves */}
                 <div
@@ -1522,14 +1512,14 @@ export default function PokemonInfo() {
                   >
                     {activeMoves.length === 0 && <div style={{ opacity: 0.75 }}>Keine Daten</div>}
 
-                    {activeMoves.map((m, idx) => {
+                    {activeMoves.map((m, idx3) => {
                       const info = moveNameDeByUrl?.[m.url];
                       const moveName = info?.nameDe || moveNameDeByUrl?.[m.url] || m.name;
                       const t = info?.typeKey || "";
 
                       return (
                         <div
-                          key={`${m.level}-${m.name}-${idx}`}
+                          key={`${m.level}-${m.name}-${idx3}`}
                           style={{
                             display: "flex",
                             justifyContent: "space-between",
@@ -1564,7 +1554,7 @@ export default function PokemonInfo() {
                   </div>
                 </div>
 
-                {/* Evo unten rechts */}
+                {/* Evo */}
                 {evoList.length > 0 && (
                   <div
                     style={{
@@ -1643,7 +1633,7 @@ export default function PokemonInfo() {
               </div>
             </div>
 
-            {/* ✅ Catchrate Rechner Modal (DEIN EXISTIERENDER CODE) */}
+            {/* ✅ Catchrate Rechner Modal */}
             {showCatchCalc && (
               <div
                 onClick={() => setShowCatchCalc(false)}
@@ -1746,17 +1736,10 @@ export default function PokemonInfo() {
                         <span>{ccHpPct}%</span>
                         <span>100%</span>
                       </div>
-                      <input
-                        className="pinfo-range"
-                        type="range"
-                        min="1"
-                        max="100"
-                        value={ccHpPct}
-                        onChange={(e) => setCcHpPct(Number(e.target.value))}
-                      />
+                      <input className="pinfo-range" type="range" min="1" max="100" value={ccHpPct} onChange={(e) => setCcHpPct(Number(e.target.value))} />
                     </div>
 
-                    {/* Zusatz-Optionen (gen-/ball-abhängig) */}
+                    {/* Zusatz-Optionen */}
                     {ccBall === "timer" && (
                       <div style={{ display: "grid", gap: 6 }}>
                         <div style={{ opacity: 0.85, fontWeight: 800 }}>Runde im Kampf (Timerball)</div>
