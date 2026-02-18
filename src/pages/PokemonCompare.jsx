@@ -939,6 +939,31 @@ export default function PokemonCompare() {
           color: #fff;
           background: rgba(0,0,0,0.35);
         }
+          select.cmp-select{
+  color:#fff;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 12px;
+}
+
+select.cmp-select:focus{
+  outline: none;
+  border-color: rgba(255,255,255,0.28);
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.06), 0 16px 40px rgba(0,0,0,0.35);
+}
+
+/* wichtig: Dropdown-Liste selbst (Options) */
+select.cmp-select option{
+  background: #0f1216;
+  color: #fff;
+}
+
+/* Highlight im geöffneten Dropdown (Chrome/Win klappt damit gut) */
+select.cmp-select option:checked{
+  background: #18202a;
+  color: #fff;
+}
+
       `}</style>
 
       <div style={scrollWrap} className="cmp-scroll">
