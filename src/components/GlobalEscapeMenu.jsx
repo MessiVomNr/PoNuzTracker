@@ -166,6 +166,12 @@ export default function GlobalEscapeMenu() {
   const isPokemonDetail = location.pathname.startsWith("/pokemon/");
   const isMoveDetail = location.pathname.startsWith("/move/");
 
+  // ✅ Compare zählt zur Dex-Fläche (damit E nicht zwischen Compare <-> Dex toggelt)
+  const isPokemonCompare =
+    location.pathname.startsWith("/compare") ||
+    location.pathname.startsWith("/pokemon-compare") ||
+    location.pathname.startsWith("/pokemoncompare");
+
   // ✅ "Return-to" Speicher für echtes Toggle (E/A)
   const POKEDEX_RETURN_KEY = "app_return_to_pokedex_v1";
   const MOVEDEX_RETURN_KEY = "app_return_to_movedex_v1";
@@ -188,12 +194,12 @@ export default function GlobalEscapeMenu() {
   }, [location.pathname]);
 
   // ✅ Merke dir jeweils die "letzte normale Seite" (außerhalb von Dex-Flächen),
-  // damit E/A auf Detail-Seiten korrekt: Detail -> Dex -> schließen (zur normalen Seite)
+  // damit E/A auf Detail/Compare korrekt: Detail/Compare -> Dex -> schließen (zur normalen Seite)
   useEffect(() => {
     const path = currentFullPath();
 
-    // Pokedex-Fläche: /pokedex + /pokemon/:id (Detail zählt zur Dex-Fläche)
-    if (!isPokedex && !isPokemonDetail) {
+    // Pokedex-Fläche: /pokedex + /pokemon/:id + /compare... (zählt zur Dex-Fläche)
+    if (!isPokedex && !isPokemonDetail && !isPokemonCompare) {
       try {
         sessionStorage.setItem(LAST_NON_POKEDEX_KEY, path);
       } catch {
@@ -209,7 +215,15 @@ export default function GlobalEscapeMenu() {
         // ignore
       }
     }
-  }, [location.pathname, location.search, location.hash, isPokedex, isPokemonDetail, isMoveDetail]);
+  }, [
+    location.pathname,
+    location.search,
+    location.hash,
+    isPokedex,
+    isPokemonDetail,
+    isPokemonCompare,
+    isMoveDetail,
+  ]);
 
   // Audio apply + listeners
   useEffect(() => {
@@ -235,7 +249,7 @@ export default function GlobalEscapeMenu() {
       window.removeEventListener("appAudioSettingsChanged", onAudioChanged);
       window.removeEventListener("escDraftCtxChanged", onDraftCtxChanged);
     };
-  }, []);
+  }, []); // intentional
 
   const setMuted = (muted) => {
     const next = { ...audio, muted: !!muted };
@@ -273,7 +287,6 @@ export default function GlobalEscapeMenu() {
   const defBuckets = useMemo(() => {
     if (!defTypes.length) return null;
 
-    // gewünschte Reihenfolge später in UI: 4x, 2x, 1/2, 1/4, immun
     const out = { "4x": [], "2x": [], "0.5x": [], "0.25x": [], "0x": [], "1x": [] };
 
     for (const a of TYPES) {
@@ -404,7 +417,6 @@ export default function GlobalEscapeMenu() {
   // ✅ Global hotkeys (auch wenn Menü zu ist)
   useEffect(() => {
     function onGlobalHotkeys(e) {
-      // ✅ kein Auto-repeat (sonst togglet es sofort wieder zurück)
       if (e.repeat) return;
 
       const hk = loadHotkeys();
@@ -446,9 +458,7 @@ export default function GlobalEscapeMenu() {
         e.stopPropagation();
         try {
           window.dispatchEvent(new CustomEvent("appLevelCapNext"));
-        } catch {
-          // ignore
-        }
+        } catch {}
         return;
       }
 
@@ -457,9 +467,7 @@ export default function GlobalEscapeMenu() {
         e.stopPropagation();
         try {
           window.dispatchEvent(new CustomEvent("appLevelCapPrev"));
-        } catch {
-          // ignore
-        }
+        } catch {}
         return;
       }
 
@@ -488,7 +496,7 @@ export default function GlobalEscapeMenu() {
       }
 
       // ✅ POKEDEX TOGGLE (E):
-      // - von Pokemon-Detail: E -> /pokedex (Return-To = letzte Non-Dex Seite)
+      // - von Pokemon-Detail/Compare: E -> /pokedex (Return-To = letzte Non-Dex Seite)
       // - auf /pokedex: E -> schließen (zur Return-To/letzte Non-Dex Seite)
       // - von überall sonst: E -> /pokedex (Return-To = aktuelle Seite)
       if (g.openPokedex && comboMatches(e, g.openPokedex)) {
@@ -507,7 +515,9 @@ export default function GlobalEscapeMenu() {
           return;
         }
 
-        if (isPokemonDetail) {
+        // ✅ Detail/Compare verhalten wie "Dex-Fläche": E bringt dich in den Pokédex,
+        // aber Return-To bleibt die letzte normale Seite (nicht die Compare/Detail Seite)
+        if (isPokemonDetail || isPokemonCompare) {
           const lastNon = sessionStorage.getItem(LAST_NON_POKEDEX_KEY) || "/";
           sessionStorage.setItem(POKEDEX_RETURN_KEY, lastNon);
           nav("/pokedex");
@@ -520,10 +530,7 @@ export default function GlobalEscapeMenu() {
         return;
       }
 
-      // ✅ MOVEDEX TOGGLE (A):
-      // - von Move-Detail: A -> /movedex (Return-To = letzte Non-MoveDex Seite)
-      // - auf /movedex: A -> schließen (zur Return-To/letzte Non-MoveDex Seite)
-      // - von überall sonst: A -> /movedex (Return-To = aktuelle Seite)
+      // ✅ MOVEDEX TOGGLE (A)
       if (g.openMoveDex && comboMatches(e, g.openMoveDex)) {
         e.preventDefault();
         e.stopPropagation();
@@ -549,7 +556,6 @@ export default function GlobalEscapeMenu() {
           return;
         }
 
-        // normal öffnen von irgendwo
         sessionStorage.setItem(MOVEDEX_RETURN_KEY, currentFullPath());
         nav("/movedex");
         return;
@@ -571,8 +577,8 @@ export default function GlobalEscapeMenu() {
     audio,
     lobbyPath,
     isPokedex,
-    isMoveDex,
     isPokemonDetail,
+    isPokemonCompare,
     isMoveDetail,
     location.pathname,
     location.search,
@@ -584,10 +590,8 @@ export default function GlobalEscapeMenu() {
     function onKeyDown(e) {
       if (e.key !== "Escape") return;
 
-      // ✅ wenn man tippt: nix machen
       if (isTypingTarget(document.activeElement)) return;
 
-      // ✅ Controls mit ESC schließen
       if (isControls) {
         e.preventDefault();
         e.stopPropagation();
@@ -621,7 +625,6 @@ export default function GlobalEscapeMenu() {
   const restartFn = draftCtx?.restart;
   const leaveTo = draftCtx?.leaveTo || lobbyPath;
 
-  // ✅ Wenn weder Menü offen noch Dock offen: nichts rendern
   if (!open && !typeDockOpen) return null;
 
   return (
@@ -689,10 +692,7 @@ export default function GlobalEscapeMenu() {
           {typeMode === "atk" && (
             <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
               <div style={{ opacity: 0.85, fontWeight: 900 }}>Atk (mehrere):</div>
-              <div
-                className="tm-scroll"
-                style={{ display: "flex", flexWrap: "wrap", gap: 8, maxHeight: 160, overflow: "auto" }}
-              >
+              <div className="tm-scroll" style={{ display: "flex", flexWrap: "wrap", gap: 8, maxHeight: 160, overflow: "auto" }}>
                 {TYPES.map((t) => (
                   <TypePill key={t} t={t} active={atkTypes.includes(t)} onClick={() => toggleAtk(t)} />
                 ))}
@@ -822,11 +822,7 @@ export default function GlobalEscapeMenu() {
                       Reset
                     </button>
 
-                    <button
-                      style={btnTab}
-                      onClick={() => setTypeDockOpen((v) => !v)}
-                      title="Dock rechts öffnen/schließen"
-                    >
+                    <button style={btnTab} onClick={() => setTypeDockOpen((v) => !v)} title="Dock rechts öffnen/schließen">
                       Dock
                     </button>
                   </div>
@@ -909,11 +905,7 @@ export default function GlobalEscapeMenu() {
               <div style={sectionTitle}>Audio</div>
 
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                <button
-                  style={audio.muted ? btnMuted : btnOrange}
-                  onClick={() => setMuted(!audio.muted)}
-                  title="Stumm / Ton an"
-                >
+                <button style={audio.muted ? btnMuted : btnOrange} onClick={() => setMuted(!audio.muted)} title="Stumm / Ton an">
                   {audio.muted ? "Stumm" : "Ton an"}
                 </button>
 

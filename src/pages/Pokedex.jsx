@@ -5,6 +5,9 @@ import { pokedex as fullPokedex } from "../data/pokedex.js";
 import dexBg from "../assets/DexBackground.png";
 import { megaFormsByBaseDexId, specialFormsByBaseDexId } from "../data/megaForms";
 
+/** ✅ Falls deine Compare-Route anders heißt, nur DAS hier ändern */
+const COMPARE_ROUTE = "/compare";
+
 // =========================================================
 // EXTRA SPECIAL FORMS (Rotom, Kyurem, usw.)
 // =========================================================
@@ -125,6 +128,11 @@ const LS_KEYS = {
   apiNameCache: "pokedex_api_name_cache_v2", // dexId -> { baseDe, gen }
   apiTypeCache: "pokedex_api_type_cache_v1", // dexId -> { types, typesDe }
   uiFilterOpen: "pokedex_filter_open_v1",
+
+  favorites: "pokedex_favorites_v1", // csv dexIds
+  onlyFav: "pokedex_only_favorites_v1", // "1"/"0"
+  apiStatsCache: "pokedex_api_stats_cache_v1", // dexId -> { stats, total }
+  apiEvoCache: "pokedex_api_evo_cache_v1", // dexId -> { chainDexIds: number[] }
 };
 
 const DEX_NAV_STATE_KEY = "pokedex_nav_state_v1";
@@ -172,6 +180,11 @@ function normText(s) {
 // =====================
 function getIdFromSpeciesUrl(url) {
   const m = String(url || "").match(/\/pokemon-species\/(\d+)\//);
+  return m ? Number(m[1]) : null;
+}
+
+function getIdFromPokemonUrl(url) {
+  const m = String(url || "").match(/\/pokemon\/(\d+)\//);
   return m ? Number(m[1]) : null;
 }
 
@@ -275,6 +288,30 @@ function isApiGigas(apiName) {
   return String(apiName || "").toLowerCase().includes("-gmax");
 }
 
+// =====================
+// EVO CHAIN parser
+// =====================
+function flattenEvoChain(chainNode) {
+  const out = [];
+  function walk(node) {
+    if (!node) return;
+    const sid = getIdFromSpeciesUrl(node?.species?.url);
+    if (Number.isFinite(sid)) out.push(sid);
+    const next = Array.isArray(node?.evolves_to) ? node.evolves_to : [];
+    next.forEach(walk);
+  }
+  walk(chainNode);
+  // dedupe, keep order
+  const seen = new Set();
+  const ded = [];
+  for (const x of out) {
+    if (seen.has(x)) continue;
+    seen.add(x);
+    ded.push(x);
+  }
+  return ded;
+}
+
 export default function Pokedex() {
   const nav = useNavigate();
 
@@ -303,6 +340,28 @@ export default function Pokedex() {
   useEffect(() => {
     localStorage.setItem(LS_KEYS.uiFilterOpen, filtersOpen ? "1" : "0");
   }, [filtersOpen]);
+
+  // Favorites
+  const [favorites, setFavorites] = useState(() => readCsvSet(LS_KEYS.favorites, [])); // set of dexId strings
+  useEffect(() => writeCsvSet(LS_KEYS.favorites, favorites), [favorites]);
+
+  const [onlyFav, setOnlyFav] = useState(() => localStorage.getItem(LS_KEYS.onlyFav) === "1");
+  useEffect(() => localStorage.setItem(LS_KEYS.onlyFav, onlyFav ? "1" : "0"), [onlyFav]);
+
+  function isFav(dexId) {
+    const id = String(Number(dexId));
+    return favorites.has(id);
+  }
+
+  function toggleFav(dexId) {
+    const id = String(Number(dexId));
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // Filters
   const [selectedGens, setSelectedGens] = useState(() =>
@@ -355,6 +414,23 @@ export default function Pokedex() {
     return cached && typeof cached === "object" ? cached : {};
   });
   useEffect(() => writeJson(LS_KEYS.apiTypeCache, typeCache), [typeCache]);
+
+  // dexId -> { stats, total }
+  const [statsCache, setStatsCache] = useState(() => {
+    const cached = readJson(LS_KEYS.apiStatsCache, {});
+    return cached && typeof cached === "object" ? cached : {};
+  });
+  useEffect(() => writeJson(LS_KEYS.apiStatsCache, statsCache), [statsCache]);
+
+  // dexId -> { chainDexIds }
+  const [evoCache, setEvoCache] = useState(() => {
+    const cached = readJson(LS_KEYS.apiEvoCache, {});
+    return cached && typeof cached === "object" ? cached : {};
+  });
+  useEffect(() => writeJson(LS_KEYS.apiEvoCache, evoCache), [evoCache]);
+
+  // Quick Info toggle
+  const [quickOpen, setQuickOpen] = useState(false);
 
   // =====================
   // State save/restore for "go to pokemon and back"
@@ -661,12 +737,19 @@ export default function Pokedex() {
 
   const list = useMemo(() => {
     const q = normText(query.trim());
-    if (!q) return rawList;
-    return rawList.filter((p) => {
+    let out = rawList;
+
+    if (onlyFav) {
+      out = out.filter((p) => isFav(p.dexId));
+    }
+
+    if (!q) return out;
+
+    return out.filter((p) => {
       const name = getDisplayName(p, apiNameCache);
       return normText(name).includes(q) || String(p.dexId) === q;
     });
-  }, [rawList, query, apiNameCache]);
+  }, [rawList, query, apiNameCache, onlyFav, favorites]);
 
   // Keep idx in range when list changes
   useEffect(() => setIdx((v) => clamp(v, 0, Math.max(0, list.length - 1))), [list.length]);
@@ -729,6 +812,87 @@ export default function Pokedex() {
     } catch {}
   }
 
+  async function resolveStatsIfNeeded(entry) {
+    const id = Number(entry?.dexId);
+    if (!Number.isFinite(id) || id <= 0) return;
+    if (statsCache[id]?.stats) return;
+
+    try {
+      const pRes = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+      if (!pRes.ok) return;
+      const p = await pRes.json();
+
+      const statsArr = Array.isArray(p?.stats) ? p.stats : [];
+      const map = {};
+      for (const s of statsArr) {
+        const k = String(s?.stat?.name || "");
+        const v = Number(s?.base_stat);
+        if (!k || !Number.isFinite(v)) continue;
+        map[k] = v;
+      }
+
+      const hp = map.hp ?? null;
+      const atk = map.attack ?? null;
+      const def = map.defense ?? null;
+      const spa = map["special-attack"] ?? null;
+      const spd = map["special-defense"] ?? null;
+      const spe = map.speed ?? null;
+
+      const nums = [hp, atk, def, spa, spd, spe].filter((x) => Number.isFinite(x));
+      const total = nums.reduce((a, b) => a + b, 0);
+
+      setStatsCache((prev) => ({
+        ...prev,
+        [id]: { stats: { hp, atk, def, spa, spd, spe }, total },
+      }));
+    } catch {}
+  }
+
+  async function resolveEvoChainIfNeeded(entry) {
+    const id = Number(entry?.dexId);
+    if (!Number.isFinite(id) || id <= 0) return;
+    if (evoCache[id]?.chainDexIds?.length) return;
+
+    try {
+      const pRes = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+      if (!pRes.ok) return;
+      const p = await pRes.json();
+
+      const speciesId = getIdFromSpeciesUrl(p?.species?.url);
+      if (!Number.isFinite(speciesId)) return;
+
+      const sRes = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${speciesId}`);
+      if (!sRes.ok) return;
+      const species = await sRes.json();
+
+      const evoUrl = String(species?.evolution_chain?.url || "");
+      if (!evoUrl) return;
+
+      const eRes = await fetch(evoUrl);
+      if (!eRes.ok) return;
+      const evo = await eRes.json();
+
+      const chainSpeciesIds = flattenEvoChain(evo?.chain);
+      if (!chainSpeciesIds.length) return;
+
+      // speciesId == national dex id for base species, usable for official artwork
+      const chainDexIds = chainSpeciesIds.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0);
+
+      setEvoCache((prev) => ({
+        ...prev,
+        [id]: { chainDexIds },
+      }));
+
+      // warm name cache (nice UX)
+      for (const dex of chainDexIds) {
+        if (!apiNameCache[dex]?.baseDe && !fullPokedex?.[`pokedex${dex}`]) {
+          // create a tiny entry-like object for resolver
+          await resolveGermanNameAndGenIfNeeded({ dexId: dex, nameDe: null, apiName: null, kind: "normal_api" });
+        }
+      }
+    } catch {}
+  }
+
   // Prefetch around current (fast + cached)
   useEffect(() => {
     let alive = true;
@@ -754,6 +918,10 @@ export default function Pokedex() {
     if (!current) return;
     if (!current.nameDe) resolveGermanNameAndGenIfNeeded(current);
     resolveTypesIfNeeded(current);
+
+    // Quick info prefetch (lightweight)
+    resolveStatsIfNeeded(current);
+    resolveEvoChainIfNeeded(current);
   }, [current?.dexId]);
 
   // Navigation (wheel / keyboard)
@@ -871,7 +1039,7 @@ export default function Pokedex() {
     boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
   };
 
-  // Type pills (colored like PokemonInfo)
+  // Type pills
   const typePill = (active, typeEn) => {
     const c = typeColor(typeEn);
     return {
@@ -931,11 +1099,312 @@ export default function Pokedex() {
     nav(`/pokemon/${dexId}`);
   }
 
+  function openCompare(leftDexId) {
+  const id = Number(leftDexId);
+  if (!Number.isFinite(id) || id <= 0) return;
+  saveDexNavState();
+  nav(`${COMPARE_ROUTE}/${id}`, { state: { leftDexId: id } });
+}
+
+
+  // Accent for quick info (based on first type)
+  const currentTypes = current ? typeCache[current.dexId]?.types || [] : [];
+  const accentType = currentTypes[0] || null;
+  const accent = accentType ? typeColor(accentType) : { bg: "rgba(255,255,255,0.08)", bd: "rgba(255,255,255,0.18)" };
+
+  function FavStar({ active, onClick, title }) {
+    return (
+      <button
+        onClick={onClick}
+        title={title}
+        style={{
+          appearance: "none",
+          border: "1px solid rgba(255,255,255,0.14)",
+          background: active ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.18)",
+          cursor: "pointer",
+          width: 38,
+          height: 38,
+          borderRadius: 12,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: active ? "0 14px 40px rgba(0,0,0,0.40)" : "none",
+          transition: "120ms ease",
+          color: "white",
+          flex: "0 0 auto",
+        }}
+      >
+        <span style={{ fontSize: 18, lineHeight: 1, opacity: active ? 1 : 0.85 }}>
+          {active ? "★" : "☆"}
+        </span>
+      </button>
+    );
+  }
+
+  function SmallFav({ active, onClick }) {
+    return (
+      <button
+        onClick={onClick}
+        title={active ? "Aus Favoriten entfernen" : "Zu Favoriten"}
+        style={{
+          appearance: "none",
+          border: "1px solid rgba(255,255,255,0.10)",
+          background: "rgba(0,0,0,0.18)",
+          cursor: "pointer",
+          width: 30,
+          height: 30,
+          borderRadius: 10,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: active ? 1 : 0.75,
+        }}
+      >
+        <span style={{ fontSize: 14, lineHeight: 1 }}>{active ? "★" : "☆"}</span>
+      </button>
+    );
+  }
+
+  function renderEvoAndStats(dexId) {
+  const evo = evoCache[dexId]?.chainDexIds || [];
+  const st = statsCache[dexId];
+
+  const statRows = st?.stats
+    ? [
+        { k: "hp", label: "KP", v: st.stats.hp },
+        { k: "atk", label: "Ang", v: st.stats.atk },
+        { k: "def", label: "Vert", v: st.stats.def },
+        { k: "spa", label: "SpAng", v: st.stats.spa },
+        { k: "spd", label: "SpVert", v: st.stats.spd },
+        { k: "spe", label: "Init", v: st.stats.spe },
+      ]
+    : [];
+
+  const max = 180;
+
+  function statFillStyle(k) {
+    // bewusst “Pokémon-like” Farben
+    const map = {
+      hp: { a: "rgba(70, 220, 140, 0.92)", b: "rgba(70, 220, 140, 0.28)" },    // grün
+      atk: { a: "rgba(255, 92, 92, 0.92)", b: "rgba(255, 92, 92, 0.26)" },     // rot
+      def: { a: "rgba(88, 140, 255, 0.92)", b: "rgba(88, 140, 255, 0.26)" },   // blau
+      spa: { a: "rgba(185, 110, 255, 0.92)", b: "rgba(185, 110, 255, 0.26)" }, // lila
+      spd: { a: "rgba(80, 220, 255, 0.92)", b: "rgba(80, 220, 255, 0.22)" },   // cyan
+      spe: { a: "rgba(255, 210, 80, 0.92)", b: "rgba(255, 210, 80, 0.22)" },   // gelb
+    };
+    return map[k] || { a: "rgba(255,255,255,0.75)", b: "rgba(255,255,255,0.18)" };
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        borderRadius: 16,
+        border: `1px solid ${accent.bd}`,
+        background: accent.bg,
+        padding: 12,
+        boxShadow: "0 18px 55px rgba(0,0,0,0.45)",
+      }}
+    >
+      {/* EVO */}
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ fontWeight: 1000, letterSpacing: 0.2, opacity: 0.95 }}>Quick Info</div>
+        <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 900 }}>
+          {st?.total ? (
+            <>
+              BST: <b>{st.total}</b>
+            </>
+          ) : (
+            " "
+          )}
+        </div>
+      </div>
+
+      {evo.length ? (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 12, opacity: 0.80, fontWeight: 900, marginBottom: 8 }}>Entwicklungsreihe</div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            {evo.map((eid, i) => {
+              const nameLocal = fullPokedex?.[`pokedex${eid}`] || null;
+              const name = nameLocal || apiNameCache?.[eid]?.baseDe || `#${eid}`;
+              const active = Number(eid) === Number(dexId);
+
+              return (
+                <div key={eid + "-" + i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <button
+                    onClick={() => openPokemon(eid)}
+                    title={active ? "Aktuell" : "Info öffnen"}
+                    style={{
+                      position: "relative",
+                      appearance: "none",
+                      color: "white",
+                      textShadow: "0 1px 2px rgba(0,0,0,0.65)",
+                      border: active ? `2px solid ${accent.bd}` : "1px solid rgba(255,255,255,0.14)",
+                      background: active ? "rgba(0,0,0,0.26)" : "rgba(0,0,0,0.14)",
+                      cursor: "pointer",
+                      borderRadius: 14,
+                      padding: "8px 10px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      transform: active ? "scale(1.03)" : "scale(1)",
+                      boxShadow: active
+                        ? `0 0 0 2px rgba(255,255,255,0.10), 0 18px 55px rgba(0,0,0,0.55), 0 0 22px ${accent.bd}`
+                        : "none",
+                      transition: "120ms ease",
+                    }}
+                  >
+                    {/* kleine “Aktuell” Markierung */}
+                    
+
+                    <img
+                      src={officialArtworkUrl(eid)}
+                      alt={name}
+                      style={{
+                        width: 34,
+                        height: 34,
+                        objectFit: "contain",
+                        filter: active ? "drop-shadow(0 8px 18px rgba(0,0,0,0.55))" : "none",
+                      }}
+                      loading="lazy"
+                    />
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.05 }}>
+                      <div
+                        style={{
+                          fontWeight: 1000,
+                          fontSize: 13,
+                          maxWidth: 180,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {name}
+                      </div>
+                      <div style={{ fontSize: 11, opacity: 0.72, fontWeight: 900 }}>#{eid}</div>
+                    </div>
+                  </button>
+
+                  {i < evo.length - 1 ? <div style={{ opacity: 0.5, fontWeight: 1000, userSelect: "none" }}>›</div> : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>Entwicklungsreihe lädt…</div>
+      )}
+
+      {/* STATS */}
+      <div style={{ marginTop: 12 }}>
+        <div style={{ fontSize: 12, opacity: 0.80, fontWeight: 900, marginBottom: 8 }}>Basiswerte</div>
+
+        {statRows.length ? (
+          <div style={{ display: "grid", gap: 8 }}>
+            {statRows.map((r) => {
+              const v = Number(r.v);
+              const pct = Number.isFinite(v) ? Math.max(0, Math.min(1, v / max)) : 0;
+              const col = statFillStyle(r.k);
+
+              return (
+                <div key={r.k} style={{ display: "grid", gridTemplateColumns: "54px 1fr 42px", gap: 10, alignItems: "center" }}>
+                  <div style={{ fontSize: 12, opacity: 0.9, fontWeight: 950 }}>{r.label}</div>
+
+                  <div
+                    style={{
+                      height: 10,
+                      borderRadius: 999,
+                      background: "rgba(0,0,0,0.18)",
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${pct * 100}%`,
+                        borderRadius: 999,
+                        background: `linear-gradient(90deg, ${col.a}, ${col.b})`,
+                        boxShadow: `0 0 0 1px rgba(255,255,255,0.10) inset, 0 10px 22px rgba(0,0,0,0.35)`,
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ textAlign: "right", fontSize: 12, fontWeight: 1000, opacity: 0.9 }}>
+                    {Number.isFinite(v) ? v : "—"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, opacity: 0.75 }}>Stats laden…</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
   return (
     <div style={page}>
       <style>{`
         .dex-scroll { scrollbar-width: none; -ms-overflow-style: none; }
         .dex-scroll::-webkit-scrollbar { display: none; }
+
+        /* CTA Buttons – clean, nicht "AI neon" */
+        .dexCtaRow { display:flex; gap:10px; align-items:stretch; margin-top: 12px; flex-wrap: wrap; }
+        .dexCtaBtn {
+          appearance:none;
+          border: 1px solid rgba(255,255,255,0.14);
+          background: rgba(0,0,0,0.22);
+          color: white;
+          cursor:pointer;
+          border-radius: 14px;
+          padding: 10px 12px;
+          font-weight: 950;
+          display:flex;
+          align-items:center;
+          gap:10px;
+          transition: transform 120ms ease, background 120ms ease, border 120ms ease, box-shadow 120ms ease;
+          user-select:none;
+          white-space:nowrap;
+        }
+        .dexCtaBtn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.22); }
+        .dexCtaBtn:active { transform: translateY(0px); }
+
+        .dexCtaPrimary {
+          border-color: rgba(255,255,255,0.22);
+          background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(0,0,0,0.18));
+          box-shadow: 0 14px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06) inset;
+        }
+
+        .dexCtaIcon {
+          width: 30px;
+          height: 30px;
+          border-radius: 999px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          border: 1px solid rgba(255,255,255,0.16);
+          background: rgba(0,0,0,0.22);
+          flex: 0 0 auto;
+        }
+        .dexCtaText { display:flex; flex-direction:column; line-height:1.05; }
+        .dexCtaTitle { font-size: 13px; font-weight: 1000; letter-spacing: 0.2px; }
+        .dexCtaSub { font-size: 11px; opacity: 0.72; margin-top: 2px; font-weight: 900; }
+
+        .dexInfoPanel {
+          border-radius: 16px;
+          padding: 10px 10px 12px;
+          border: 1px solid rgba(255,255,255,0.10);
+          background: rgba(255,255,255,0.03);
+          transition: 120ms ease;
+        }
+        .dexInfoPanel:hover {
+          border-color: rgba(255,255,255,0.18);
+          background: rgba(255,255,255,0.05);
+        }
       `}</style>
 
       <div style={{ width: "min(980px, 96vw)", margin: "0 auto", paddingTop: 12 }}>
@@ -961,6 +1430,8 @@ export default function Pokedex() {
                 setSelectedForms(new Set(["normal", "mega", "gigas", "special"]));
                 setQuery("");
                 setIdx(0);
+                setOnlyFav(false);
+                setQuickOpen(false);
                 if (listRef.current) listRef.current.scrollTop = 0;
                 saveDexNavState({
                   idx: 0,
@@ -1052,6 +1523,18 @@ export default function Pokedex() {
                       {f.label}
                     </div>
                   ))}
+
+                  <div
+                    style={chip(onlyFav)}
+                    onClick={() => {
+                      setOnlyFav((v) => !v);
+                      setIdx(0);
+                      if (listRef.current) listRef.current.scrollTop = 0;
+                    }}
+                    title="Nur Favoriten anzeigen"
+                  >
+                    Favoriten
+                  </div>
                 </div>
               </div>
 
@@ -1064,13 +1547,13 @@ export default function Pokedex() {
             </div>
           )}
 
-          {/* Middle highlight layout (current + 2 above/below) */}
+          {/* List */}
           <div
             ref={listRef}
             className="dex-scroll"
             style={{
               marginTop: 12,
-              maxHeight: filtersOpen ? "calc(100vh - 420px)" : "calc(100vh - 250px)",
+              maxHeight: filtersOpen ? "calc(100vh - 440px)" : "calc(100vh - 270px)",
               overflowY: "auto",
               paddingRight: 2,
             }}
@@ -1097,6 +1580,7 @@ export default function Pokedex() {
                           style={{ width: 42, height: 42, objectFit: "contain" }}
                           loading="lazy"
                         />
+
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 950, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                             {name}
@@ -1109,11 +1593,14 @@ export default function Pokedex() {
                           {renderTypes(p.dexId, false)}
                         </div>
 
-                        {p.kind !== "normal" && p.kind !== "normal_api" ? (
-                          <div style={badge(false)}>
-                            {p.kind.includes("mega") ? "MEGA" : p.kind.includes("gigas") ? "GIGAS" : "FORM"}
-                          </div>
-                        ) : null}
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFav(p.dexId);
+                          }}
+                        >
+                          <SmallFav active={isFav(p.dexId)} onClick={() => {}} />
+                        </div>
                       </div>
                     );
                   })}
@@ -1132,42 +1619,86 @@ export default function Pokedex() {
                         />
                       </div>
 
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                      <div className="dexInfoPanel" style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: 22,
+                                fontWeight: 1000,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                              title={currentName}
+                            >
+                              {currentName}
+                            </div>
+                            <div style={{ opacity: 0.72, fontWeight: 950, marginTop: 2, fontSize: 12 }}>
+                              #{current.dexId}
+                              {current.gen ? <> · Gen {current.gen}</> : null}
+                            </div>
+                          </div>
+
                           <div
-                            style={{
-                              fontSize: 22,
-                              fontWeight: 1000,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFav(current.dexId);
                             }}
                           >
-                            {currentName}
-                          </div>
-                          <div style={{ opacity: 0.75, fontWeight: 950 }}>#{current.dexId}</div>
-                        </div>
-
-                        <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          {current.gen ? <div style={badge(true)}>Gen {current.gen}</div> : <div style={badge(false)}>Gen …</div>}
-                          <div style={badge(true)}>
-                            {current.kind === "normal" || current.kind === "normal_api"
-                              ? "NORMAL"
-                              : current.kind.includes("mega")
-                              ? "MEGA"
-                              : current.kind.includes("gigas")
-                              ? "GIGAS"
-                              : "FORM"}
+                            <FavStar
+                              active={isFav(current.dexId)}
+                              title={isFav(current.dexId) ? "Aus Favoriten entfernen" : "Zu Favoriten"}
+                              onClick={() => {}}
+                            />
                           </div>
                         </div>
 
                         {renderTypes(current.dexId, true)}
 
-                        <div style={{ marginTop: 12 }}>
-                          <button style={{ ...btn, width: "100%" }} onClick={() => openPokemon(current.dexId)}>
-                            Info öffnen
+                        <div className="dexCtaRow">
+                          <button className="dexCtaBtn dexCtaPrimary" onClick={() => openPokemon(current.dexId)} title="Details öffnen">
+                            <span className="dexCtaIcon">
+                              <span style={{ fontSize: 16, fontWeight: 1000, lineHeight: 1 }}>↗</span>
+                            </span>
+                            <span className="dexCtaText">
+                              <span className="dexCtaTitle">Details</span>
+                              <span className="dexCtaSub">Info · Moves · Formen</span>
+                            </span>
+                          </button>
+
+                          <button className="dexCtaBtn" onClick={() => openCompare(current.dexId)} title="Vergleichen">
+                            <span className="dexCtaIcon">
+                              <span style={{ fontSize: 16, fontWeight: 1000, lineHeight: 1 }}>⚔</span>
+                            </span>
+                            <span className="dexCtaText">
+                              <span className="dexCtaTitle">Vergleichen</span>
+                            </span>
+                          </button>
+
+                          <button
+                            className="dexCtaBtn"
+                            onClick={() => {
+                              setQuickOpen((v) => !v);
+                              // ensure data prefetch when opening
+                              if (!quickOpen) {
+                                resolveStatsIfNeeded(current);
+                                resolveEvoChainIfNeeded(current);
+                              }
+                            }}
+                            title="Quick Info ein-/ausklappen"
+                          >
+                            <span className="dexCtaIcon">
+                              <span style={{ fontSize: 16, fontWeight: 1000, lineHeight: 1 }}>{quickOpen ? "▾" : "▸"}</span>
+                            </span>
+                            <span className="dexCtaText">
+                              <span className="dexCtaTitle">Quick Info</span>
+                              <span className="dexCtaSub">{quickOpen ? "Einklappen" : "Entwicklung · Stats"}</span>
+                            </span>
                           </button>
                         </div>
+
+                        {quickOpen ? renderEvoAndStats(current.dexId) : null}
                       </div>
                     </div>
                   </div>
@@ -1203,6 +1734,15 @@ export default function Pokedex() {
                             {p.kind.includes("mega") ? "MEGA" : p.kind.includes("gigas") ? "GIGAS" : "FORM"}
                           </div>
                         ) : null}
+
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFav(p.dexId);
+                          }}
+                        >
+                          <SmallFav active={isFav(p.dexId)} onClick={() => {}} />
+                        </div>
                       </div>
                     );
                   })}
@@ -1212,6 +1752,11 @@ export default function Pokedex() {
 
           <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>
             Treffer: <b>{list.length}</b>
+            {onlyFav ? (
+              <>
+                {" "}· <b>⭐ Nur Favoriten</b> ({favorites.size})
+              </>
+            ) : null}
             {query.trim() ? (
               <>
                 {" "}für "<b>{query.trim()}</b>"

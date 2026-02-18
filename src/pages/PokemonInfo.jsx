@@ -246,30 +246,6 @@ async function getItemNameDe(itemKey) {
   }
 }
 
-function evoRequirementDe(detail) {
-  if (!detail) return "Unbekannt";
-
-  const trig = detail?.trigger?.name;
-
-  if (trig === "level-up") {
-    const parts = ["Level-Up"];
-    if (detail.min_level) parts.push(`ab Lv. ${detail.min_level}`);
-    if (detail.time_of_day) parts.push(detail.time_of_day === "night" ? "bei Nacht" : "bei Tag");
-    if (detail.min_happiness) parts.push(`Zuneigung ≥ ${detail.min_happiness}`);
-    return parts.join(" • ");
-  }
-
-  if (trig === "use-item") {
-    const key = detail.item?.name;
-    const de = key ? itemNameDeCache[key] || prettyName(key) : "Item";
-    return `Item: ${de}`;
-  }
-
-  if (trig === "trade") return `Tausch`;
-
-  return prettyName(trig);
-}
-
 function compactSprite(pokemon) {
   return pokemon?.sprites?.other?.["official-artwork"]?.front_default || pokemon?.sprites?.front_default || "";
 }
@@ -518,6 +494,118 @@ function multToBucket(mult) {
   return "neutral";
 }
 
+/* =========================
+   ✅ Evolution Details (vollständig)
+========================= */
+const GENDER_DE = {
+  1: "♀",
+  2: "♂",
+};
+
+function triggerLabelDe(trig) {
+  const t = String(trig || "").toLowerCase();
+  if (t === "level-up") return "Level-Up";
+  if (t === "use-item") return "Item";
+  if (t === "trade") return "Tausch";
+  if (t === "shed") return "Spezial";
+  if (!t) return "Unbekannt";
+  return prettyName(t);
+}
+
+// nutzt Cache (wird über useEffect vorab befüllt)
+function itemNameDeFromKey(key) {
+  const k = String(key || "").trim().toLowerCase();
+  if (!k) return null;
+  return itemNameDeCache[k] || prettyName(k);
+}
+
+// nutzt Move-Cache (wird über useEffect vorab befüllt)
+function moveNameDeFromUrlOrKey(urlOrKey) {
+  if (!urlOrKey) return null;
+  // wenn url:
+  if (String(urlOrKey).includes("/api/v2/move/")) {
+    return moveNameCache.get(urlOrKey) || null;
+  }
+  // wenn nur key:
+  return cap(urlOrKey);
+}
+
+function evoRequirementDe(detail) {
+  if (!detail) return "Unbekannt";
+
+  const parts = [];
+
+  const trig = detail?.trigger?.name;
+  parts.push(triggerLabelDe(trig));
+
+  // Reihenfolge: Level/Item, dann Bedingungen
+  if (detail.min_level) parts.push(`ab Lv. ${detail.min_level}`);
+
+  if (detail.item?.name) parts.push(`mit ${itemNameDeFromKey(detail.item.name)}`);
+  if (detail.held_item?.name) parts.push(`hält ${itemNameDeFromKey(detail.held_item.name)}`);
+
+  if (detail.time_of_day) parts.push(detail.time_of_day === "night" ? "bei Nacht" : "bei Tag");
+
+  if (detail.min_happiness) parts.push(`Zuneigung ≥ ${detail.min_happiness}`);
+  if (detail.min_affection) parts.push(`Zuneigung ≥ ${detail.min_affection}`);
+  if (detail.min_beauty) parts.push(`Schönheit ≥ ${detail.min_beauty}`);
+
+  if (detail.known_move) {
+    const mvName = moveNameDeFromUrlOrKey(detail.known_move?.url) || cap(detail.known_move?.name);
+    parts.push(`kennt ${mvName}`);
+  }
+  if (detail.known_move_type?.name) {
+    const ty = String(detail.known_move_type.name).toLowerCase();
+    parts.push(`kennt ${TYPE_LABELS_DE[ty] || prettyName(ty)}-Attacke`);
+  }
+
+  if (detail.location?.name) {
+    // PokeAPI liefert Location-Keys (engl.) – wir zeigen den Key "schön" an (besser als nix).
+    parts.push(`Ort: ${prettyName(detail.location.name)}`);
+  }
+
+  if (detail.gender) parts.push(`nur ${GENDER_DE[detail.gender] || detail.gender}`);
+
+  // -1 = weniger Atk als Def, 0 = gleich, 1 = mehr
+  if (detail.relative_physical_stats === -1) parts.push("Angriff < Verteidigung");
+  if (detail.relative_physical_stats === 0) parts.push("Angriff = Verteidigung");
+  if (detail.relative_physical_stats === 1) parts.push("Angriff > Verteidigung");
+
+  if (detail.needs_overworld_rain) parts.push("bei Regen (Overworld)");
+  if (detail.turn_upside_down) parts.push("Konsole umdrehen");
+
+  // ✅ Pampam / Pandagro: party_type = dark
+  if (detail.party_type?.name) {
+    const ty = String(detail.party_type.name).toLowerCase();
+    parts.push(`${TYPE_LABELS_DE[ty] || prettyName(ty)}-Pokémon im Team`);
+  }
+
+  if (detail.party_species?.name) parts.push(`${cap(detail.party_species.name)} im Team`);
+  if (detail.trade_species?.name) parts.push(`gegen ${cap(detail.trade_species.name)} tauschen`);
+
+  // falls nur Trigger "trade" ohne weitere Infos
+  if (String(trig || "").toLowerCase() === "trade" && parts.length === 1) parts.push("tauschen");
+
+  // falls nur Trigger "use-item" ohne Item (sollte selten sein)
+  if (String(trig || "").toLowerCase() === "use-item" && !detail.item?.name) parts.push("Item benutzen");
+
+  // für "shed" (z.B. Ninjatom) sind Details oft leer; wir geben zumindest sinnvolle Basis:
+  if (String(trig || "").toLowerCase() === "shed") {
+    // PokeAPI gibt hier oft min_level + keine weiteren Bedingungen; wir ergänzen das übliche, ohne zu „raten“
+    // (keine falschen Fakten): nur wenn der Trigger so heißt, nennen wir es „Spezial“.
+    if (!detail.min_level) {
+      // nichts
+    }
+  }
+
+  // duplizierte/empty Teile raus
+  const cleaned = parts
+    .map((x) => String(x || "").trim())
+    .filter(Boolean);
+
+  return cleaned.join(" • ");
+}
+
 export default function PokemonInfo() {
   const { dexId } = useParams();
   const nav = useNavigate();
@@ -547,6 +635,7 @@ export default function PokemonInfo() {
   const [ccDark, setCcDark] = useState(false);
 
   const [evoItemTick, setEvoItemTick] = useState(0);
+  const [evoMoveTick, setEvoMoveTick] = useState(0); // ✅ damit bekannte Moves in Evo-Texten nachladen
 
   // ✅ Typ-Matchups
   const [matchups, setMatchups] = useState(null);
@@ -977,7 +1066,7 @@ export default function PokemonInfo() {
     };
   }, [evoList, evoNameDeById]);
 
-  // Evo item names DE
+  // ✅ Evo item names DE (+ rerender tick)
   useEffect(() => {
     let alive = true;
 
@@ -1000,6 +1089,43 @@ export default function PokemonInfo() {
     }
 
     loadEvoItemNames();
+
+    return () => {
+      alive = false;
+    };
+  }, [evoList]);
+
+  // ✅ Evo known_move Namen DE vorladen (damit „kennt …“ korrekt ist)
+  useEffect(() => {
+    let alive = true;
+
+    async function loadEvoMoveNames() {
+      const urls = new Set();
+
+      for (const e of evoList || []) {
+        for (const d of e.details || []) {
+          const u = d?.known_move?.url;
+          if (u) urls.add(u);
+        }
+      }
+
+      const list = [...urls];
+      if (list.length === 0) return;
+
+      // nur die, die noch nicht im Cache sind
+      const missing = list.filter((u) => !moveNameCache.has(u));
+      if (missing.length === 0) return;
+
+      await mapInBatches(missing, 10, async (u) => {
+        await fetchMoveNameDe(u);
+        return true;
+      });
+
+      if (!alive) return;
+      setEvoMoveTick((x) => x + 1);
+    }
+
+    loadEvoMoveNames();
 
     return () => {
       alive = false;
@@ -1265,7 +1391,11 @@ export default function PokemonInfo() {
                       }}
                     >
                       <div>
-                        {basePokeballChance !== null ? <>Fangchance: {basePokeballChance}%</> : <>Catchrate: {catchRate ?? "-"}</>}
+                        {basePokeballChance !== null ? (
+                          <>Fangchance: {basePokeballChance}%</>
+                        ) : (
+                          <>Catchrate: {catchRate ?? "-"}</>
+                        )}
                       </div>
 
                       <button
@@ -1618,6 +1748,7 @@ export default function PokemonInfo() {
                             {Array.isArray(e.details) && e.details.length > 0 ? (
                               e.details.map((d, i) => (
                                 <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>
+                                  {/* ✅ nutzt item/move caches + party_type etc. */}
                                   {evoRequirementDe(d)}
                                 </div>
                               ))
