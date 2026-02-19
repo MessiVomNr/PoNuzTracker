@@ -24,6 +24,7 @@ import OnlineMode from "./pages/OnlineMode";
 import SoullinkStart from "./duo/SoullinkStart";
 import DuoLobby from "./duo/DuoLobby";
 import PokemonCompare from "./pages/PokemonCompare.jsx";
+import TeamCompare from "./pages/TeamCompare.jsx";
 
 // Hook für Theme-Verwaltung
 function useInitTheme() {
@@ -84,6 +85,7 @@ function AppContent() {
         <Route path="/controls/draft" element={<ControlsDraft />} />
         <Route path="/soullink" element={<SoullinkStart />} />
         <Route path="/compare/:leftId" element={<PokemonCompare />} />
+        <Route path="/team-compare" element={<TeamCompare />} />
 
       </Routes>
     </>

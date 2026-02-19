@@ -209,6 +209,13 @@ export default function Controls() {
             conflict={conflicts["general.openTypeCalculator"]}
             onChange={(v) => setHotkeyChecked("general", "openTypeCalculator", v)}
           />
+          
+          <Row
+            title={labelHotkey("general", "openTeamCompare")}
+            value={general.openTeamCompare}
+            conflict={conflicts["general.openTeamCompare"]}
+            onChange={(v) => setHotkeyChecked("general", "openTeamCompare", v)}
+          />
 
           {/* ✅ Level-Cap Hotkeys (K/L default, aber bindbar) */}
           <Row

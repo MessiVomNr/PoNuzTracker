@@ -172,11 +172,16 @@ export default function GlobalEscapeMenu() {
     location.pathname.startsWith("/pokemon-compare") ||
     location.pathname.startsWith("/pokemoncompare");
 
-  // ✅ "Return-to" Speicher für echtes Toggle (E/A)
+  // ✅ Team-Compare: eigene Seite (Toggle mit C)
+  const isTeamCompare = location.pathname === "/team-compare";
+
+  // ✅ "Return-to" Speicher für echtes Toggle (E/A/C)
   const POKEDEX_RETURN_KEY = "app_return_to_pokedex_v1";
   const MOVEDEX_RETURN_KEY = "app_return_to_movedex_v1";
+  const TEAMCOMPARE_RETURN_KEY = "app_return_to_team_compare_v1";
   const LAST_NON_POKEDEX_KEY = "app_last_non_pokedex_v1";
   const LAST_NON_MOVEDEX_KEY = "app_last_non_movedex_v1";
+  const LAST_NON_TEAMCOMPARE_KEY = "app_last_non_team_compare_v1";
 
   function currentFullPath() {
     return `${location.pathname}${location.search || ""}${location.hash || ""}`;
@@ -193,27 +198,26 @@ export default function GlobalEscapeMenu() {
     return "/duo";
   }, [location.pathname]);
 
-  // ✅ Merke dir jeweils die "letzte normale Seite" (außerhalb von Dex-Flächen),
-  // damit E/A auf Detail/Compare korrekt: Detail/Compare -> Dex -> schließen (zur normalen Seite)
+  // ✅ Merke dir jeweils die "letzte normale Seite" (außerhalb von Dex-/MoveDex-/TeamCompare-Flächen)
   useEffect(() => {
     const path = currentFullPath();
 
-    // Pokedex-Fläche: /pokedex + /pokemon/:id + /compare... (zählt zur Dex-Fläche)
     if (!isPokedex && !isPokemonDetail && !isPokemonCompare) {
       try {
         sessionStorage.setItem(LAST_NON_POKEDEX_KEY, path);
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
-    // MoveDex-Fläche: /movedex + /move/:id
     if (location.pathname !== "/movedex" && !isMoveDetail) {
       try {
         sessionStorage.setItem(LAST_NON_MOVEDEX_KEY, path);
-      } catch {
-        // ignore
-      }
+      } catch {}
+    }
+
+    if (!isTeamCompare) {
+      try {
+        sessionStorage.setItem(LAST_NON_TEAMCOMPARE_KEY, path);
+      } catch {}
     }
   }, [
     location.pathname,
@@ -223,6 +227,7 @@ export default function GlobalEscapeMenu() {
     isPokemonDetail,
     isPokemonCompare,
     isMoveDetail,
+    isTeamCompare,
   ]);
 
   // Audio apply + listeners
@@ -435,6 +440,28 @@ export default function GlobalEscapeMenu() {
       // ✅ Ab hier: wenn Fokus in Input/Textarea/ContentEditable -> GAR NICHTS triggern
       if (isTypingTarget(document.activeElement)) return;
 
+      // ✅ TEAM COMPARE TOGGLE (C)
+      if (g.openTeamCompare && comboMatches(e, g.openTeamCompare)) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (isTeamCompare) {
+          const ret =
+            sessionStorage.getItem(TEAMCOMPARE_RETURN_KEY) ||
+            sessionStorage.getItem(LAST_NON_TEAMCOMPARE_KEY);
+
+          sessionStorage.removeItem(TEAMCOMPARE_RETURN_KEY);
+
+          if (ret) nav(ret);
+          else smartBack();
+          return;
+        }
+
+        sessionStorage.setItem(TEAMCOMPARE_RETURN_KEY, currentFullPath());
+        nav("/team-compare");
+        return;
+      }
+
       // Soullink Hotkeys
       if (s.goTeam && comboMatches(e, s.goTeam)) {
         e.preventDefault();
@@ -495,10 +522,7 @@ export default function GlobalEscapeMenu() {
         return;
       }
 
-      // ✅ POKEDEX TOGGLE (E):
-      // - von Pokemon-Detail/Compare: E -> /pokedex (Return-To = letzte Non-Dex Seite)
-      // - auf /pokedex: E -> schließen (zur Return-To/letzte Non-Dex Seite)
-      // - von überall sonst: E -> /pokedex (Return-To = aktuelle Seite)
+      // ✅ POKEDEX TOGGLE (E)
       if (g.openPokedex && comboMatches(e, g.openPokedex)) {
         e.preventDefault();
         e.stopPropagation();
@@ -515,8 +539,6 @@ export default function GlobalEscapeMenu() {
           return;
         }
 
-        // ✅ Detail/Compare verhalten wie "Dex-Fläche": E bringt dich in den Pokédex,
-        // aber Return-To bleibt die letzte normale Seite (nicht die Compare/Detail Seite)
         if (isPokemonDetail || isPokemonCompare) {
           const lastNon = sessionStorage.getItem(LAST_NON_POKEDEX_KEY) || "/";
           sessionStorage.setItem(POKEDEX_RETURN_KEY, lastNon);
@@ -524,7 +546,6 @@ export default function GlobalEscapeMenu() {
           return;
         }
 
-        // normal öffnen von irgendwo
         sessionStorage.setItem(POKEDEX_RETURN_KEY, currentFullPath());
         nav("/pokedex");
         return;
@@ -580,6 +601,7 @@ export default function GlobalEscapeMenu() {
     isPokemonDetail,
     isPokemonCompare,
     isMoveDetail,
+    isTeamCompare,
     location.pathname,
     location.search,
     location.hash,

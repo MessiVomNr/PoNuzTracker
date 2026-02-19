@@ -14,6 +14,7 @@ export const DEFAULT_HOTKEYS = {
     goHome: "H",
     goLobby: "Shift+L",
     goBack: "Backspace",
+    openTeamCompare: "C",
   },
 
   draft: {
@@ -253,6 +254,7 @@ export function labelHotkey(scope, key) {
       goHome: "Zum Start",
       goLobby: "Zur Lobby",
       goBack: "Zurück",
+      openTeamCompare: "Team-Rechner öffnen",
     },
     draft: {
       bidSubmit: "Gebot bestätigen",
