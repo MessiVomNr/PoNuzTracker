@@ -11,6 +11,7 @@ import RunTitleBar from "./duo/RunTitleBar";
 import { updateDuoSave } from "./duo/duoService";
 import { upsertRecentRoom } from "./duo/recentRooms";
 import levelCapsByGen from "./guides/level_caps";
+import { getFossilPoolForRunGen } from "./data/fossilsByGen";
 
 function getDexIdFromName(pokemonName, pokedex) {
   const entry = Object.entries(pokedex).find(([, name]) => name === pokemonName);
@@ -136,6 +137,14 @@ function normalizeSlotNames(arr, count) {
   return a;
 }
 
+function isFossilLocation(loc) {
+  return /^Fossil-\d+/.test(String(loc || "").trim());
+}
+
+function fossilFieldForSlot(slotIndex) {
+  // slotIndex 0..2
+  return `fossil${slotIndex + 1}`; // fossil1 / fossil2 / fossil3
+}
 function EncounterTable() {
   const navigate = useNavigate();
 
@@ -486,6 +495,24 @@ function EncounterTable() {
     });
   }
 
+  const fossilPool = useMemo(() => getFossilPoolForRunGen(gen), [gen]);
+
+const usedFossilsBySlot = useMemo(() => {
+  // pro Spieler: Set der bereits gewählten Fossilien (über alle Fossil-1..Fossil-10 Zeilen)
+  const sets = [...Array(slotCount)].map(() => new Set());
+
+  Object.entries(encounters || {}).forEach(([loc, row]) => {
+    if (!isFossilLocation(loc)) return;
+    const data = row || {};
+    for (let i = 0; i < slotCount; i++) {
+      const key = data[fossilFieldForSlot(i)];
+      if (key) sets[i].add(key);
+    }
+  });
+
+  return sets;
+}, [encounters, slotCount]);
+
   const getSelectStyles = () => {
     const dark = theme === "dark";
     return {
@@ -752,80 +779,183 @@ function EncounterTable() {
                   <td>{loc}</td>
 
                   {[...Array(slotCount)].map((_, i) => {
-                    const slotName = `pokemon${i + 1}`;
-                    const formKey = data[`form${i + 1}`] || "";
-                    const selected = data[slotName] || "";
-                    const available = pokemonList.filter((p) => !usedPokemon.has(p) || p === selected);
+  const slotName = `pokemon${i + 1}`;
+  const formKey = data[`form${i + 1}`] || "";
+  const selected = data[slotName] || "";
 
-                    const dexId = selected ? getDexIdFromName(selected, pokedex) : null;
-                    const megaOptions = dexId ? getMegaOptionsForDexId(dexId) : [];
-                    const hasMega = megaOptions.length > 0;
-                    const sprite = dexId ? spriteUrlFor(dexId, formKey) : null;
+  const isFossil = isFossilLocation(loc);
+  const fossilField = fossilFieldForSlot(i);
+  const chosenFossil = data[fossilField] || "";
 
-                    return (
-                      <td key={`${loc}-slot-${i}`}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ flex: 1, minWidth: 180 }}>
-                            <CreatableSelect
-                              key={`${loc}-${i}-${theme}`}
-                              options={available.map((name) => ({ label: name, value: name }))}
-                              value={selected ? { label: selected, value: selected } : null}
-                              onChange={(sel) => handleChange(loc, slotName, sel?.value || "")}
-                              isClearable
-                              isSearchable
-                              placeholder={`Pokémon ${i + 1}`}
-                              styles={getSelectStyles()}
-                            />
-                          </div>
+  // Fossil-Optionen: disable wenn dieser Spieler es schon woanders gewählt hat
+  const usedSet = usedFossilsBySlot[i] || new Set();
+  const fossilOptions = fossilPool;
 
-                          {/* Mega Toggle */}
-                          {selected && dexId && hasMega && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const next = nextMegaForm(formKey, megaOptions);
-                                handleChange(loc, `form${i + 1}`, next);
-                              }}
-                              title="Form wechseln (Normal/Mega/Mega X/Mega Y)"
-                              style={megaBtn(dark, !!formKey)}
-                            >
-                              {megaLabel(formKey)}
-                            </button>
-                          )}
+  // normale Pokémon-Auswahl
+  const available = pokemonList.filter((p) => !usedPokemon.has(p) || p === selected);
+  const dexId = selected ? getDexIdFromName(selected, pokedex) : null;
+  const megaOptions = dexId ? getMegaOptionsForDexId(dexId) : [];
+  const hasMega = megaOptions.length > 0;
+  const sprite = dexId ? spriteUrlFor(dexId, formKey) : null;
 
-                          {/* ✅ Sprite: Klick -> interne Pokédex-Seite */}
-                          {selected && dexId && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const idToUse =
-                                  formKey && dexId && MEGA_FORM_IDS[Number(dexId)]?.[formKey]
-                                    ? MEGA_FORM_IDS[Number(dexId)][formKey]
-                                    : Number(dexId);
+  // --- Fossil-Zeile: Dropdown statt CreatableSelect ---
+  if (isFossil) {
+  return (
+    <td key={`${loc}-slot-${i}`}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {/* 1) Pokémon ganz normal auswählen */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <CreatableSelect
+              key={`${loc}-${i}-${theme}`}
+              options={available.map((name) => ({ label: name, value: name }))}
+              value={selected ? { label: selected, value: selected } : null}
+              onChange={(sel) => handleChange(loc, slotName, sel?.value || "")}
+              isClearable
+              isSearchable
+              placeholder={`Pokémon ${i + 1}`}
+              styles={getSelectStyles()}
+            />
+          </div>
 
-                                if (idToUse) navigate(`/pokemon/${idToUse}`);
-                              }}
-                              title={`Info öffnen: ${selected}${formKey ? ` (${megaLabel(formKey)})` : ""}`}
-                              style={{
-                                border: "none",
-                                background: "transparent",
-                                padding: 0,
-                                cursor: "pointer",
-                                display: "inline-flex",
-                                alignItems: "center",
-                              }}
-                            >
-                              <img
-                                src={sprite || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexId}.png`}
-                                alt={selected}
-                                style={{ height: "60px" }}
-                              />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    );
-                  })}
+          {/* Mega Toggle bleibt auch bei Fossil möglich (falls du willst) */}
+          {selected && dexId && hasMega && (
+            <button
+              type="button"
+              onClick={() => {
+                const next = nextMegaForm(formKey, megaOptions);
+                handleChange(loc, `form${i + 1}`, next);
+              }}
+              title="Form wechseln (Normal/Mega/Mega X/Mega Y)"
+              style={megaBtn(dark, !!formKey)}
+            >
+              {megaLabel(formKey)}
+            </button>
+          )}
+
+          {/* Sprite */}
+          {selected && dexId && (
+            <button
+              type="button"
+              onClick={() => {
+                const idToUse =
+                  formKey && dexId && MEGA_FORM_IDS[Number(dexId)]?.[formKey]
+                    ? MEGA_FORM_IDS[Number(dexId)][formKey]
+                    : Number(dexId);
+
+                if (idToUse) navigate(`/pokemon/${idToUse}`);
+              }}
+              title={`Info öffnen: ${selected}${formKey ? ` (${megaLabel(formKey)})` : ""}`}
+              style={{
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+              }}
+            >
+              <img
+                src={sprite || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexId}.png`}
+                alt={selected}
+                style={{ height: "60px" }}
+              />
+            </button>
+          )}
+        </div>
+
+        {/* 2) Fossil-Auswahl klein darunter */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, opacity: 0.75, minWidth: 64 }}>Fossil:</span>
+          <select
+            value={chosenFossil}
+            onChange={(e) => handleChange(loc, fossilField, e.target.value)}
+            style={{
+              fontSize: 12,
+              padding: "6px 8px",
+              borderRadius: 10,
+              opacity: 0.95,
+              width: "100%",
+            }}
+          >
+            <option value="">— wählen —</option>
+            {fossilOptions.map((f) => (
+              <option key={f.key} value={f.key} disabled={usedSet.has(f.key) && f.key !== chosenFossil}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </td>
+  );
+}
+
+  // --- normale Route: CreatableSelect + Mega + Sprite ---
+  return (
+    <td key={`${loc}-slot-${i}`}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <CreatableSelect
+            key={`${loc}-${i}-${theme}`}
+            options={available.map((name) => ({ label: name, value: name }))}
+            value={selected ? { label: selected, value: selected } : null}
+            onChange={(sel) => handleChange(loc, slotName, sel?.value || "")}
+            isClearable
+            isSearchable
+            placeholder={`Pokémon ${i + 1}`}
+            styles={getSelectStyles()}
+          />
+        </div>
+
+        {/* Mega Toggle */}
+        {selected && dexId && hasMega && (
+          <button
+            type="button"
+            onClick={() => {
+              const next = nextMegaForm(formKey, megaOptions);
+              handleChange(loc, `form${i + 1}`, next);
+            }}
+            title="Form wechseln (Normal/Mega/Mega X/Mega Y)"
+            style={megaBtn(dark, !!formKey)}
+          >
+            {megaLabel(formKey)}
+          </button>
+        )}
+
+        {/* Sprite */}
+        {selected && dexId && (
+          <button
+            type="button"
+            onClick={() => {
+              const idToUse =
+                formKey && dexId && MEGA_FORM_IDS[Number(dexId)]?.[formKey]
+                  ? MEGA_FORM_IDS[Number(dexId)][formKey]
+                  : Number(dexId);
+
+              if (idToUse) navigate(`/pokemon/${idToUse}`);
+            }}
+            title={`Info öffnen: ${selected}${formKey ? ` (${megaLabel(formKey)})` : ""}`}
+            style={{
+              border: "none",
+              background: "transparent",
+              padding: 0,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+            }}
+          >
+            <img
+              src={sprite || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexId}.png`}
+              alt={selected}
+              style={{ height: "60px" }}
+            />
+          </button>
+        )}
+      </div>
+    </td>
+  );
+})}
 
                   <td>
                     <select value={status || ""} onChange={(e) => handleChange(loc, "status", e.target.value)}>

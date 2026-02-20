@@ -130,6 +130,7 @@ function buildAvailablePokemon(encounters, teamCount) {
     }
   });
 
+  // unique, Reihenfolge wird später deterministisch sortiert
   return perTeamPokemon.map((list) => [...new Set(list)]);
 }
 
@@ -160,6 +161,64 @@ function normalizeTeamsSource(teamsSrc, teamCount) {
   }
 
   return Array(teamCount).fill(null).map(() => ["", "", "", "", "", ""]);
+}
+
+/* =========================
+   Box: Anti-Wobble CSS
+========================= */
+const BOX_STATIC_CSS = `
+  .pokeboxItemStatic,
+  .pokeboxItemStatic:hover,
+  .pokeboxItemStatic:active,
+  .pokeboxItemStatic:focus,
+  .pokeboxItemStatic:focus-visible {
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+    filter: none !important;
+    box-shadow: none !important;
+  }
+
+  .pokeboxItemStatic img,
+  .pokeboxItemStatic:hover img,
+  .pokeboxItemStatic:active img,
+  .pokeboxItemStatic:focus img,
+  .pokeboxItemStatic:focus-visible img {
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+    filter: none !important;
+  }
+
+  .pokeboxImgStatic {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .pokeboxItemStatic:focus-visible {
+    outline: 2px solid rgba(120,170,255,0.55) !important;
+    outline-offset: 2px !important;
+  }
+`;
+
+/* =========================
+   Deterministische Sortierung
+   - stabilisiert Box-Reihenfolge trotz Firestore/Object.values()
+========================= */
+function sortBoxList(list, fullDex) {
+  const arr = [...(list || [])];
+  arr.sort((a, b) => {
+    const aDex = Number(getDexIdFromName(a, fullDex) || 99999);
+    const bDex = Number(getDexIdFromName(b, fullDex) || 99999);
+    if (aDex !== bDex) return aDex - bDex;
+    return String(a).localeCompare(String(b), "de", { sensitivity: "base" });
+  });
+  return arr;
 }
 
 function TeamManager() {
@@ -214,7 +273,7 @@ function TeamManager() {
       for (let i = 1; i <= 3; i++) {
         const n = entry?.[`pokemon${i}`];
         const f = entry?.[`form${i}`] || "";
-        if (n) map[n] = f; // Nuzlocke: Name ist i.d.R. einzigartig
+        if (n) map[n] = f;
       }
     });
     return map;
@@ -240,6 +299,11 @@ function TeamManager() {
     const avail = buildAvailablePokemon(encountersSource, teamCount);
     setAvailablePokemon(avail);
   }, [effectiveEdition, effectiveLinkMode, teamCount, encountersSource, teamsSource]);
+
+  // ===== Stabil sortierte Box-Listen (wichtig gegen Shuffle) =====
+  const sortedAvailablePokemon = useMemo(() => {
+    return (availablePokemon || []).map((list) => sortBoxList(list, fullDex));
+  }, [availablePokemon, fullDex]);
 
   // ===== Persist Teams helper =====
   const persistTeams = async (newTeams) => {
@@ -351,6 +415,8 @@ function TeamManager() {
 
   return (
     <div style={page}>
+      <style>{BOX_STATIC_CSS}</style>
+
       <div style={bg} />
       <div style={overlay} />
 
@@ -401,7 +467,6 @@ function TeamManager() {
                           const formId = baseDexId ? getFormIdFor(baseDexId, formKey) : null;
                           const idToUse = formId || (baseDexId ? Number(baseDexId) : null);
 
-                          // Bild: Normal = Official Artwork, Mega = Sprite-ID (100xx) -> sprites/pokemon/
                           const imgUrl = idToUse
                             ? formId
                               ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${idToUse}.png`
@@ -437,9 +502,9 @@ function TeamManager() {
                                             filter: formId
                                               ? "drop-shadow(0 0 14px rgba(161,76,255,0.55)) drop-shadow(0 10px 18px rgba(0,0,0,0.45))"
                                               : "drop-shadow(0 6px 14px rgba(0,0,0,0.45))",
+                                            display: "block",
                                           }}
                                           onError={(e) => {
-                                            // fallback: wenn official-artwork mal nicht lädt
                                             if (!formId && idToUse) {
                                               e.currentTarget.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${idToUse}.png`;
                                             }
@@ -487,6 +552,7 @@ function TeamManager() {
                                                 background: "rgba(0,0,0,0.35)",
                                                 border: "1px solid rgba(255,255,255,0.12)",
                                                 boxShadow: "0 6px 14px rgba(0,0,0,0.35)",
+                                                display: "block",
                                               }}
                                               onError={(e) => {
                                                 e.currentTarget.style.display = "none";
@@ -514,7 +580,7 @@ function TeamManager() {
               <div style={glassCard}>
                 <h3 style={{ marginTop: 0 }}>Box {i + 1}</h3>
                 <div style={pokeboxList}>
-                  {availablePokemon[i]?.map((p) => {
+                  {sortedAvailablePokemon[i]?.map((p) => {
                     if (isInTeam(p)) return null;
 
                     const dexId = getDexIdFromName(p, fullDex);
@@ -527,13 +593,14 @@ function TeamManager() {
                         key={p}
                         onClick={() => toggleLinkedPokemon(i, p)}
                         title={p}
+                        className="pokeboxItemStatic"
                         style={pokeboxItem}
                       >
                         {imgUrl ? (
                           <img
                             src={imgUrl}
                             alt={p}
-                            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                            className="pokeboxImgStatic"
                             onError={(e) => {
                               if (dexId) {
                                 e.currentTarget.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexId}.png`;

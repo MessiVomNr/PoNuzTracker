@@ -1,4 +1,5 @@
 // src/data/tmStory/index.js
+import { tmStoryGen52 } from "./tmStory_gen52";
 import { tmStoryGen62 } from "./tmStory_gen62";
 
 export const TM_STORY_BY_GEN = {
@@ -20,7 +21,7 @@ export const TM_STORY_BY_GEN = {
   72: [],
   32: [],
   42: [],
-  52: [],
+  52: tmStoryGen52,
   62: tmStoryGen62, // ✅ OR/AS
 };
 

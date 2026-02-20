@@ -113,6 +113,12 @@ const TYPE_LABELS_DE = {
   fairy: "Fee",
 };
 
+const MOVE_CLASS_LABEL_DE = {
+  physical: "Physisch",
+  special: "Spezial",
+  status: "Status",
+};
+
 const TYPE_MULT = {
   normal: { rock: 0.5, ghost: 0, steel: 0.5 },
   fire: { fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 },
@@ -146,9 +152,31 @@ function typeEffectiveness(attType, defTypes) {
   return mult;
 }
 
+function overrideEffForAbilities({ moveType, defenderAbilities, eff }) {
+  const t = String(moveType || "").toLowerCase();
+  if (!t) return eff;
+
+  // Schwebe: Boden trifft nicht
+  if (t === "ground" && Array.isArray(defenderAbilities)) {
+    if (defenderAbilities.includes("levitate")) return 0;
+  }
+
+  return eff;
+}
+
 function typeIconUrl(typeKey) {
   const t = String(typeKey || "").toLowerCase();
   return `https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t}.svg`;
+}
+
+/**
+ * Offizielle Move-Kategorie-Icons (Gen 4+ Symbole) via pokesprite (msikma).
+ * - physical / special / status
+ */
+function moveCategoryIconUrl(dc) {
+  const d = String(dc || "").toLowerCase();
+  if (d !== "physical" && d !== "special" && d !== "status") return null;
+  return `https://raw.githubusercontent.com/msikma/pokesprite/master/misc/move-category/${d}.png`;
 }
 
 /* =========================
@@ -157,6 +185,12 @@ function typeIconUrl(typeKey) {
 function getGermanName(namesArr, fallback) {
   const de = (namesArr || []).find((n) => n?.language?.name === "de");
   return de?.name || fallback;
+}
+
+function getGermanEffectShort(effectEntries, fallback = "") {
+  const de = (effectEntries || []).find((e) => e?.language?.name === "de");
+  if (!de) return fallback;
+  return de?.short_effect || de?.effect || fallback;
 }
 
 async function fetchPokemonById(id) {
@@ -183,6 +217,12 @@ async function fetchMove(moveName) {
   return await r.json();
 }
 
+async function fetchAbility(abilityName) {
+  const r = await fetch(`https://pokeapi.co/api/v2/ability/${abilityName}`);
+  if (!r.ok) throw new Error("ability");
+  return await r.json();
+}
+
 function extractTypes(poke) {
   return (poke?.types || [])
     .slice()
@@ -206,6 +246,15 @@ function extractAllowedMoves(poke, versionGroup) {
     if (ok) out.push(moveName);
   }
   return uniq(out).sort((a, b) => a.localeCompare(b));
+}
+
+function extractAbilityKeys(poke) {
+  return (poke?.abilities || [])
+    .slice()
+    .sort((a, b) => (a?.slot || 0) - (b?.slot || 0))
+    .map((a) => a?.ability?.name)
+    .filter(Boolean)
+    .map((x) => String(x).toLowerCase());
 }
 
 /* =========================
@@ -699,6 +748,7 @@ function MovePicker({
   moveCacheRef,
   loadMove,
   enemyTypes,
+  enemyAbilityKeys,
   myPokemonTitle,
   myPokemonImg,
   takenMoves,
@@ -777,7 +827,6 @@ function MovePicker({
   const currentDet = key ? moveCacheRef.current.get(key) : null;
 
   if (key && !currentDet) {
-    // load details in background for the header row
     loadMove(key).catch(() => {});
   }
 
@@ -786,8 +835,8 @@ function MovePicker({
   const curPower = currentDet?.power ?? null;
   const curPP = currentDet?.pp ?? null;
   const curAcc = currentDet?.accuracy ?? null;
+  const curDC = currentDet?.damage_class || null;
 
-  // effectiveness shown only if damaging
   const isDamaging =
     currentDet?.damage_class === "physical" ||
     currentDet?.damage_class === "special" ||
@@ -795,14 +844,23 @@ function MovePicker({
     String(currentDet?.damage_class || "") === "physical" ||
     String(currentDet?.damage_class || "") === "special";
 
-  const eff = curType && enemyTypes?.length && isDamaging ? typeEffectiveness(curType, enemyTypes) : null;
+  let eff = curType && enemyTypes?.length && isDamaging ? typeEffectiveness(curType, enemyTypes) : null;
+  if (eff != null) {
+    eff = overrideEffForAbilities({
+      moveType: curType,
+      defenderAbilities: enemyAbilityKeys,
+      eff,
+    });
+  }
+
+  const catIcon = moveCategoryIconUrl(curDC);
+  const catLabel = curDC ? MOVE_CLASS_LABEL_DE[String(curDC).toLowerCase()] || cap(curDC) : null;
 
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
       <div style={{ opacity: 0.9, fontSize: 13, marginBottom: 6 }}>{label}</div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 42px", gap: 8, alignItems: "stretch" }}>
-        {/* MAIN FIELD (clickable to open dropdown OR go to /move/<key>) */}
         <button
           ref={btnRef}
           onClick={() => setOpen((v) => !v)}
@@ -885,9 +943,35 @@ function MovePicker({
                   Genauigkeit: <b>{curAcc != null ? `${curAcc}%` : "—"}</b>
                 </span>
 
+                {curDC ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    {catIcon ? (
+                      <img
+                        src={catIcon}
+                        alt=""
+                        style={{
+                          width: 16,
+                          height: 16,
+                          imageRendering: "pixelated",
+                          borderRadius: 6,
+                          padding: 1,
+                          background: "rgba(0,0,0,0.35)",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                        }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    ) : null}
+                    <span>
+                      Klasse: <b>{catLabel || cap(curDC)}</b>
+                    </span>
+                  </span>
+                ) : null}
+
                 {eff != null ? (
-                  <span style={moveBadgeStyle(eff, eff >= 2, "my")}>
-                    {eff >= 2 ? "SEHR " : ""}x{eff}
+                  <span style={moveBadgeStyle(eff, eff >= 2 || eff === 0, "my")}>
+                    {eff >= 2 ? "" : ""}x{eff}
                   </span>
                 ) : null}
               </div>
@@ -895,7 +979,6 @@ function MovePicker({
           </div>
         </button>
 
-        {/* X REMOVE */}
         <button
           onClick={(e) => {
             e.preventDefault();
@@ -919,7 +1002,7 @@ function MovePicker({
           }}
           title={key ? "Attacke entfernen" : "Keine Attacke gesetzt"}
         >
-          ✕
+          X
         </button>
       </div>
 
@@ -1000,7 +1083,7 @@ function MovePicker({
               }}
               title="Leeren"
             >
-              ✕
+              X
             </button>
           </div>
 
@@ -1020,16 +1103,26 @@ function MovePicker({
                 const acc = cached?.accuracy ?? null;
                 const dc = cached?.damage_class || null;
 
+                const catIcon2 = moveCategoryIconUrl(dc);
+                const catLabel2 = dc ? MOVE_CLASS_LABEL_DE[String(dc).toLowerCase()] || cap(dc) : null;
+
                 const alreadyTaken = takenMoves?.has(mk) && mk !== String(value || "").toLowerCase();
 
                 let eff2 = null;
-                if (type && Array.isArray(enemyTypes) && enemyTypes.length) eff2 = typeEffectiveness(type, enemyTypes);
+                if (type && Array.isArray(enemyTypes) && enemyTypes.length) {
+                  eff2 = typeEffectiveness(type, enemyTypes);
+                  eff2 = overrideEffForAbilities({
+                    moveType: type,
+                    defenderAbilities: enemyAbilityKeys,
+                    eff: eff2,
+                  });
+                }
 
-                const isDamaging =
+                const isDamaging2 =
                   dc === "physical" || dc === "special" || power != null || String(dc || "") === "physical" || String(dc || "") === "special";
 
-                const showEff = eff2 != null && isDamaging;
-                const badge = showEff ? moveBadgeStyle(eff2, eff2 >= 2, "my") : null;
+                const showEff = eff2 != null && isDamaging2;
+                const badge = showEff ? moveBadgeStyle(eff2, eff2 >= 2 || eff2 === 0, "my") : null;
 
                 const rowGlow =
                   showEff && eff2 >= 2
@@ -1072,9 +1165,7 @@ function MovePicker({
                     title={alreadyTaken ? "Diese Attacke ist schon im Moveset." : "Wählen"}
                   >
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 1100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {deName} {showEff && eff2 >= 2 ? <span style={{ marginLeft: 8, opacity: 0.9, fontSize: 12, fontWeight: 1000 }}>★</span> : null}
-                      </div>
+                      <div style={{ fontWeight: 1100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{deName}</div>
 
                       <div
                         style={{
@@ -1114,14 +1205,38 @@ function MovePicker({
                         <span>Stärke: {power != null ? power : "—"}</span>
                         <span>AP: {pp != null ? pp : "—"}</span>
                         <span>Genauigkeit: {acc != null ? `${acc}%` : "—"}</span>
-                        <span>Klasse: {dc ? cap(dc) : "—"}</span>
+
+                        {dc ? (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            {catIcon2 ? (
+                              <img
+                                src={catIcon2}
+                                alt=""
+                                style={{
+                                  width: 16,
+                                  height: 16,
+                                  imageRendering: "pixelated",
+                                  borderRadius: 6,
+                                  padding: 1,
+                                  background: "rgba(0,0,0,0.35)",
+                                  border: "1px solid rgba(255,255,255,0.12)",
+                                }}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                }}
+                              />
+                            ) : null}
+                            Klasse: {catLabel2 || cap(dc)}
+                          </span>
+                        ) : null}
+
                         {alreadyTaken ? <span style={{ color: "rgba(255,120,120,0.9)", fontWeight: 950 }}>Schon gewählt</span> : null}
                       </div>
                     </div>
 
                     {badge ? (
                       <div style={badge}>
-                        {eff2 >= 2 ? "SEHR " : ""}x{eff2}
+                        {eff2 >= 2 ? "" : ""}x{eff2}
                       </div>
                     ) : null}
                   </button>
@@ -1271,6 +1386,7 @@ export default function TeamCompare() {
 
   const pokeCacheRef = useRef(new Map());
   const moveCacheRef = useRef(new Map());
+  const abilityCacheRef = useRef(new Map());
   const [tick, setTick] = useState(0);
 
   useEffect(() => writeJSON(TEAM_KEY, team), [team]);
@@ -1322,6 +1438,20 @@ export default function TeamCompare() {
       isStatus: dc === "status",
     };
     moveCacheRef.current.set(key, val);
+    setTick((t) => t + 1);
+    return val;
+  }
+
+  async function loadAbility(abilityKey) {
+    const k = String(abilityKey || "").toLowerCase().trim();
+    if (!k) return null;
+    if (abilityCacheRef.current.has(k)) return abilityCacheRef.current.get(k);
+
+    const a = await fetchAbility(k);
+    const deName = getGermanName(a?.names, cap(k));
+    const short = getGermanEffectShort(a?.effect_entries, "");
+    const val = { key: k, deName, shortEffect: short };
+    abilityCacheRef.current.set(k, val);
     setTick((t) => t + 1);
     return val;
   }
@@ -1383,7 +1513,6 @@ export default function TeamCompare() {
   useEffect(() => {
     let alive = true;
     async function run() {
-      // prefetch enemy move details (a bit), so list doesn't feel empty
       if (!enemyDexId) return;
       const data = pokeCacheRef.current.get(Number(enemyDexId));
       const allowed = data?.pokemon ? extractAllowedMoves(data.pokemon, versionGroup).map((x) => String(x).toLowerCase()) : [];
@@ -1418,6 +1547,72 @@ export default function TeamCompare() {
     if (!enemyData?.pokemon) return [];
     return extractAllowedMoves(enemyData.pokemon, versionGroup).map((x) => String(x).toLowerCase());
   }, [enemyData, versionGroup, tick]);
+
+  const myAbilityKeysRaw = useMemo(() => extractAbilityKeys(myData?.pokemon), [myData, tick]);
+  const enemyAbilityKeysRaw = useMemo(() => extractAbilityKeys(enemyData?.pokemon), [enemyData, tick]);
+
+  useEffect(() => {
+    let alive = true;
+    async function run() {
+      for (const k of myAbilityKeysRaw) {
+        try {
+          await loadAbility(k);
+          if (!alive) return;
+        } catch {}
+      }
+    }
+    run();
+    return () => {
+      alive = false;
+    };
+  }, [myAbilityKeysRaw.join("|")]);
+
+  useEffect(() => {
+    let alive = true;
+    async function run() {
+      for (const k of enemyAbilityKeysRaw) {
+        try {
+          await loadAbility(k);
+          if (!alive) return;
+        } catch {}
+      }
+    }
+    run();
+    return () => {
+      alive = false;
+    };
+  }, [enemyAbilityKeysRaw.join("|")]);
+
+  const myAbilities = useMemo(() => {
+    const out = [];
+    for (const k of myAbilityKeysRaw) {
+      const det = abilityCacheRef.current.get(k);
+      out.push({
+        key: k,
+        deName: det?.deName || cap(k),
+        shortEffect: det?.shortEffect || "",
+      });
+    }
+    return out;
+  }, [myAbilityKeysRaw.join("|"), tick]);
+
+  const enemyAbilities = useMemo(() => {
+    const out = [];
+    for (const k of enemyAbilityKeysRaw) {
+      const det = abilityCacheRef.current.get(k);
+      out.push({
+        key: k,
+        deName: det?.deName || cap(k),
+        shortEffect: det?.shortEffect || "",
+      });
+    }
+    return out;
+  }, [enemyAbilityKeysRaw.join("|"), tick]);
+
+  const enemyAbilityKeys = useMemo(() => enemyAbilities.map((a) => a.key).filter(Boolean), [enemyAbilities]);
+  const myAbilityKeys = useMemo(() => myAbilities.map((a) => a.key).filter(Boolean), [myAbilities]);
+
+  const enemyHasLevitate = useMemo(() => enemyAbilityKeys.includes("levitate"), [enemyAbilityKeys.join("|")]);
 
   const editSuggestions = useMemo(() => {
     const q = normText(editQuery);
@@ -1582,6 +1777,7 @@ export default function TeamCompare() {
   const myMoveAdvice = useMemo(() => {
     if (!enemyTypes?.length) return { list: [], best: null, hasVeryEffective: false };
     const rows = [];
+
     for (const mv of (mySlot.moves || []).filter(Boolean)) {
       const key = String(mv).toLowerCase();
       const det = moveCacheRef.current.get(key);
@@ -1590,7 +1786,13 @@ export default function TeamCompare() {
       const isDamaging = det.damage_class === "physical" || det.damage_class === "special" || det.power != null;
       if (!isDamaging) continue;
 
-      const eff = typeEffectiveness(det.type, enemyTypes);
+      let eff = typeEffectiveness(det.type, enemyTypes);
+      eff = overrideEffForAbilities({
+        moveType: det.type,
+        defenderAbilities: enemyAbilityKeys,
+        eff,
+      });
+
       const power = det.power ?? 60;
       const score = eff * power;
 
@@ -1603,7 +1805,6 @@ export default function TeamCompare() {
         pp: det.pp,
         accuracy: det.accuracy,
         dc: det.damage_class,
-        isStatus: det.isStatus,
         score,
       });
     }
@@ -1611,12 +1812,8 @@ export default function TeamCompare() {
     const best = rows[0] || null;
     const hasVeryEffective = rows.some((r) => r.eff >= 2);
     return { list: rows, best, hasVeryEffective };
-  }, [enemyTypes, mySlot.moves?.join("|"), tick]);
+  }, [enemyTypes, enemyAbilityKeys.join("|"), mySlot.moves?.join("|"), tick]);
 
-  // ALL enemy moves (limited), colored:
-  // - x2/x4 (enemy) = red (bad for me)
-  // - x0.5/x0.25 (enemy) = green (good for me)
-  // - x0 immune = black
   const enemyAllMoves = useMemo(() => {
     if (!myTypes?.length || !enemyAllowedMoves?.length) return [];
     const rows = [];
@@ -1632,7 +1829,13 @@ export default function TeamCompare() {
       const isDamaging = det.damage_class === "physical" || det.damage_class === "special" || det.power != null;
       if (!isDamaging || !det.type) continue;
 
-      const eff = typeEffectiveness(det.type, myTypes);
+      let eff = typeEffectiveness(det.type, myTypes);
+      eff = overrideEffForAbilities({
+        moveType: det.type,
+        defenderAbilities: myAbilityKeys,
+        eff,
+      });
+
       const score = eff * (det.power ?? 60);
 
       rows.push({
@@ -1648,10 +1851,9 @@ export default function TeamCompare() {
       });
     }
 
-    // sort: dangerous first, then neutral, then "good for me"
     rows.sort((a, b) => b.score - a.score);
     return rows.slice(0, 60);
-  }, [enemyAllowedMoves?.join("|"), myTypes?.join("|"), tick]);
+  }, [enemyAllowedMoves?.join("|"), myTypes?.join("|"), myAbilityKeys.join("|"), tick]);
 
   const enemyHasVeryEffectiveVsMe = useMemo(() => {
     return enemyAllMoves.some((m) => m.eff >= 2);
@@ -1668,8 +1870,6 @@ export default function TeamCompare() {
     return s;
   }
 
-  // Team-slot highlight rule:
-  // green ONLY if slot has very effective damaging move vs enemy AND enemy does NOT have very effective damaging move vs that slot
   function slotHasVeryEffectiveMoveVsEnemy(slot) {
     if (!enemyTypes?.length) return false;
     const moves = (slot?.moves || []).filter(Boolean);
@@ -1678,7 +1878,14 @@ export default function TeamCompare() {
       if (!det?.type) continue;
       const isDamaging = det.damage_class === "physical" || det.damage_class === "special" || det.power != null;
       if (!isDamaging) continue;
-      const eff = typeEffectiveness(det.type, enemyTypes);
+
+      let eff = typeEffectiveness(det.type, enemyTypes);
+      eff = overrideEffForAbilities({
+        moveType: det.type,
+        defenderAbilities: enemyAbilityKeys,
+        eff,
+      });
+
       if (eff >= 2) return true;
     }
     return false;
@@ -1694,7 +1901,14 @@ export default function TeamCompare() {
       }
       const isDamaging = det.damage_class === "physical" || det.damage_class === "special" || det.power != null;
       if (!isDamaging) continue;
-      const eff = typeEffectiveness(det.type, defTypes);
+
+      let eff = typeEffectiveness(det.type, defTypes);
+      eff = overrideEffForAbilities({
+        moveType: det.type,
+        defenderAbilities: [],
+        eff,
+      });
+
       if (eff >= 2) return true;
     }
     return false;
@@ -1725,12 +1939,11 @@ export default function TeamCompare() {
      Styles
   ========================= */
   const pageStyle = {
-    minHeight: "100vh",
-    backgroundImage: `url(${dexBg})`,
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    color: "#e9e9f2",
-  };
+  minHeight: "100vh",
+  position: "relative",
+  overflow: "hidden",
+  color: "#e9e9f2",
+};
   const shell = { maxWidth: 1220, margin: "0 auto", padding: "14px 14px 40px" };
   const card = {
     background: "rgba(10, 12, 16, 0.72)",
@@ -1772,12 +1985,87 @@ export default function TeamCompare() {
   const myFormItems = useMemo(() => myFormList.map((f) => ({ value: f.id, label: f.label })), [myFormList]);
   const enemyFormItems = useMemo(() => enemyFormList.map((f) => ({ value: f.id, label: f.label })), [enemyFormList]);
 
-  // top banners
   const showRedBanner = enemyHasVeryEffectiveVsMe;
   const showGreenBanner = myMoveAdvice.hasVeryEffective;
 
+  const speedLine = useMemo(() => {
+    if (!myStats?.spe || !enemyStats?.spe) return null;
+    const a = Number(myStats.spe);
+    const b = Number(enemyStats.spe);
+    if (a === b) return { text: `Gleich schnell (${a} vs ${b})`, kind: "neutral" };
+    if (a > b) return { text: `Du bist schneller (${a} vs ${b})`, kind: "good" };
+    return { text: `Er ist schneller (${b} vs ${a})`, kind: "bad" };
+  }, [myStats?.spe, enemyStats?.spe]);
+
+  const speedPillStyle = useMemo(() => {
+    if (!speedLine) return null;
+    if (speedLine.kind === "good") {
+      return { border: "1px solid rgba(90,255,170,0.38)", background: "rgba(90,255,170,0.12)" };
+    }
+    if (speedLine.kind === "bad") {
+      return { border: "1px solid rgba(255,120,120,0.40)", background: "rgba(255,120,120,0.14)" };
+    }
+    return { border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.06)" };
+  }, [speedLine]);
+
+  const showLevitateWarning = useMemo(() => {
+    if (!enemyHasLevitate) return false;
+    for (const mv of (mySlot.moves || []).filter(Boolean)) {
+      const det = moveCacheRef.current.get(String(mv).toLowerCase());
+      if (!det?.type) continue;
+      const isDamaging = det.damage_class === "physical" || det.damage_class === "special" || det.power != null;
+      if (!isDamaging) continue;
+      if (String(det.type).toLowerCase() === "ground") return true;
+    }
+    return false;
+  }, [enemyHasLevitate, mySlot.moves?.join("|"), tick]);
+
   return (
-    <div style={pageStyle}>
+  <div style={pageStyle}>
+    {/* Background Layer 1: füllt den Screen (keine Balken), blurred */}
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 0,
+        backgroundImage: `url(${dexBg})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        filter: "blur(18px)",
+        transform: "scale(1.06)",
+        opacity: 0.55,
+        pointerEvents: "none",
+      }}
+    />
+
+    {/* Background Layer 2: das eigentliche Bild komplett sichtbar */}
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1,
+        backgroundImage: `url(${dexBg})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        pointerEvents: "none",
+      }}
+    />
+
+    {/* leichtes Darkening für bessere Lesbarkeit */}
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 2,
+        background: "rgba(0,0,0,0.35)",
+        pointerEvents: "none",
+      }}
+    />
+
+    {/* Content */}
+    <div style={{ position: "relative", zIndex: 3 }}>
       <style>{HIDE_SCROLL_CSS}</style>
 
       <div style={shell}>
@@ -1829,7 +2117,7 @@ export default function TeamCompare() {
                   gap: 8,
                 }}
               >
-                ⚠️ Achtung: Gegner hat sehr effektive Attacken gegen dich
+                Achtung: Gegner hat sehr effektive Attacken gegen dich
               </div>
             ) : null}
 
@@ -1847,7 +2135,7 @@ export default function TeamCompare() {
                   gap: 8,
                 }}
               >
-                ✅ Du hast sehr effektive Attacken gegen den Gegner
+                Hinweis: Du hast sehr effektive Attacken gegen den Gegner
               </div>
             ) : null}
           </div>
@@ -1895,12 +2183,10 @@ export default function TeamCompare() {
 
               return (
                 <button key={s.id} style={chip} onClick={() => setActiveSlot(idx)}>
-                  {/* NAME HIGHER (top row) */}
                   <div style={{ fontWeight: 1200, fontSize: 13, lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {name}
                   </div>
 
-                  {/* bottom row: sprite + lvl + actions */}
                   <div style={{ display: "grid", gridTemplateColumns: "44px 1fr auto", gap: 10, alignItems: "center" }}>
                     <div
                       style={{
@@ -1946,7 +2232,7 @@ export default function TeamCompare() {
                           if (idx === activeSlot) setEditOpen(false);
                         }}
                       >
-                        ✕
+                        X
                       </IconBtn>
                     </div>
                   </div>
@@ -1957,7 +2243,8 @@ export default function TeamCompare() {
         </div>
 
         {/* MAIN */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        {/* Gegner-Spalte etwas breiter, damit die Attacken-Zeilen genauso „clean“ wirken wie links */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.15fr", gap: 12 }}>
           {/* ME */}
           <div style={card}>
             <div
@@ -1978,13 +2265,13 @@ export default function TeamCompare() {
                   setEditOpen(true);
                 }}
               >
-                ✎ Bearbeiten
+                Bearbeiten
               </button>
             </div>
 
             <div style={{ padding: 12 }}>
               {!mySlot.dexId ? (
-                <div style={{ opacity: 0.75 }}>Wähle oben ein Pokémon (✎).</div>
+                <div style={{ opacity: 0.75 }}>Wähle oben ein Pokémon (Bearbeiten).</div>
               ) : (
                 <>
                   <div style={{ display: "grid", gridTemplateColumns: "112px 1fr", gap: 12, alignItems: "start" }}>
@@ -2014,6 +2301,28 @@ export default function TeamCompare() {
                         ))}
                       </div>
 
+                      {myAbilities.length ? (
+                        <div
+                          style={{
+                            marginTop: 10,
+                            padding: 10,
+                            borderRadius: 14,
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            background: "rgba(0,0,0,0.18)",
+                          }}
+                        >
+                          <div style={{ fontWeight: 1100, marginBottom: 6 }}>Fähigkeiten</div>
+                          <div style={{ display: "grid", gap: 6 }}>
+                            {myAbilities.map((a) => (
+                              <div key={a.key} style={{ fontSize: 13, lineHeight: 1.35 }}>
+                                <b>{a.deName}</b>
+                                {a.shortEffect ? <span style={{ opacity: 0.9 }}> — {a.shortEffect}</span> : <span style={{ opacity: 0.75 }}> — (Keine DE-Beschreibung)</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
                       {myStats && (
                         <div style={{ marginTop: 10, display: "grid", gap: 7 }}>
                           <StatBar label="KP" value={myStats.hp} compact />
@@ -2030,15 +2339,55 @@ export default function TeamCompare() {
                   <div style={{ marginTop: 12 }}>
                     <div style={{ fontWeight: 1100, marginBottom: 8 }}>Empfehlung gegen Gegner</div>
 
+                    {enemyDexId && speedLine ? (
+                      <div
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: 14,
+                          fontWeight: 950,
+                          fontSize: 13,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          marginBottom: 10,
+                          ...speedPillStyle,
+                        }}
+                      >
+                        Initiative: {speedLine.text}
+                      </div>
+                    ) : null}
+
+                    {enemyDexId && showLevitateWarning ? (
+                      <div
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: 14,
+                          border: "1px solid rgba(255,200,120,0.40)",
+                          background: "rgba(255,200,120,0.12)",
+                          fontWeight: 950,
+                          fontSize: 13,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          marginBottom: 10,
+                        }}
+                      >
+                        Gegner hat<b>Schwebe</b>
+                      </div>
+                    ) : null}
+
                     {!enemyDexId ? (
                       <div style={{ opacity: 0.75 }}>Wähle rechts einen Gegner.</div>
                     ) : !myMoveAdvice.list.length ? (
-                      <div style={{ opacity: 0.75 }}>Wähle im ✎-Editor deine 4 Attacken.</div>
+                      <div style={{ opacity: 0.75 }}>Wähle im Bearbeiten-Editor deine 4 Attacken.</div>
                     ) : (
                       <div style={{ display: "grid", gap: 8 }}>
                         {myMoveAdvice.list.slice(0, 6).map((r) => {
-                          const badge = moveBadgeStyle(r.eff, r.eff >= 2, "my");
+                          const badge = moveBadgeStyle(r.eff, r.eff >= 2 || r.eff === 0, "my");
                           const { bg, border, glow } = moveRowBg(r.eff, "my");
+                          const catIcon = moveCategoryIconUrl(r.dc);
+                          const catLabel = r.dc ? MOVE_CLASS_LABEL_DE[String(r.dc).toLowerCase()] || cap(r.dc) : null;
+
                           return (
                             <button
                               key={r.moveKey}
@@ -2062,7 +2411,12 @@ export default function TeamCompare() {
                             >
                               <div style={{ minWidth: 0 }}>
                                 <div style={{ fontWeight: 1100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {r.deName} {r.eff >= 2 ? <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>SEHR EFFEKTIV</span> : null}
+                                  {r.deName}{" "}
+                                  {r.eff >= 2 ? (
+                                    <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>SEHR EFFEKTIV</span>
+                                  ) : r.eff === 0 ? (
+                                    <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>IMMUN</span>
+                                  ) : null}
                                 </div>
                                 <div
                                   style={{
@@ -2096,12 +2450,36 @@ export default function TeamCompare() {
                                   <span>Stärke: {r.power ?? "—"}</span>
                                   <span>AP: {r.pp ?? "—"}</span>
                                   <span>Genauigkeit: {r.accuracy != null ? `${r.accuracy}%` : "—"}</span>
+
+                                  {r.dc ? (
+                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                      {catIcon ? (
+                                        <img
+                                          src={catIcon}
+                                          alt=""
+                                          style={{
+                                            width: 16,
+                                            height: 16,
+                                            imageRendering: "pixelated",
+                                            borderRadius: 6,
+                                            padding: 1,
+                                            background: "rgba(0,0,0,0.35)",
+                                            border: "1px solid rgba(255,255,255,0.12)",
+                                          }}
+                                          onError={(e) => {
+                                            e.currentTarget.style.display = "none";
+                                          }}
+                                        />
+                                      ) : null}
+                                      Klasse: {catLabel || cap(r.dc)}
+                                    </span>
+                                  ) : null}
                                 </div>
                               </div>
 
                               <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
                                 <div style={badge}>
-                                  {r.eff >= 2 ? "SEHR " : ""}x{r.eff}
+                                  {r.eff >= 2 ? "" : ""}x{r.eff}
                                 </div>
                                 <div style={{ opacity: 0.65, fontSize: 12 }}>Effektiv</div>
                               </div>
@@ -2185,6 +2563,28 @@ export default function TeamCompare() {
                       ))}
                     </div>
 
+                    {enemyAbilities.length ? (
+                      <div
+                        style={{
+                          marginTop: 10,
+                          padding: 10,
+                          borderRadius: 14,
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          background: "rgba(0,0,0,0.18)",
+                        }}
+                      >
+                        <div style={{ fontWeight: 1100, marginBottom: 6 }}>Fähigkeiten (Gegner)</div>
+                        <div style={{ display: "grid", gap: 6 }}>
+                          {enemyAbilities.map((a) => (
+                            <div key={a.key} style={{ fontSize: 13, lineHeight: 1.35 }}>
+                              <b>{a.deName}</b>
+                              {a.shortEffect ? <span style={{ opacity: 0.9 }}> — {a.shortEffect}</span> : <span style={{ opacity: 0.75 }}> — (Keine DE-Beschreibung)</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
                     {enemyFormItems.length > 1 ? (
                       <div style={{ marginTop: 10 }}>
                         <DarkPicker title="Form auswählen" value={enemyDexId} onChange={(v) => setEnemyDexId(Number(v))} items={enemyFormItems} search />
@@ -2225,6 +2625,10 @@ export default function TeamCompare() {
                               const badge = moveBadgeStyle(m.eff, emph, "enemy");
                               const { bg, border, glow } = moveRowBg(m.eff, "enemy");
 
+                              const catIcon = moveCategoryIconUrl(m.dc);
+                              const catLabel = m.dc ? MOVE_CLASS_LABEL_DE[String(m.dc).toLowerCase()] || cap(m.dc) : null;
+
+                              // Gegner-Zeile: exakt wie links (Badge + "Effektiv" Label rechts, Meta-Zeile in einer Zeile)
                               return (
                                 <button
                                   key={m.moveKey}
@@ -2248,7 +2652,12 @@ export default function TeamCompare() {
                                 >
                                   <div style={{ minWidth: 0 }}>
                                     <div style={{ fontWeight: 1100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                      {m.deName} {m.eff >= 2 ? <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>SEHR EFFEKTIV</span> : null}
+                                      {m.deName}{" "}
+                                      {m.eff >= 2 ? (
+                                        <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>SEHR EFFEKTIV</span>
+                                      ) : m.eff === 0 ? (
+                                        <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>IMMUN</span>
+                                      ) : null}
                                     </div>
 
                                     <div
@@ -2280,14 +2689,42 @@ export default function TeamCompare() {
                                         />
                                         Typ: {TYPE_LABELS_DE[m.type] || cap(m.type)}
                                       </span>
+
                                       <span>Stärke: {m.power ?? "—"}</span>
                                       <span>AP: {m.pp ?? "—"}</span>
                                       <span>Genauigkeit: {m.accuracy != null ? `${m.accuracy}%` : "—"}</span>
+
+                                      {m.dc ? (
+                                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                          {catIcon ? (
+                                            <img
+                                              src={catIcon}
+                                              alt=""
+                                              style={{
+                                                width: 16,
+                                                height: 16,
+                                                imageRendering: "pixelated",
+                                                borderRadius: 6,
+                                                padding: 1,
+                                                background: "rgba(0,0,0,0.35)",
+                                                border: "1px solid rgba(255,255,255,0.12)",
+                                              }}
+                                              onError={(e) => {
+                                                e.currentTarget.style.display = "none";
+                                              }}
+                                            />
+                                          ) : null}
+                                          Klasse: {catLabel || cap(m.dc)}
+                                        </span>
+                                      ) : null}
                                     </div>
                                   </div>
 
-                                  <div style={badge}>
-                                    {m.eff >= 2 ? "SEHR " : ""}x{m.eff}
+                                  <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
+                                    <div style={badge}>
+                                      {m.eff >= 2 ? "" : ""}x{m.eff}
+                                    </div>
+                                    <div style={{ opacity: 0.65, fontSize: 12 }}>Effektiv</div>
                                   </div>
                                 </button>
                               );
@@ -2348,7 +2785,6 @@ export default function TeamCompare() {
                 </button>
               </div>
 
-              {/* header: image + name + level */}
               <div
                 style={{
                   display: "grid",
@@ -2388,25 +2824,24 @@ export default function TeamCompare() {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-  <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 6 }}>Level</div>
-  <input
-    style={{
-      ...input,
-      width: 72,            // ✅ macht das Feld klein
-      padding: "8px 10px",
-      height: 36,
-      textAlign: "center",  // optional: sieht cleaner aus
-    }}
-    type="number"
-    min={1}
-    max={100}
-    value={mySlot.level ?? 50}
-    onChange={(e) => setSlotLevel(activeSlot, e.target.value)}
-  />
-</div>
+                  <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 6 }}>Level</div>
+                  <input
+                    style={{
+                      ...input,
+                      width: 72,
+                      padding: "8px 10px",
+                      height: 36,
+                      textAlign: "center",
+                    }}
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={mySlot.level ?? 50}
+                    onChange={(e) => setSlotLevel(activeSlot, e.target.value)}
+                  />
+                </div>
               </div>
 
-              {/* stats */}
               {myStats ? (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                   <StatBar label="KP" value={myStats.hp} compact />
@@ -2418,7 +2853,6 @@ export default function TeamCompare() {
                 </div>
               ) : null}
 
-              {/* pick pokemon */}
               <div>
                 <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 6 }}>Pokémon wählen</div>
                 <input style={input} value={editQuery} onChange={(e) => setEditQuery(e.target.value)} placeholder="Name oder Dex-ID…" />
@@ -2441,7 +2875,6 @@ export default function TeamCompare() {
               ) : null}
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                {/* moves */}
                 <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", padding: 12 }}>
                   <div style={{ fontWeight: 1100, marginBottom: 10 }}>Deine 4 Attacken</div>
 
@@ -2450,7 +2883,12 @@ export default function TeamCompare() {
                   ) : (
                     <div style={{ display: "grid", gap: 12 }}>
                       {[0, 1, 2, 3].map((i) => {
-                        const taken = pickedMovesSetForSlot(mySlot);
+                        const taken = (function pickedMovesSetForSlotInline(slot) {
+                          const s = new Set();
+                          for (const m of (slot?.moves || []).filter(Boolean)) s.add(String(m).toLowerCase());
+                          return s;
+                        })(mySlot);
+
                         return (
                           <MovePicker
                             key={i}
@@ -2461,6 +2899,7 @@ export default function TeamCompare() {
                             moveCacheRef={moveCacheRef}
                             loadMove={loadMove}
                             enemyTypes={enemyTypes}
+                            enemyAbilityKeys={enemyAbilityKeys}
                             myPokemonTitle={myData?.displayDeName || displayNameForDexId(mySlot.dexId)}
                             myPokemonImg={myImg}
                             takenMoves={taken}
@@ -2472,7 +2911,6 @@ export default function TeamCompare() {
                   )}
                 </div>
 
-                {/* actions */}
                 <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", padding: 12 }}>
                   <div style={{ fontWeight: 1100, marginBottom: 10 }}>Schnellaktionen</div>
 
@@ -2484,7 +2922,7 @@ export default function TeamCompare() {
                         setEditOpen(false);
                       }}
                     >
-                      Slot entfernen (✕)
+                      Slot entfernen (X)
                     </button>
 
                     <button
@@ -2518,6 +2956,7 @@ export default function TeamCompare() {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

@@ -179,7 +179,7 @@ const levelCapsByGen = {
 
   52: [
   { order: "Rivale", name: "Hugh", location: "Avenitia", level: 5 },
-  { order: "Rivale", name: "Hugh", location: "Route 19", level: 7 },
+  { order: "Rivale", name: "Hugh", location: "Route 19", level: 8 },
   { order: 1, name: "Cheren", location: "Eventura City", level: 13 },
   { order: "Rivale", name: "Hugh", location: "Floccesy Ranch", level: 13 },
   { order: "Rivale", name: "Hugh", location: "Pokémon Liga Eingang", level: 17 },
@@ -195,11 +195,11 @@ const levelCapsByGen = {
   { order: 7, name: "Lysander", location: "Nevaio City", level: 48 },
   { order: "Rivale", name: "Hugh", location: "Route 22", level: 48 },
   { order: 8, name: "Benson", location: "Seigaiha City", level: 51 },
-  { order: "Top 4", name: "Anissa", location: "Pokémon Liga", level: 55 },
-  { order: "Top 4", name: "Astor", location: "Pokémon Liga", level: 57 },
-  { order: "Top 4", name: "Kattlea", location: "Pokémon Liga", level: 59 },
-  { order: "Top 4", name: "Eugen", location: "Pokémon Liga", level: 61 },
-  { order: "Champ", name: "Iris", location: "Pokémon Liga", level: 63 }
+  { order: "Top 4", name: "Anissa", location: "Pokémon Liga", level: 58 },
+  { order: "Top 4", name: "Astor", location: "Pokémon Liga", level: 58 },
+  { order: "Top 4", name: "Kattlea", location: "Pokémon Liga", level: 58 },
+  { order: "Top 4", name: "Eugen", location: "Pokémon Liga", level: 58 },
+  { order: "Champ", name: "Iris", location: "Pokémon Liga", level: 59 }
 ],
   62: [
   { order: "Rivale", name: "Rivale", location: "Route 103", level: 5 },
