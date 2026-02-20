@@ -76,14 +76,9 @@ function isBaseDexIdAllowedInGen(dexId, gen) {
   const id = Number(dexId);
   if (!id) return false;
 
-  // "normal" natdex ids are <= ~2000. Forms/variants can be >10000 (mega etc).
-  // Base selection (from fullPokedex) only contains natdex anyway.
-  // For safety: if it's an "odd" id > maxDex and gen is small -> disallow.
   const max = maxDexForGen(gen);
 
-  // allow special form ids only when the gen could contain special forms at all
   if (id > max && id >= 10000) {
-    // megas/primal etc (handled separately via form list anyway)
     return Number(gen) >= 6;
   }
 
@@ -185,8 +180,6 @@ function normalizeTypeForGen(typeKey, gen) {
   const t = String(typeKey || "").toLowerCase();
   if (!t) return t;
 
-  // Fairy introduced Gen 6.
-  // We map fairy -> normal for older gens (e.g. Togekiss would have been normal/flying, Clefable normal, etc.)
   if (Number(gen) < 6 && t === "fairy") return "normal";
 
   return t;
@@ -194,7 +187,6 @@ function normalizeTypeForGen(typeKey, gen) {
 
 function attackTypesForGen(gen) {
   const g = Number(gen) || 1;
-  // remove fairy from attack list before gen 6 (so weakness table doesn't show fairy)
   if (g < 6) return TYPES.filter((x) => x !== "fairy");
   return TYPES;
 }
@@ -216,7 +208,6 @@ function overrideEffForAbilities({ moveType, defenderAbilities, eff }) {
   const t = String(moveType || "").toLowerCase();
   if (!t) return eff;
 
-  // Schwebe: Boden trifft nicht
   if (t === "ground" && Array.isArray(defenderAbilities)) {
     if (defenderAbilities.includes("levitate")) return 0;
   }
@@ -229,10 +220,6 @@ function typeIconUrl(typeKey) {
   return `https://raw.githubusercontent.com/partywhale/pokemon-type-icons/master/icons/${t}.svg`;
 }
 
-/**
- * Offizielle Move-Kategorie-Icons (Gen 4+ Symbole) via pokesprite (msikma).
- * - physical / special / status
- */
 function moveCategoryIconUrl(dc) {
   const d = String(dc || "").toLowerCase();
   if (d !== "physical" && d !== "special" && d !== "status") return null;
@@ -297,6 +284,10 @@ function extractTypesForGen(poke, gen) {
   return uniq(mapped);
 }
 
+/**
+ * Returns ALL moves that are allowed by VersionGroup, regardless of level.
+ * (level-up + machine)
+ */
 function extractAllowedMoves(poke, versionGroup) {
   const out = [];
   for (const m of poke?.moves || []) {
@@ -312,6 +303,46 @@ function extractAllowedMoves(poke, versionGroup) {
     if (ok) out.push(moveName);
   }
   return uniq(out).sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * ✅ Level-aware learnset extraction (for enemy level filtering)
+ * - level-up: keep the LOWEST level at which the move is learned in that versionGroup
+ * - machine: always allowed (TMs/HMs/TRs etc)
+ */
+function extractLearnsetByMethod(poke, versionGroup) {
+  const lvlMap = new Map(); // moveName -> lowestLevel
+  const machineSet = new Set();
+
+  for (const m of poke?.moves || []) {
+    const moveName = m?.move?.name;
+    if (!moveName) continue;
+
+    for (const d of m?.version_group_details || []) {
+      const vg = d?.version_group?.name;
+      if (vg !== versionGroup) continue;
+
+      const method = d?.move_learn_method?.name;
+      if (method === "machine") {
+        machineSet.add(String(moveName).toLowerCase());
+        continue;
+      }
+      if (method === "level-up") {
+        const lvl = Number(d?.level_learned_at ?? 0);
+        const key = String(moveName).toLowerCase();
+        const prev = lvlMap.get(key);
+        if (prev == null || (Number.isFinite(lvl) && lvl < prev)) lvlMap.set(key, Number.isFinite(lvl) ? lvl : 0);
+      }
+    }
+  }
+
+  const levelUp = Array.from(lvlMap.entries())
+    .map(([name, level]) => ({ name, level: Number(level) || 0 }))
+    .sort((a, b) => (a.level - b.level) || a.name.localeCompare(b.name));
+
+  const machine = Array.from(machineSet).sort((a, b) => a.localeCompare(b));
+
+  return { levelUp, machine };
 }
 
 function extractAbilityKeys(poke) {
@@ -383,25 +414,17 @@ function formatFormLabelDE(baseDeName, pokemonApiName) {
 function isFormAvailableInGen(apiName, gen) {
   const n = String(apiName || "").toLowerCase();
 
-  // Megas + Proto: Gen 6+
   if (n.includes("-mega") || n.includes("-primal")) return Number(gen) >= 6;
-
-  // Gigadynamax: Gen 8+
   if (n.includes("-gmax")) return Number(gen) >= 8;
 
-  // Regional forms
   if (n.includes("-alola")) return Number(gen) >= 7;
   if (n.includes("-galar")) return Number(gen) >= 8;
   if (n.includes("-hisui")) return Number(gen) >= 8;
   if (n.includes("-paldea")) return Number(gen) >= 9;
 
-  // Origin forms: mostly Gen 4+
   if (n.includes("-origin")) return Number(gen) >= 4;
-
-  // Therian / Incarnate: Gen 5+
   if (n.includes("-therian") || n.includes("-incarnate")) return Number(gen) >= 5;
 
-  // Zygarde tags etc: Gen 6+
   if (n.includes("-complete") || n.includes("-10") || n.includes("-50")) return Number(gen) >= 6;
 
   return true;
@@ -477,11 +500,6 @@ function TypePill({ t, compact }) {
   );
 }
 
-/**
- * Perspective coloring:
- * - view="my": green = good for me (x2/x4), red = bad (x0.5/x0.25), black = immune (x0)
- * - view="enemy": green = good for me (enemy does x0.5/x0.25), red = bad (enemy does x2/x4), black = immune (x0)
- */
 function moveBadgeStyle(eff, emphasis, view = "my") {
   const base = {
     padding: "7px 10px",
@@ -510,13 +528,11 @@ function moveBadgeStyle(eff, emphasis, view = "my") {
     };
   }
 
-  // decide good/bad for me
   let goodForMe = false;
   if (view === "my") {
     if (isVery) goodForMe = true;
     else if (isResist) goodForMe = false;
   } else {
-    // enemy move vs me: resist is good for me, very is bad for me
     if (isResist) goodForMe = true;
     else if (isVery) goodForMe = false;
   }
@@ -540,7 +556,6 @@ function moveBadgeStyle(eff, emphasis, view = "my") {
     };
   }
 
-  // bad for me
   return {
     ...base,
     border: emphasis ? "1px solid rgba(255,120,120,0.55)" : "1px solid rgba(255,120,120,0.30)",
@@ -557,7 +572,6 @@ function moveRowBg(eff, view = "my") {
   const isVery = eff >= 2;
   const isResist = eff > 0 && eff < 1;
 
-  // goodForMe logic mirrors badge
   let goodForMe = false;
   if (view === "my") {
     goodForMe = isVery;
@@ -828,11 +842,7 @@ function DarkPicker({ title, value, onChange, items, placeholder = "Auswählen�
   );
 }
 
-/* Move Picker:
-   - shows chosen move ONCE (no duplicate block)
-   - whole field clickable to open /move/<moveKey> (if selected)
-   - remove X at end to clear
-*/
+/* Move Picker */
 function MovePicker({
   label,
   value,
@@ -1568,7 +1578,6 @@ export default function TeamCompare() {
   const [myLoading, setMyLoading] = useState(false);
   const [enemyLoading, setEnemyLoading] = useState(false);
 
-  // ✅ IMPORTANT: when gen changes, remove any pokemon that does not exist in that gen (e.g. Togekiss in Gen 2)
   useEffect(() => {
     setTeam((prev) => {
       let changed = false;
@@ -1643,13 +1652,21 @@ export default function TeamCompare() {
     };
   }, [mySlot.moves?.join("|")]);
 
+  // ✅ IMPORTANT: now depends on enemyLevel too (because allowed enemy moves depend on level)
   useEffect(() => {
     let alive = true;
     async function run() {
       if (!enemyDexId) return;
       const data = pokeCacheRef.current.get(Number(enemyDexId));
-      const allowed = data?.pokemon ? extractAllowedMoves(data.pokemon, versionGroup).map((x) => String(x).toLowerCase()) : [];
-      for (const mv of allowed.slice(0, 180)) {
+      if (!data?.pokemon) return;
+
+      const L = clamp(Number(enemyLevel) || 1, 1, 100);
+      const ls = extractLearnsetByMethod(data.pokemon, versionGroup);
+
+      const allowedLevel = ls.levelUp.filter((x) => (Number(x.level) || 0) <= L).map((x) => String(x.name).toLowerCase());
+      const allowed = uniq([...allowedLevel, ...(ls.machine || [])]);
+
+      for (const mv of allowed.slice(0, 220)) {
         try {
           await loadMove(mv);
           if (!alive) return;
@@ -1660,7 +1677,7 @@ export default function TeamCompare() {
     return () => {
       alive = false;
     };
-  }, [enemyDexId, versionGroup]);
+  }, [enemyDexId, versionGroup, enemyLevel]);
 
   const myData = mySlot.dexId ? pokeCacheRef.current.get(Number(mySlot.dexId)) : null;
   const enemyData = enemyDexId ? pokeCacheRef.current.get(Number(enemyDexId)) : null;
@@ -1676,10 +1693,19 @@ export default function TeamCompare() {
     return extractAllowedMoves(myData.pokemon, versionGroup).map((x) => String(x).toLowerCase());
   }, [myData, versionGroup, tick]);
 
+  // ✅ Enemy moves are now LEVEL-AWARE:
+  // - level-up moves only if level_learned_at <= enemyLevel
+  // - machine moves always allowed
   const enemyAllowedMoves = useMemo(() => {
     if (!enemyData?.pokemon) return [];
-    return extractAllowedMoves(enemyData.pokemon, versionGroup).map((x) => String(x).toLowerCase());
-  }, [enemyData, versionGroup, tick]);
+    const L = clamp(Number(enemyLevel) || 1, 1, 100);
+
+    const ls = extractLearnsetByMethod(enemyData.pokemon, versionGroup);
+    const levelMoves = (ls.levelUp || []).filter((x) => (Number(x.level) || 0) <= L).map((x) => String(x.name).toLowerCase());
+    const machineMoves = (ls.machine || []).map((x) => String(x).toLowerCase());
+
+    return uniq([...levelMoves, ...machineMoves]).sort((a, b) => a.localeCompare(b));
+  }, [enemyData, versionGroup, tick, enemyLevel]);
 
   const myAbilityKeysRaw = useMemo(() => extractAbilityKeys(myData?.pokemon), [myData, tick]);
   const enemyAbilityKeysRaw = useMemo(() => extractAbilityKeys(enemyData?.pokemon), [enemyData, tick]);
@@ -1747,7 +1773,6 @@ export default function TeamCompare() {
 
   const enemyHasLevitate = useMemo(() => enemyAbilityKeys.includes("levitate"), [enemyAbilityKeys.join("|")]);
 
-  // ✅ Filter suggestions by gen (no Togekiss in Gen 2 anymore)
   const editSuggestions = useMemo(() => {
     const q = normText(editQuery);
     if (!q) return [];
@@ -1856,7 +1881,6 @@ export default function TeamCompare() {
       const items = [];
 
       for (const apiName of vars.slice(0, 80)) {
-        // ✅ forms only if gen supports them
         if (!isFormAvailableInGen(apiName, gen)) continue;
 
         try {
@@ -1864,7 +1888,6 @@ export default function TeamCompare() {
           const id = Number(p?.id);
           if (!id) continue;
 
-          // ✅ also ensure ID is allowed in gen (safety)
           if (!isBaseDexIdAllowedInGen(id, gen)) continue;
 
           const label = formatFormLabelDE(baseDe, apiName);
@@ -3009,7 +3032,13 @@ export default function TeamCompare() {
 
                 {mySlot.dexId && myFormItems.length > 1 ? (
                   <div style={{ display: "grid", gap: 6 }}>
-                    <DarkPicker title="Form auswählen (Mega/Gigadynamax/Regional/Spezial)" value={mySlot.dexId} onChange={(v) => setSlotDex(activeSlot, Number(v))} items={myFormItems} search />
+                    <DarkPicker
+                      title="Form auswählen (Mega/Gigadynamax/Regional/Spezial)"
+                      value={mySlot.dexId}
+                      onChange={(v) => setSlotDex(activeSlot, Number(v))}
+                      items={myFormItems}
+                      search
+                    />
                   </div>
                 ) : null}
 
