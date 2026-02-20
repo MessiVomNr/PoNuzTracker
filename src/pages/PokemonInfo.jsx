@@ -19,9 +19,113 @@ function getIdFromSpeciesUrl(url) {
 const moveNameCache = new Map(); // legacy: moveUrl -> germanName
 const moveInfoCache = new Map(); // moveUrl -> { nameDe, typeKey }
 const speciesNameDeCache = new Map(); // speciesId -> germanName
-
+const speciesMetaCache = new Map(); // speciesId -> { nameDe, genNum }
 // ✅ Ability Cache
 const abilityInfoCache = new Map(); // abilityUrl -> { nameDe, effectDe, isHidden }
+
+/* =========================
+   ✅ Persist: selectedGen
+========================= */
+const LS_INFO_GEN_KEY = "pokemon_info_selected_gen_v1";
+
+function readInfoGen(defaultGen = 7) {
+  const raw = localStorage.getItem(LS_INFO_GEN_KEY);
+  const n = raw == null ? defaultGen : Number(raw);
+  return Number.isFinite(n) ? n : defaultGen;
+}
+function writeInfoGen(gen) {
+  localStorage.setItem(LS_INFO_GEN_KEY, String(gen));
+}
+
+/* =========================
+   ✅ Types by Gen (past_types)
+========================= */
+function genNameToNumber(genName) {
+  // "generation-i" .. "generation-ix"
+  const m = String(genName || "").match(/generation-([ivx]+)/i);
+  if (!m) return null;
+  const roman = m[1].toLowerCase();
+  const map = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9 };
+  return map[roman] || null;
+}
+
+function getTypesForGen(pokemonData, selectedGen) {
+  if (!pokemonData) return [];
+
+  const g = Number(selectedGen) || 7;
+
+  const current = (pokemonData.types || [])
+    .slice()
+    .sort((a, b) => (a?.slot ?? 0) - (b?.slot ?? 0))
+    .map((t) => String(t?.type?.name || "").toLowerCase())
+    .filter(Boolean);
+
+  const past = Array.isArray(pokemonData.past_types) ? pokemonData.past_types : [];
+
+  let resolved = current;
+
+  if (past.length) {
+    const candidates = past
+      .map((p) => ({
+        changeGen: genNameToNumber(p?.generation?.name),
+        types: (p?.types || [])
+          .slice()
+          .sort((a, b) => (a?.slot ?? 0) - (b?.slot ?? 0))
+          .map((t) => String(t?.type?.name || "").toLowerCase())
+          .filter(Boolean),
+      }))
+      .filter((x) => x.changeGen && x.types.length)
+      .sort((a, b) => a.changeGen - b.changeGen);
+
+    for (const c of candidates) {
+      // past_types gilt "für Generationen VOR changeGen"
+      if (g < c.changeGen) {
+        resolved = c.types;
+        break;
+      }
+    }
+  }
+
+  // ✅ HARD GUARD: Fee existiert erst ab Gen 6
+  if (g < 6) {
+    resolved = resolved.filter((t) => t !== "fairy");
+    if (resolved.length === 0) resolved = ["normal"]; // Fallback, z.B. Togepi
+  }
+
+  return resolved;
+}
+
+function allTypeKeysForGen(gen) {
+  const g = Number(gen) || 7;
+  // Gen 1: kein Dark/Steel
+  // < Gen 6: kein Fairy
+  const base = [
+    "normal",
+    "fire",
+    "water",
+    "electric",
+    "grass",
+    "ice",
+    "fighting",
+    "poison",
+    "ground",
+    "flying",
+    "psychic",
+    "bug",
+    "rock",
+    "ghost",
+    "dragon",
+    "dark",
+    "steel",
+    "fairy",
+  ];
+
+  return base.filter((t) => {
+    if (g <= 1 && (t === "dark" || t === "steel")) return false;
+    if (g < 6 && t === "fairy") return false;
+    return true;
+  });
+}
 
 function getLocalizedName(namesArr, lang = "de") {
   const arr = Array.isArray(namesArr) ? namesArr : [];
@@ -53,6 +157,27 @@ async function fetchSpeciesNameDeById(speciesId) {
     const name = de || fallback;
     speciesNameDeCache.set(id, name);
     return name;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchSpeciesMetaById(speciesId) {
+  const id = Number(speciesId);
+  if (!id) return null;
+  if (speciesMetaCache.has(id)) return speciesMetaCache.get(id);
+
+  try {
+    const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+
+    const nameDe = getLocalizedName(json?.names, "de") || cap(json?.name);
+    const genNum = genNameToNumber(json?.generation?.name) || null;
+
+    const packed = { nameDe, genNum };
+    speciesMetaCache.set(id, packed);
+    return packed;
   } catch {
     return null;
   }
@@ -460,27 +585,6 @@ function formatCatchChance(chance01) {
 /* =========================
    Typ-Matchups (Schwächen)
 ========================= */
-const ALL_TYPE_KEYS = [
-  "normal",
-  "fire",
-  "water",
-  "electric",
-  "grass",
-  "ice",
-  "fighting",
-  "poison",
-  "ground",
-  "flying",
-  "psychic",
-  "bug",
-  "rock",
-  "ghost",
-  "dragon",
-  "dark",
-  "steel",
-  "fairy",
-];
-
 function uniq(arr) {
   return Array.from(new Set((arr || []).filter(Boolean)));
 }
@@ -591,8 +695,6 @@ function evoRequirementDe(detail) {
 
   // für "shed" (z.B. Ninjatom) sind Details oft leer; wir geben zumindest sinnvolle Basis:
   if (String(trig || "").toLowerCase() === "shed") {
-    // PokeAPI gibt hier oft min_level + keine weiteren Bedingungen; wir ergänzen das übliche, ohne zu „raten“
-    // (keine falschen Fakten): nur wenn der Trigger so heißt, nennen wir es „Spezial“.
     if (!detail.min_level) {
       // nichts
     }
@@ -623,9 +725,12 @@ export default function PokemonInfo() {
   const [moveNameDeByUrl, setMoveNameDeByUrl] = useState({});
 
   const [evoNameDeById, setEvoNameDeById] = useState({});
+  const [evoMetaById, setEvoMetaById] = useState({}); // id -> { nameDe, genNum }
   const [simLevel, setSimLevel] = useState();
   const [useSimulation, setUseSimulation] = useState(false);
-  const [selectedGen, setSelectedGen] = useState(7);
+
+  // ✅ Persisted selectedGen
+  const [selectedGen, setSelectedGen] = useState(() => readInfoGen(7));
 
   const [showCatchCalc, setShowCatchCalc] = useState(false);
   const [ccBall, setCcBall] = useState("poke");
@@ -716,15 +821,24 @@ export default function PokemonInfo() {
     };
   }, [id]);
 
-  // Types DE (optional)
+  /* =========================
+     ✅ TypeKeys depend on Gen
+  ========================= */
+  const typeKeys = useMemo(() => {
+    if (!pokemon) return [];
+    return getTypesForGen(pokemon, selectedGen);
+  }, [pokemon, selectedGen]);
+
+  // Types DE (optional) – jetzt passend zur Gen
   useEffect(() => {
     let alive = true;
     async function run() {
-      const arr = pokemon?.types || [];
-      const sorted = arr.slice().sort((a, b) => (a?.slot ?? 0) - (b?.slot ?? 0));
-
-      const names = await Promise.all(sorted.map((t) => fetchTypeNameDe(t?.type?.url)));
-
+      const keys = typeKeys || [];
+      if (!keys.length) {
+        setTypesDe([]);
+        return;
+      }
+      const names = await Promise.all(keys.map((k) => fetchTypeNameDe(`https://pokeapi.co/api/v2/type/${k}`)));
       if (!alive) return;
       setTypesDe(names.filter(Boolean));
     }
@@ -733,7 +847,7 @@ export default function PokemonInfo() {
     return () => {
       alive = false;
     };
-  }, [pokemon]);
+  }, [pokemon, typeKeys]);
 
   // ✅ Abilities laden (Name DE + Effekt)
   useEffect(() => {
@@ -777,26 +891,22 @@ export default function PokemonInfo() {
     };
   }, [pokemon, abilityInfoByUrl]);
 
-  // ✅ Typ-Matchups
+  // ✅ Typ-Matchups (PokeAPI type endpoint) – jetzt passend zur Gen
   useEffect(() => {
     let alive = true;
 
     async function run() {
-      if (!pokemon?.types?.length) {
+      if (!typeKeys?.length) {
         setMatchups(null);
         return;
       }
 
-      const defenderTypeUrls = pokemon.types
-        .slice()
-        .sort((a, b) => (a?.slot ?? 0) - (b?.slot ?? 0))
-        .map((t) => t?.type?.url)
-        .filter(Boolean);
+      const defenderTypeKeys = (typeKeys || []).slice(0, 2);
 
       try {
         const defs = await Promise.all(
-          defenderTypeUrls.map(async (url) => {
-            const res = await fetch(url);
+          defenderTypeKeys.map(async (k) => {
+            const res = await fetch(`https://pokeapi.co/api/v2/type/${k}`);
             if (!res.ok) return null;
             return res.json();
           })
@@ -807,7 +917,9 @@ export default function PokemonInfo() {
         const rels = defs.filter(Boolean).map((t) => t.damage_relations || {});
         const buckets = { immune: [], weak2: [], weak4: [], resist2: [], resist4: [] };
 
-        for (const atk of ALL_TYPE_KEYS) {
+        const allAtkTypes = allTypeKeysForGen(selectedGen);
+
+        for (const atk of allAtkTypes) {
           let mult = 1;
 
           for (const dr of rels) {
@@ -836,7 +948,7 @@ export default function PokemonInfo() {
     return () => {
       alive = false;
     };
-  }, [pokemon]);
+  }, [typeKeys, selectedGen]);
 
   const catchRate = species?.capture_rate ?? null;
 
@@ -863,15 +975,6 @@ export default function PokemonInfo() {
       SpD: map["special-defense"] ?? "-",
       Spe: map.speed ?? "-",
     };
-  }, [pokemon]);
-
-  const typeKeys = useMemo(() => {
-    const arr = pokemon?.types || [];
-    return arr
-      .slice()
-      .sort((a, b) => (a?.slot ?? 0) - (b?.slot ?? 0))
-      .map((t) => String(t?.type?.name || "").toLowerCase())
-      .filter(Boolean);
   }, [pokemon]);
 
   const levelUpMoves = useMemo(() => {
@@ -931,9 +1034,12 @@ export default function PokemonInfo() {
     return gensWithData.length ? gensWithData : ALL_GENS;
   }, [pokemon, basePokemon]);
 
+  // ✅ Wenn Gen nicht verfügbar ist: clamp + persist
   useEffect(() => {
     if (!availableGens.includes(selectedGen)) {
-      setSelectedGen(availableGens[availableGens.length - 1] || 7);
+      const next = availableGens[availableGens.length - 1] || 7;
+      setSelectedGen(next);
+      writeInfoGen(next);
     }
   }, [availableGens, selectedGen]);
 
@@ -997,6 +1103,22 @@ export default function PokemonInfo() {
       return true;
     });
   }, [evoChain]);
+
+  // ✅ Evo-Liste nach Gen filtern: nur Spezies anzeigen, die es in selectedGen schon gibt
+const visibleEvoList = useMemo(() => {
+  const g = Number(selectedGen) || 7;
+
+  return (evoList || []).filter((e) => {
+    // falls wir keine ID haben: lieber anzeigen
+    if (!e?.id) return true;
+
+    const meta = evoMetaById[e.id];
+    // solange noch nicht geladen: nicht "flackern" -> anzeigen
+    if (!meta || !meta.genNum) return true;
+
+    return meta.genNum <= g;
+  });
+}, [evoList, evoMetaById, selectedGen]);
 
   const simStats = useMemo(() => {
     if (!pokemon) return stats;
@@ -1065,6 +1187,39 @@ export default function PokemonInfo() {
       alive = false;
     };
   }, [evoList, evoNameDeById]);
+
+  // ✅ Evo Meta (Gen der Spezies) laden, damit wir nach selectedGen filtern können
+useEffect(() => {
+  let alive = true;
+
+  async function run() {
+    const ids = Array.from(new Set((evoList || []).map((e) => e.id).filter(Boolean)));
+    if (!ids.length) return;
+
+    const missing = ids.filter((id2) => !evoMetaById[id2]);
+    if (!missing.length) return;
+
+    const pairs = await mapInBatches(missing, 10, async (id2) => {
+      const meta = await fetchSpeciesMetaById(id2);
+      return [id2, meta];
+    });
+
+    if (!alive) return;
+
+    setEvoMetaById((prev) => {
+      const next = { ...prev };
+      for (const [id2, meta] of pairs) {
+        if (meta) next[id2] = meta;
+      }
+      return next;
+    });
+  }
+
+  run();
+  return () => {
+    alive = false;
+  };
+}, [evoList, evoMetaById]);
 
   // ✅ Evo item names DE (+ rerender tick)
   useEffect(() => {
@@ -1307,7 +1462,7 @@ export default function PokemonInfo() {
                       <span style={{ opacity: 0.6, fontWeight: 700 }}>#{id}</span>
                     </div>
 
-                    {/* Types */}
+                    {/* Types (gen-correct) */}
                     {typeKeys.length > 0 && (
                       <div style={{ ...typeIconRow, justifyContent: "flex-start" }}>
                         {typeKeys.map((t) => (
@@ -1414,12 +1569,16 @@ export default function PokemonInfo() {
                       </button>
                     </div>
 
-                    {/* Gen */}
+                    {/* Gen (persisted) */}
                     <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                       <div style={{ opacity: 0.9, fontWeight: 800 }}>Gen:</div>
                       <select
                         value={selectedGen}
-                        onChange={(e) => setSelectedGen(Number(e.target.value))}
+                        onChange={(e) => {
+                          const g = Number(e.target.value);
+                          setSelectedGen(g);
+                          writeInfoGen(g);
+                        }}
                         style={{
                           padding: "6px 10px",
                           borderRadius: 10,
@@ -1504,27 +1663,11 @@ export default function PokemonInfo() {
                 <div style={{ fontWeight: 950, fontSize: 14, marginBottom: 10 }}>Typ-Matchups</div>
 
                 {(() => {
-                  const ALL_TYPES = [
-                    "normal",
-                    "fire",
-                    "water",
-                    "electric",
-                    "grass",
-                    "ice",
-                    "fighting",
-                    "poison",
-                    "ground",
-                    "flying",
-                    "psychic",
-                    "bug",
-                    "rock",
-                    "ghost",
-                    "dragon",
-                    "dark",
-                    "steel",
-                    "fairy",
-                  ];
+                  const ALL_TYPES = allTypeKeysForGen(selectedGen);
 
+                  // Gen-Chart:
+                  // Für Gen < 2 werden Dark/Steel sowieso aus ALL_TYPES entfernt,
+                  // für Gen < 6 wird Fairy entfernt.
                   const CHART = {
                     normal: { rock: 0.5, ghost: 0, steel: 0.5 },
                     fire: { fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 },
@@ -1685,7 +1828,7 @@ export default function PokemonInfo() {
                 </div>
 
                 {/* Evo */}
-                {evoList.length > 0 && (
+                {visibleEvoList.length > 0 && (
                   <div
                     style={{
                       border: "1px solid rgba(255,255,255,0.12)",
@@ -1712,7 +1855,7 @@ export default function PokemonInfo() {
                     <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
 
                     <div className="hide-scrollbar" style={{ ...hideScrollbar, overflowY: "auto", maxHeight: "28vh", paddingRight: 6 }}>
-                      {evoList.map((e) => (
+                      {visibleEvoList.map((e) => (
                         <div
                           key={e.id || e.fallbackName}
                           onClick={() => e.id && nav(`/pokemon/${e.id}`)}

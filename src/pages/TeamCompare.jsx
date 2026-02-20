@@ -53,6 +53,43 @@ function isTypingTarget(el) {
 const TEAM_KEY = "team_compare_v4";
 const UI_KEY = "team_compare_ui_v4";
 
+// shared with PokemonInfo (so both pages use same gen)
+const GEN_KEY = "pinfo_selected_gen_v1";
+
+/* =========================
+   Gen helpers (availability)
+========================= */
+function maxDexForGen(gen) {
+  const g = Number(gen) || 1;
+  if (g <= 1) return 151;
+  if (g === 2) return 251;
+  if (g === 3) return 386;
+  if (g === 4) return 493;
+  if (g === 5) return 649;
+  if (g === 6) return 721;
+  if (g === 7) return 809;
+  if (g === 8) return 905;
+  return 1025; // gen 9 (current natdex in many sources)
+}
+
+function isBaseDexIdAllowedInGen(dexId, gen) {
+  const id = Number(dexId);
+  if (!id) return false;
+
+  // "normal" natdex ids are <= ~2000. Forms/variants can be >10000 (mega etc).
+  // Base selection (from fullPokedex) only contains natdex anyway.
+  // For safety: if it's an "odd" id > maxDex and gen is small -> disallow.
+  const max = maxDexForGen(gen);
+
+  // allow special form ids only when the gen could contain special forms at all
+  if (id > max && id >= 10000) {
+    // megas/primal etc (handled separately via form list anyway)
+    return Number(gen) >= 6;
+  }
+
+  return id <= max;
+}
+
 /* =========================
    Gen → VersionGroup
 ========================= */
@@ -140,11 +177,34 @@ const TYPE_MULT = {
   fairy: { fighting: 2, dragon: 2, dark: 2, fire: 0.5, poison: 0.5, steel: 0.5 },
 };
 
-function typeEffectiveness(attType, defTypes) {
-  const a = String(attType || "").toLowerCase();
+/* =========================
+   Gen type normalization
+   (Fix: Fairy should not exist < Gen 6)
+========================= */
+function normalizeTypeForGen(typeKey, gen) {
+  const t = String(typeKey || "").toLowerCase();
+  if (!t) return t;
+
+  // Fairy introduced Gen 6.
+  // We map fairy -> normal for older gens (e.g. Togekiss would have been normal/flying, Clefable normal, etc.)
+  if (Number(gen) < 6 && t === "fairy") return "normal";
+
+  return t;
+}
+
+function attackTypesForGen(gen) {
+  const g = Number(gen) || 1;
+  // remove fairy from attack list before gen 6 (so weakness table doesn't show fairy)
+  if (g < 6) return TYPES.filter((x) => x !== "fairy");
+  return TYPES;
+}
+
+function typeEffectiveness(attType, defTypes, gen) {
+  const a = normalizeTypeForGen(attType, gen);
   let mult = 1;
+
   for (const dt of defTypes || []) {
-    const d = String(dt || "").toLowerCase();
+    const d = normalizeTypeForGen(dt, gen);
     const row = TYPE_MULT[a] || {};
     const m = row[d];
     mult *= m == null ? 1 : m;
@@ -231,6 +291,12 @@ function extractTypes(poke) {
     .filter(Boolean);
 }
 
+function extractTypesForGen(poke, gen) {
+  const raw = extractTypes(poke);
+  const mapped = raw.map((t) => normalizeTypeForGen(t, gen)).filter(Boolean);
+  return uniq(mapped);
+}
+
 function extractAllowedMoves(poke, versionGroup) {
   const out = [];
   for (const m of poke?.moves || []) {
@@ -312,6 +378,33 @@ function formatFormLabelDE(baseDeName, pokemonApiName) {
   if (n.includes("-50")) return `${baseDeName} (50%)`;
 
   return baseDeName;
+}
+
+function isFormAvailableInGen(apiName, gen) {
+  const n = String(apiName || "").toLowerCase();
+
+  // Megas + Proto: Gen 6+
+  if (n.includes("-mega") || n.includes("-primal")) return Number(gen) >= 6;
+
+  // Gigadynamax: Gen 8+
+  if (n.includes("-gmax")) return Number(gen) >= 8;
+
+  // Regional forms
+  if (n.includes("-alola")) return Number(gen) >= 7;
+  if (n.includes("-galar")) return Number(gen) >= 8;
+  if (n.includes("-hisui")) return Number(gen) >= 8;
+  if (n.includes("-paldea")) return Number(gen) >= 9;
+
+  // Origin forms: mostly Gen 4+
+  if (n.includes("-origin")) return Number(gen) >= 4;
+
+  // Therian / Incarnate: Gen 5+
+  if (n.includes("-therian") || n.includes("-incarnate")) return Number(gen) >= 5;
+
+  // Zygarde tags etc: Gen 6+
+  if (n.includes("-complete") || n.includes("-10") || n.includes("-50")) return Number(gen) >= 6;
+
+  return true;
 }
 
 /* =========================
@@ -753,6 +846,7 @@ function MovePicker({
   myPokemonImg,
   takenMoves,
   navigateToMove,
+  gen,
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -844,7 +938,7 @@ function MovePicker({
     String(currentDet?.damage_class || "") === "physical" ||
     String(currentDet?.damage_class || "") === "special";
 
-  let eff = curType && enemyTypes?.length && isDamaging ? typeEffectiveness(curType, enemyTypes) : null;
+  let eff = curType && enemyTypes?.length && isDamaging ? typeEffectiveness(curType, enemyTypes, gen) : null;
   if (eff != null) {
     eff = overrideEffForAbilities({
       moveType: curType,
@@ -971,7 +1065,7 @@ function MovePicker({
 
                 {eff != null ? (
                   <span style={moveBadgeStyle(eff, eff >= 2 || eff === 0, "my")}>
-                    {eff >= 2 ? "" : ""}x{eff}
+                    x{eff}
                   </span>
                 ) : null}
               </div>
@@ -1110,7 +1204,7 @@ function MovePicker({
 
                 let eff2 = null;
                 if (type && Array.isArray(enemyTypes) && enemyTypes.length) {
-                  eff2 = typeEffectiveness(type, enemyTypes);
+                  eff2 = typeEffectiveness(type, enemyTypes, gen);
                   eff2 = overrideEffForAbilities({
                     moveType: type,
                     defenderAbilities: enemyAbilityKeys,
@@ -1236,7 +1330,7 @@ function MovePicker({
 
                     {badge ? (
                       <div style={badge}>
-                        {eff2 >= 2 ? "" : ""}x{eff2}
+                        x{eff2}
                       </div>
                     ) : null}
                   </button>
@@ -1285,12 +1379,16 @@ function SuggestList({ suggestions, onPick }) {
 /* =========================
    Weakness buckets
 ========================= */
-function buildDefBuckets(defTypes) {
+function buildDefBuckets(defTypes, gen) {
   const out = { "4x": [], "2x": [], "0.5x": [], "0.25x": [], "0x": [], "1x": [] };
   if (!defTypes?.length) return out;
-  for (const a of TYPES) {
-    let mult = 1;
-    for (const d of defTypes) mult *= typeEffectiveness(a, [d]);
+
+  const atkTypes = attackTypesForGen(gen);
+  const normalizedDef = (defTypes || []).map((t) => normalizeTypeForGen(t, gen)).filter(Boolean);
+
+  for (const a of atkTypes) {
+    const mult = typeEffectiveness(a, normalizedDef, gen);
+
     if (mult === 0) out["0x"].push(a);
     else if (mult === 0.25) out["0.25x"].push(a);
     else if (mult === 0.5) out["0.5x"].push(a);
@@ -1359,7 +1457,14 @@ export default function TeamCompare() {
       .filter((x) => Number.isFinite(x.dexId) && x.dexId > 0 && x.name);
   }, []);
 
-  const [gen, setGen] = useState(() => clamp(Number(readJSON(UI_KEY, {})?.gen ?? 6), 1, 9));
+  const [gen, setGen] = useState(() => {
+    const fromShared = Number(localStorage.getItem(GEN_KEY));
+    if (Number.isFinite(fromShared) && fromShared >= 1 && fromShared <= 9) return fromShared;
+
+    const fromUi = Number(readJSON(UI_KEY, {})?.gen ?? 6);
+    return clamp(fromUi, 1, 9);
+  });
+
   const versionGroup = useMemo(() => GEN_TO_VERSION_GROUP[gen] || "omega-ruby-alpha-sapphire", [gen]);
 
   const [team, setTeam] = useState(() => {
@@ -1391,6 +1496,10 @@ export default function TeamCompare() {
 
   useEffect(() => writeJSON(TEAM_KEY, team), [team]);
   useEffect(() => writeJSON(UI_KEY, { gen, activeSlot, enemyDexId, enemyLevel }), [gen, activeSlot, enemyDexId, enemyLevel]);
+
+  useEffect(() => {
+    localStorage.setItem(GEN_KEY, String(gen));
+  }, [gen]);
 
   const mySlot = team[activeSlot] || makeEmptySlot(activeSlot);
 
@@ -1458,6 +1567,30 @@ export default function TeamCompare() {
 
   const [myLoading, setMyLoading] = useState(false);
   const [enemyLoading, setEnemyLoading] = useState(false);
+
+  // ✅ IMPORTANT: when gen changes, remove any pokemon that does not exist in that gen (e.g. Togekiss in Gen 2)
+  useEffect(() => {
+    setTeam((prev) => {
+      let changed = false;
+      const next = prev.map((s, idx) => {
+        const id = Number(s?.dexId || 0);
+        if (!id) return s;
+        if (!isBaseDexIdAllowedInGen(id, gen)) {
+          changed = true;
+          return makeEmptySlot(idx);
+        }
+        return s;
+      });
+      return changed ? next : prev;
+    });
+
+    setEnemyDexId((prev) => {
+      const id = Number(prev || 0);
+      if (!id) return prev;
+      if (!isBaseDexIdAllowedInGen(id, gen)) return null;
+      return prev;
+    });
+  }, [gen]);
 
   useEffect(() => {
     let alive = true;
@@ -1532,8 +1665,8 @@ export default function TeamCompare() {
   const myData = mySlot.dexId ? pokeCacheRef.current.get(Number(mySlot.dexId)) : null;
   const enemyData = enemyDexId ? pokeCacheRef.current.get(Number(enemyDexId)) : null;
 
-  const myTypes = useMemo(() => extractTypes(myData?.pokemon), [myData, tick]);
-  const enemyTypes = useMemo(() => extractTypes(enemyData?.pokemon), [enemyData, tick]);
+  const myTypes = useMemo(() => extractTypesForGen(myData?.pokemon, gen), [myData, tick, gen]);
+  const enemyTypes = useMemo(() => extractTypesForGen(enemyData?.pokemon, gen), [enemyData, tick, gen]);
 
   const myStats = useMemo(() => computeStats(myData?.pokemon, mySlot.level), [myData, mySlot.level, tick]);
   const enemyStats = useMemo(() => computeStats(enemyData?.pokemon, enemyLevel), [enemyData, enemyLevel, tick]);
@@ -1614,23 +1747,35 @@ export default function TeamCompare() {
 
   const enemyHasLevitate = useMemo(() => enemyAbilityKeys.includes("levitate"), [enemyAbilityKeys.join("|")]);
 
+  // ✅ Filter suggestions by gen (no Togekiss in Gen 2 anymore)
   const editSuggestions = useMemo(() => {
     const q = normText(editQuery);
     if (!q) return [];
-    return allDexEntries.filter((p) => normText(p.name).includes(q) || String(p.dexId) === q).slice(0, 12);
-  }, [editQuery, allDexEntries]);
+    const max = maxDexForGen(gen);
+    return allDexEntries
+      .filter((p) => p.dexId <= max)
+      .filter((p) => normText(p.name).includes(q) || String(p.dexId) === q)
+      .slice(0, 12);
+  }, [editQuery, allDexEntries, gen]);
 
   const enemySuggestions = useMemo(() => {
     const q = normText(enemyQuery);
     if (!q) return [];
-    return allDexEntries.filter((p) => normText(p.name).includes(q) || String(p.dexId) === q).slice(0, 12);
-  }, [enemyQuery, allDexEntries]);
+    const max = maxDexForGen(gen);
+    return allDexEntries
+      .filter((p) => p.dexId <= max)
+      .filter((p) => normText(p.name).includes(q) || String(p.dexId) === q)
+      .slice(0, 12);
+  }, [enemyQuery, allDexEntries, gen]);
 
   function setSlotDex(slotIndex, dexId) {
+    const id = Number(dexId);
+    if (!isBaseDexIdAllowedInGen(id, gen)) return;
+
     setTeam((prev) => {
       const next = prev.slice();
       const cur = next[slotIndex] || makeEmptySlot(slotIndex);
-      next[slotIndex] = { ...cur, dexId: Number(dexId), moves: cur.moves || ["", "", "", ""] };
+      next[slotIndex] = { ...cur, dexId: id, moves: cur.moves || ["", "", "", ""] };
       return next;
     });
   }
@@ -1711,10 +1856,17 @@ export default function TeamCompare() {
       const items = [];
 
       for (const apiName of vars.slice(0, 80)) {
+        // ✅ forms only if gen supports them
+        if (!isFormAvailableInGen(apiName, gen)) continue;
+
         try {
           const p = await fetchPokemonByName(apiName);
           const id = Number(p?.id);
           if (!id) continue;
+
+          // ✅ also ensure ID is allowed in gen (safety)
+          if (!isBaseDexIdAllowedInGen(id, gen)) continue;
+
           const label = formatFormLabelDE(baseDe, apiName);
           items.push({ id, apiName, label });
 
@@ -1786,7 +1938,7 @@ export default function TeamCompare() {
       const isDamaging = det.damage_class === "physical" || det.damage_class === "special" || det.power != null;
       if (!isDamaging) continue;
 
-      let eff = typeEffectiveness(det.type, enemyTypes);
+      let eff = typeEffectiveness(det.type, enemyTypes, gen);
       eff = overrideEffForAbilities({
         moveType: det.type,
         defenderAbilities: enemyAbilityKeys,
@@ -1812,7 +1964,7 @@ export default function TeamCompare() {
     const best = rows[0] || null;
     const hasVeryEffective = rows.some((r) => r.eff >= 2);
     return { list: rows, best, hasVeryEffective };
-  }, [enemyTypes, enemyAbilityKeys.join("|"), mySlot.moves?.join("|"), tick]);
+  }, [enemyTypes, enemyAbilityKeys.join("|"), mySlot.moves?.join("|"), tick, gen]);
 
   const enemyAllMoves = useMemo(() => {
     if (!myTypes?.length || !enemyAllowedMoves?.length) return [];
@@ -1829,7 +1981,7 @@ export default function TeamCompare() {
       const isDamaging = det.damage_class === "physical" || det.damage_class === "special" || det.power != null;
       if (!isDamaging || !det.type) continue;
 
-      let eff = typeEffectiveness(det.type, myTypes);
+      let eff = typeEffectiveness(det.type, myTypes, gen);
       eff = overrideEffForAbilities({
         moveType: det.type,
         defenderAbilities: myAbilityKeys,
@@ -1853,7 +2005,7 @@ export default function TeamCompare() {
 
     rows.sort((a, b) => b.score - a.score);
     return rows.slice(0, 60);
-  }, [enemyAllowedMoves?.join("|"), myTypes?.join("|"), myAbilityKeys.join("|"), tick]);
+  }, [enemyAllowedMoves?.join("|"), myTypes?.join("|"), myAbilityKeys.join("|"), tick, gen]);
 
   const enemyHasVeryEffectiveVsMe = useMemo(() => {
     return enemyAllMoves.some((m) => m.eff >= 2);
@@ -1861,14 +2013,8 @@ export default function TeamCompare() {
 
   const enemyDefBuckets = useMemo(() => {
     if (!enemyTypes?.length) return null;
-    return buildDefBuckets(enemyTypes);
-  }, [enemyTypes?.join("|")]);
-
-  function pickedMovesSetForSlot(slot) {
-    const s = new Set();
-    for (const m of (slot?.moves || []).filter(Boolean)) s.add(String(m).toLowerCase());
-    return s;
-  }
+    return buildDefBuckets(enemyTypes, gen);
+  }, [enemyTypes?.join("|"), gen]);
 
   function slotHasVeryEffectiveMoveVsEnemy(slot) {
     if (!enemyTypes?.length) return false;
@@ -1879,7 +2025,7 @@ export default function TeamCompare() {
       const isDamaging = det.damage_class === "physical" || det.damage_class === "special" || det.power != null;
       if (!isDamaging) continue;
 
-      let eff = typeEffectiveness(det.type, enemyTypes);
+      let eff = typeEffectiveness(det.type, enemyTypes, gen);
       eff = overrideEffForAbilities({
         moveType: det.type,
         defenderAbilities: enemyAbilityKeys,
@@ -1902,7 +2048,7 @@ export default function TeamCompare() {
       const isDamaging = det.damage_class === "physical" || det.damage_class === "special" || det.power != null;
       if (!isDamaging) continue;
 
-      let eff = typeEffectiveness(det.type, defTypes);
+      let eff = typeEffectiveness(det.type, defTypes, gen);
       eff = overrideEffForAbilities({
         moveType: det.type,
         defenderAbilities: [],
@@ -1939,11 +2085,11 @@ export default function TeamCompare() {
      Styles
   ========================= */
   const pageStyle = {
-  minHeight: "100vh",
-  position: "relative",
-  overflow: "hidden",
-  color: "#e9e9f2",
-};
+    minHeight: "100vh",
+    position: "relative",
+    overflow: "hidden",
+    color: "#e9e9f2",
+  };
   const shell = { maxWidth: 1220, margin: "0 auto", padding: "14px 14px 40px" };
   const card = {
     background: "rgba(10, 12, 16, 0.72)",
@@ -1981,7 +2127,6 @@ export default function TeamCompare() {
   };
 
   const genItems = useMemo(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((g) => ({ value: g, label: `Gen ${g}` })), []);
-
   const myFormItems = useMemo(() => myFormList.map((f) => ({ value: f.id, label: f.label })), [myFormList]);
   const enemyFormItems = useMemo(() => enemyFormList.map((f) => ({ value: f.id, label: f.label })), [enemyFormList]);
 
@@ -2021,264 +2166,523 @@ export default function TeamCompare() {
   }, [enemyHasLevitate, mySlot.moves?.join("|"), tick]);
 
   return (
-  <div style={pageStyle}>
-    {/* Background Layer 1: füllt den Screen (keine Balken), blurred */}
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 0,
-        backgroundImage: `url(${dexBg})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        filter: "blur(18px)",
-        transform: "scale(1.06)",
-        opacity: 0.55,
-        pointerEvents: "none",
-      }}
-    />
+    <div style={pageStyle}>
+      {/* Background Layer 1: füllt den Screen (keine Balken), blurred */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 0,
+          backgroundImage: `url(${dexBg})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          filter: "blur(18px)",
+          transform: "scale(1.06)",
+          opacity: 0.55,
+          pointerEvents: "none",
+        }}
+      />
 
-    {/* Background Layer 2: das eigentliche Bild komplett sichtbar */}
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1,
-        backgroundImage: `url(${dexBg})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        pointerEvents: "none",
-      }}
-    />
+      {/* Background Layer 2: das eigentliche Bild komplett sichtbar */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 1,
+          backgroundImage: `url(${dexBg})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          pointerEvents: "none",
+        }}
+      />
 
-    {/* leichtes Darkening für bessere Lesbarkeit */}
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 2,
-        background: "rgba(0,0,0,0.35)",
-        pointerEvents: "none",
-      }}
-    />
+      {/* leichtes Darkening für bessere Lesbarkeit */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 2,
+          background: "rgba(0,0,0,0.35)",
+          pointerEvents: "none",
+        }}
+      />
 
-    {/* Content */}
-    <div style={{ position: "relative", zIndex: 3 }}>
-      <style>{HIDE_SCROLL_CSS}</style>
+      {/* Content */}
+      <div style={{ position: "relative", zIndex: 3 }}>
+        <style>{HIDE_SCROLL_CSS}</style>
 
-      <div style={shell}>
-        <div style={headerRow}>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 1100, letterSpacing: 0.2 }}>Team Compare</div>
-            <div style={{ opacity: 0.78, fontSize: 13, marginTop: 4 }}>
-              Gen <b>{gen}</b> • Move-Filter: <b>Level-Up + TM</b> • Version-Group: <b>{versionGroup}</b>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <div style={{ width: 140 }}>
-              <DarkPicker title={null} value={gen} onChange={(v) => setGen(clamp(Number(v), 1, 9))} items={genItems} search={false} />
+        <div style={shell}>
+          <div style={headerRow}>
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 1100, letterSpacing: 0.2 }}>Team Compare</div>
+              <div style={{ opacity: 0.78, fontSize: 13, marginTop: 4 }}>
+                Gen <b>{gen}</b> • Move-Filter: <b>Level-Up + TM</b> • Version-Group: <b>{versionGroup}</b>
+              </div>
             </div>
 
-            <button style={btn} onClick={() => navigate(location.state?.from || -1)}>
-              Zurück
-            </button>
-
-            <button
-              style={btn}
-              onClick={() => {
-                const fresh = new Array(6).fill(0).map((_, i) => makeEmptySlot(i));
-                setTeam(fresh);
-                setActiveSlot(0);
-                setEnemyDexId(null);
-                setEnemyLevel(50);
-              }}
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-
-        {(showRedBanner || showGreenBanner) && (
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-            {showRedBanner ? (
-              <div
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: 14,
-                  border: "1px solid rgba(255,120,120,0.40)",
-                  background: "rgba(255,120,120,0.14)",
-                  fontWeight: 950,
-                  fontSize: 13,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                Achtung: Gegner hat sehr effektive Attacken gegen dich
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <div style={{ width: 140 }}>
+                <DarkPicker title={null} value={gen} onChange={(v) => setGen(clamp(Number(v), 1, 9))} items={genItems} search={false} />
               </div>
-            ) : null}
 
-            {showGreenBanner ? (
-              <div
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: 14,
-                  border: "1px solid rgba(90,255,170,0.38)",
-                  background: "rgba(90,255,170,0.12)",
-                  fontWeight: 950,
-                  fontSize: 13,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                Hinweis: Du hast sehr effektive Attacken gegen den Gegner
-              </div>
-            ) : null}
-          </div>
-        )}
+              <button style={btn} onClick={() => navigate(location.state?.from || -1)}>
+                Zurück
+              </button>
 
-        {/* TOP: Team-Leiste */}
-        <div style={{ ...card, padding: 12, marginBottom: 12 }}>
-          <div style={{ fontWeight: 1000, marginBottom: 10 }}>Dein Team</div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
-            {team.map((s, idx) => {
-              const active = idx === activeSlot;
-              const spr = spriteForDexId(s.dexId);
-              const name = displayNameForDexId(s.dexId);
-
-              let greenGlow = false;
-              if (enemyDexId && s.dexId) {
-                const slotData = pokeCacheRef.current.get(Number(s.dexId));
-                const slotTypes = extractTypes(slotData?.pokemon);
-                const iAmVE = slotHasVeryEffectiveMoveVsEnemy(s);
-                const heIsVE = enemyHasVeryEffectiveMoveVsTypes(slotTypes);
-                greenGlow = iAmVE && !heIsVE;
-              }
-
-              const chip = {
-                width: "100%",
-                textAlign: "left",
-                padding: 10,
-                borderRadius: 16,
-                border: active
-                  ? "1px solid rgba(120,170,255,0.42)"
-                  : greenGlow
-                  ? "1px solid rgba(90,255,170,0.55)"
-                  : "1px solid rgba(255,255,255,0.12)",
-                background: active ? "rgba(120,170,255,0.14)" : greenGlow ? "rgba(90,255,170,0.10)" : "rgba(255,255,255,0.06)",
-                color: "#fff",
-                cursor: "pointer",
-                display: "grid",
-                gridTemplateRows: "auto auto",
-                gap: 8,
-                alignItems: "stretch",
-                boxShadow: greenGlow ? "0 0 0 3px rgba(90,255,170,0.10), 0 16px 36px rgba(0,0,0,0.35)" : undefined,
-                textDecoration: "none",
-              };
-
-              return (
-                <button key={s.id} style={chip} onClick={() => setActiveSlot(idx)}>
-                  <div style={{ fontWeight: 1200, fontSize: 13, lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {name}
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "44px 1fr auto", gap: 10, alignItems: "center" }}>
-                    <div
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 14,
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        background: "rgba(0,0,0,0.28)",
-                        display: "grid",
-                        placeItems: "center",
-                        overflow: "hidden",
-                        flex: "0 0 auto",
-                      }}
-                    >
-                      {spr ? <img src={spr} alt="" style={{ width: 44, height: 44, objectFit: "contain" }} /> : <div style={{ opacity: 0.55, fontWeight: 900 }}>—</div>}
-                    </div>
-
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 12, opacity: 0.85 }}>Lvl {s.level || 50}</div>
-                    </div>
-
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <IconBtn
-                        title="Bearbeiten"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setActiveSlot(idx);
-                          setEditQuery("");
-                          setEditOpen(true);
-                        }}
-                      >
-                        ✎
-                      </IconBtn>
-
-                      <IconBtn
-                        title="Entfernen"
-                        danger
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          clearSlot(idx);
-                          if (idx === activeSlot) setEditOpen(false);
-                        }}
-                      >
-                        X
-                      </IconBtn>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* MAIN */}
-        {/* Gegner-Spalte etwas breiter, damit die Attacken-Zeilen genauso „clean“ wirken wie links */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.15fr", gap: 12 }}>
-          {/* ME */}
-          <div style={card}>
-            <div
-              style={{
-                padding: 12,
-                borderBottom: "1px solid rgba(255,255,255,0.10)",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 12,
-              }}
-            >
-              <div style={{ fontWeight: 1100 }}>Dein aktuelles Pokémon</div>
               <button
-                style={{ ...btn, padding: "8px 10px" }}
+                style={btn}
                 onClick={() => {
-                  setEditQuery("");
-                  setEditOpen(true);
+                  const fresh = new Array(6).fill(0).map((_, i) => makeEmptySlot(i));
+                  setTeam(fresh);
+                  setActiveSlot(0);
+                  setEnemyDexId(null);
+                  setEnemyLevel(50);
                 }}
               >
-                Bearbeiten
+                Reset
               </button>
             </div>
+          </div>
 
-            <div style={{ padding: 12 }}>
-              {!mySlot.dexId ? (
-                <div style={{ opacity: 0.75 }}>Wähle oben ein Pokémon (Bearbeiten).</div>
-              ) : (
-                <>
-                  <div style={{ display: "grid", gridTemplateColumns: "112px 1fr", gap: 12, alignItems: "start" }}>
+          {(showRedBanner || showGreenBanner) && (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+              {showRedBanner ? (
+                <div
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(255,120,120,0.40)",
+                    background: "rgba(255,120,120,0.14)",
+                    fontWeight: 950,
+                    fontSize: 13,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  Achtung: Gegner hat sehr effektive Attacken gegen dich
+                </div>
+              ) : null}
+
+              {showGreenBanner ? (
+                <div
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(90,255,170,0.38)",
+                    background: "rgba(90,255,170,0.12)",
+                    fontWeight: 950,
+                    fontSize: 13,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  Hinweis: Du hast sehr effektive Attacken gegen den Gegner
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* TOP: Team-Leiste */}
+          <div style={{ ...card, padding: 12, marginBottom: 12 }}>
+            <div style={{ fontWeight: 1000, marginBottom: 10 }}>Dein Team</div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
+              {team.map((s, idx) => {
+                const active = idx === activeSlot;
+                const spr = spriteForDexId(s.dexId);
+                const name = displayNameForDexId(s.dexId);
+
+                let greenGlow = false;
+                if (enemyDexId && s.dexId) {
+                  const slotData = pokeCacheRef.current.get(Number(s.dexId));
+                  const slotTypes = extractTypesForGen(slotData?.pokemon, gen);
+                  const iAmVE = slotHasVeryEffectiveMoveVsEnemy(s);
+                  const heIsVE = enemyHasVeryEffectiveMoveVsTypes(slotTypes);
+                  greenGlow = iAmVE && !heIsVE;
+                }
+
+                const chip = {
+                  width: "100%",
+                  textAlign: "left",
+                  padding: 10,
+                  borderRadius: 16,
+                  border: active
+                    ? "1px solid rgba(120,170,255,0.42)"
+                    : greenGlow
+                    ? "1px solid rgba(90,255,170,0.55)"
+                    : "1px solid rgba(255,255,255,0.12)",
+                  background: active ? "rgba(120,170,255,0.14)" : greenGlow ? "rgba(90,255,170,0.10)" : "rgba(255,255,255,0.06)",
+                  color: "#fff",
+                  cursor: "pointer",
+                  display: "grid",
+                  gridTemplateRows: "auto auto",
+                  gap: 8,
+                  alignItems: "stretch",
+                  boxShadow: greenGlow ? "0 0 0 3px rgba(90,255,170,0.10), 0 16px 36px rgba(0,0,0,0.35)" : undefined,
+                  textDecoration: "none",
+                };
+
+                return (
+                  <button key={s.id} style={chip} onClick={() => setActiveSlot(idx)}>
+                    <div style={{ fontWeight: 1200, fontSize: 13, lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {name}
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "44px 1fr auto", gap: 10, alignItems: "center" }}>
+                      <div
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 14,
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          background: "rgba(0,0,0,0.28)",
+                          display: "grid",
+                          placeItems: "center",
+                          overflow: "hidden",
+                          flex: "0 0 auto",
+                        }}
+                      >
+                        {spr ? <img src={spr} alt="" style={{ width: 44, height: 44, objectFit: "contain" }} /> : <div style={{ opacity: 0.55, fontWeight: 900 }}>—</div>}
+                      </div>
+
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12, opacity: 0.85 }}>Lvl {s.level || 50}</div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <IconBtn
+                          title="Bearbeiten"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setActiveSlot(idx);
+                            setEditQuery("");
+                            setEditOpen(true);
+                          }}
+                        >
+                          ✎
+                        </IconBtn>
+
+                        <IconBtn
+                          title="Entfernen"
+                          danger
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            clearSlot(idx);
+                            if (idx === activeSlot) setEditOpen(false);
+                          }}
+                        >
+                          X
+                        </IconBtn>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* MAIN */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.15fr", gap: 12 }}>
+            {/* ME */}
+            <div style={card}>
+              <div
+                style={{
+                  padding: 12,
+                  borderBottom: "1px solid rgba(255,255,255,0.10)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                <div style={{ fontWeight: 1100 }}>Dein aktuelles Pokémon</div>
+                <button
+                  style={{ ...btn, padding: "8px 10px" }}
+                  onClick={() => {
+                    setEditQuery("");
+                    setEditOpen(true);
+                  }}
+                >
+                  Bearbeiten
+                </button>
+              </div>
+
+              <div style={{ padding: 12 }}>
+                {!mySlot.dexId ? (
+                  <div style={{ opacity: 0.75 }}>Wähle oben ein Pokémon (Bearbeiten).</div>
+                ) : (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "112px 1fr", gap: 12, alignItems: "start" }}>
+                      <div
+                        style={{
+                          borderRadius: 18,
+                          background: "linear-gradient(180deg, rgba(120,170,255,0.14), rgba(255,120,220,0.08))",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          display: "grid",
+                          placeItems: "center",
+                          padding: 10,
+                          minHeight: 112,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {myLoading ? <div style={{ opacity: 0.75 }}>Lädt…</div> : myImg ? <img src={myImg} alt="" style={{ width: 92, height: 92, objectFit: "contain" }} /> : null}
+                      </div>
+
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 1200, fontSize: 18, lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {myData?.displayDeName || displayNameForDexId(mySlot.dexId)} <span style={{ opacity: 0.75, fontSize: 13 }}>• Level {mySlot.level || 50}</span>
+                        </div>
+
+                        <div style={{ marginTop: 8 }}>
+                          {myTypes.map((t) => (
+                            <TypePill key={t} t={t} compact />
+                          ))}
+                        </div>
+
+                        {myAbilities.length ? (
+                          <div
+                            style={{
+                              marginTop: 10,
+                              padding: 10,
+                              borderRadius: 14,
+                              border: "1px solid rgba(255,255,255,0.12)",
+                              background: "rgba(0,0,0,0.18)",
+                            }}
+                          >
+                            <div style={{ fontWeight: 1100, marginBottom: 6 }}>Fähigkeiten</div>
+                            <div style={{ display: "grid", gap: 6 }}>
+                              {myAbilities.map((a) => (
+                                <div key={a.key} style={{ fontSize: 13, lineHeight: 1.35 }}>
+                                  <b>{a.deName}</b>
+                                  {a.shortEffect ? <span style={{ opacity: 0.9 }}> — {a.shortEffect}</span> : <span style={{ opacity: 0.75 }}> — (Keine DE-Beschreibung)</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {myStats && (
+                          <div style={{ marginTop: 10, display: "grid", gap: 7 }}>
+                            <StatBar label="KP" value={myStats.hp} compact />
+                            <StatBar label="Angriff" value={myStats.atk} compact />
+                            <StatBar label="Vert." value={myStats.def} compact />
+                            <StatBar label="Sp.-Ang." value={myStats.spa} compact />
+                            <StatBar label="Sp.-Vert." value={myStats.spd} compact />
+                            <StatBar label="Initiative" value={myStats.spe} compact />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontWeight: 1100, marginBottom: 8 }}>Empfehlung gegen Gegner</div>
+
+                      {enemyDexId && speedLine ? (
+                        <div
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: 14,
+                            fontWeight: 950,
+                            fontSize: 13,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            marginBottom: 10,
+                            ...speedPillStyle,
+                          }}
+                        >
+                          Initiative: {speedLine.text}
+                        </div>
+                      ) : null}
+
+                      {enemyDexId && showLevitateWarning ? (
+                        <div
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: 14,
+                            border: "1px solid rgba(255,200,120,0.40)",
+                            background: "rgba(255,200,120,0.12)",
+                            fontWeight: 950,
+                            fontSize: 13,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            marginBottom: 10,
+                          }}
+                        >
+                          Gegner hat<b>Schwebe</b>
+                        </div>
+                      ) : null}
+
+                      {!enemyDexId ? (
+                        <div style={{ opacity: 0.75 }}>Wähle rechts einen Gegner.</div>
+                      ) : !myMoveAdvice.list.length ? (
+                        <div style={{ opacity: 0.75 }}>Wähle im Bearbeiten-Editor deine 4 Attacken.</div>
+                      ) : (
+                        <div style={{ display: "grid", gap: 8 }}>
+                          {myMoveAdvice.list.slice(0, 6).map((r) => {
+                            const badge = moveBadgeStyle(r.eff, r.eff >= 2 || r.eff === 0, "my");
+                            const { bg, border, glow } = moveRowBg(r.eff, "my");
+                            const catIcon = moveCategoryIconUrl(r.dc);
+                            const catLabel = r.dc ? MOVE_CLASS_LABEL_DE[String(r.dc).toLowerCase()] || cap(r.dc) : null;
+
+                            return (
+                              <button
+                                key={r.moveKey}
+                                onClick={() => goToMove(r.moveKey)}
+                                style={{
+                                  width: "100%",
+                                  textAlign: "left",
+                                  padding: "10px 12px",
+                                  borderRadius: 14,
+                                  border,
+                                  background: bg,
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  gap: 12,
+                                  boxShadow: glow,
+                                  cursor: "pointer",
+                                  color: "#fff",
+                                  textDecoration: "none",
+                                }}
+                                title="Move-Details öffnen"
+                              >
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontWeight: 1100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {r.deName}{" "}
+                                    {r.eff >= 2 ? (
+                                      <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>SEHR EFFEKTIV</span>
+                                    ) : r.eff === 0 ? (
+                                      <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>IMMUN</span>
+                                    ) : null}
+                                  </div>
+                                  <div
+                                    style={{
+                                      opacity: 0.9,
+                                      fontSize: 12,
+                                      display: "flex",
+                                      gap: 12,
+                                      flexWrap: "wrap",
+                                      alignItems: "center",
+                                      marginTop: 2,
+                                    }}
+                                  >
+                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                      <img
+                                        src={typeIconUrl(r.type)}
+                                        alt=""
+                                        style={{
+                                          width: 16,
+                                          height: 16,
+                                          borderRadius: 8,
+                                          padding: 2,
+                                          background: "rgba(0,0,0,0.35)",
+                                          border: "1px solid rgba(255,255,255,0.12)",
+                                        }}
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = "none";
+                                        }}
+                                      />
+                                      Typ: {TYPE_LABELS_DE[r.type] || cap(r.type)}
+                                    </span>
+                                    <span>Stärke: {r.power ?? "—"}</span>
+                                    <span>AP: {r.pp ?? "—"}</span>
+                                    <span>Genauigkeit: {r.accuracy != null ? `${r.accuracy}%` : "—"}</span>
+
+                                    {r.dc ? (
+                                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                        {catIcon ? (
+                                          <img
+                                            src={catIcon}
+                                            alt=""
+                                            style={{
+                                              width: 16,
+                                              height: 16,
+                                              imageRendering: "pixelated",
+                                              borderRadius: 6,
+                                              padding: 1,
+                                              background: "rgba(0,0,0,0.35)",
+                                              border: "1px solid rgba(255,255,255,0.12)",
+                                            }}
+                                            onError={(e) => {
+                                              e.currentTarget.style.display = "none";
+                                            }}
+                                          />
+                                        ) : null}
+                                        Klasse: {catLabel || cap(r.dc)}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
+
+                                <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
+                                  <div style={badge}>x{r.eff}</div>
+                                  <div style={{ opacity: 0.65, fontSize: 12 }}>Effektiv</div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* ENEMY */}
+            <div style={card}>
+              <div
+                style={{
+                  padding: 12,
+                  borderBottom: "1px solid rgba(255,255,255,0.10)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                <div style={{ fontWeight: 1100 }}>Gegner</div>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ opacity: 0.8, fontSize: 13 }}>Level</div>
+                  <input
+                    style={{ ...input, width: 80, padding: "7px 9px", height: 34 }}
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={enemyLevel}
+                    onChange={(e) => setEnemyLevel(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ padding: 12 }}>
+                <div style={{ fontWeight: 950, opacity: 0.9, marginBottom: 6 }}>Gegner wählen</div>
+                <input style={input} value={enemyQuery} onChange={(e) => setEnemyQuery(e.target.value)} placeholder="Name oder Dex-ID…" />
+                <SuggestList
+                  suggestions={enemySuggestions}
+                  onPick={async (s) => {
+                    setEnemyDexId(s.dexId);
+                    setEnemyQuery("");
+                    const list = await buildFormListFromBaseDexId(s.dexId);
+                    setEnemyFormList(list);
+                  }}
+                />
+
+                {!enemyDexId ? (
+                  <div style={{ opacity: 0.75, marginTop: 10 }}>Wähle einen Gegner.</div>
+                ) : (
+                  <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "112px 1fr", gap: 12, alignItems: "start" }}>
                     <div
                       style={{
                         borderRadius: 18,
-                        background: "linear-gradient(180deg, rgba(120,170,255,0.14), rgba(255,120,220,0.08))",
+                        background: "linear-gradient(180deg, rgba(255,180,120,0.14), rgba(120,255,210,0.08))",
                         border: "1px solid rgba(255,255,255,0.12)",
                         display: "grid",
                         placeItems: "center",
@@ -2287,21 +2691,21 @@ export default function TeamCompare() {
                         overflow: "hidden",
                       }}
                     >
-                      {myLoading ? <div style={{ opacity: 0.75 }}>Lädt…</div> : myImg ? <img src={myImg} alt="" style={{ width: 92, height: 92, objectFit: "contain" }} /> : null}
+                      {enemyLoading ? <div style={{ opacity: 0.75 }}>Lädt…</div> : enemyImg ? <img src={enemyImg} alt="" style={{ width: 92, height: 92, objectFit: "contain" }} /> : null}
                     </div>
 
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 1200, fontSize: 18, lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {myData?.displayDeName || displayNameForDexId(mySlot.dexId)} <span style={{ opacity: 0.75, fontSize: 13 }}>• Level {mySlot.level || 50}</span>
+                        {enemyData?.displayDeName || displayNameForDexId(enemyDexId)} <span style={{ opacity: 0.75, fontSize: 13 }}>• Level {enemyLevel}</span>
                       </div>
 
                       <div style={{ marginTop: 8 }}>
-                        {myTypes.map((t) => (
+                        {enemyTypes.map((t) => (
                           <TypePill key={t} t={t} compact />
                         ))}
                       </div>
 
-                      {myAbilities.length ? (
+                      {enemyAbilities.length ? (
                         <div
                           style={{
                             marginTop: 10,
@@ -2311,9 +2715,9 @@ export default function TeamCompare() {
                             background: "rgba(0,0,0,0.18)",
                           }}
                         >
-                          <div style={{ fontWeight: 1100, marginBottom: 6 }}>Fähigkeiten</div>
+                          <div style={{ fontWeight: 1100, marginBottom: 6 }}>Fähigkeiten (Gegner)</div>
                           <div style={{ display: "grid", gap: 6 }}>
-                            {myAbilities.map((a) => (
+                            {enemyAbilities.map((a) => (
                               <div key={a.key} style={{ fontSize: 13, lineHeight: 1.35 }}>
                                 <b>{a.deName}</b>
                                 {a.shortEffect ? <span style={{ opacity: 0.9 }}> — {a.shortEffect}</span> : <span style={{ opacity: 0.75 }}> — (Keine DE-Beschreibung)</span>}
@@ -2323,640 +2727,376 @@ export default function TeamCompare() {
                         </div>
                       ) : null}
 
-                      {myStats && (
+                      {enemyFormItems.length > 1 ? (
+                        <div style={{ marginTop: 10 }}>
+                          <DarkPicker title="Form auswählen" value={enemyDexId} onChange={(v) => setEnemyDexId(Number(v))} items={enemyFormItems} search />
+                        </div>
+                      ) : null}
+
+                      {enemyStats && (
                         <div style={{ marginTop: 10, display: "grid", gap: 7 }}>
-                          <StatBar label="KP" value={myStats.hp} compact />
-                          <StatBar label="Angriff" value={myStats.atk} compact />
-                          <StatBar label="Vert." value={myStats.def} compact />
-                          <StatBar label="Sp.-Ang." value={myStats.spa} compact />
-                          <StatBar label="Sp.-Vert." value={myStats.spd} compact />
-                          <StatBar label="Initiative" value={myStats.spe} compact />
+                          <StatBar label="KP" value={enemyStats.hp} compact />
+                          <StatBar label="Angriff" value={enemyStats.atk} compact />
+                          <StatBar label="Vert." value={enemyStats.def} compact />
+                          <StatBar label="Sp.-Ang." value={enemyStats.spa} compact />
+                          <StatBar label="Sp.-Vert." value={enemyStats.spd} compact />
+                          <StatBar label="Initiative" value={enemyStats.spe} compact />
                         </div>
                       )}
+
+                      {enemyDefBuckets ? (
+                        <Collapsible title="Schwächen & Resistenzen" open={enemyWeakOpen} setOpen={setEnemyWeakOpen}>
+                          <TypeRow title="4× Schwäche" list={enemyDefBuckets["4x"]} />
+                          <TypeRow title="2× Schwäche" list={enemyDefBuckets["2x"]} />
+                          <TypeRow title="½× Resist" list={enemyDefBuckets["0.5x"]} />
+                          <TypeRow title="¼× Resist" list={enemyDefBuckets["0.25x"]} />
+                          <TypeRow title="Immun (0×)" list={enemyDefBuckets["0x"]} />
+                        </Collapsible>
+                      ) : null}
+
+                      {enemyDexId && mySlot.dexId ? (
+                        <div style={{ marginTop: 14 }}>
+                          <div style={{ fontWeight: 1100, marginBottom: 8 }}>Gegner-Attacken (Level {enemyLevel})</div>
+
+                          {!enemyAllMoves.length ? (
+                            <div style={{ opacity: 0.75, fontSize: 13 }}>(Lädt Moves…)</div>
+                          ) : (
+                            <div style={{ display: "grid", gap: 8 }}>
+                              {enemyAllMoves.map((m) => {
+                                const emph = m.eff >= 2 || m.eff === 0;
+                                const badge = moveBadgeStyle(m.eff, emph, "enemy");
+                                const { bg, border, glow } = moveRowBg(m.eff, "enemy");
+
+                                const catIcon = moveCategoryIconUrl(m.dc);
+                                const catLabel = m.dc ? MOVE_CLASS_LABEL_DE[String(m.dc).toLowerCase()] || cap(m.dc) : null;
+
+                                return (
+                                  <button
+                                    key={m.moveKey}
+                                    onClick={() => goToMove(m.moveKey)}
+                                    style={{
+                                      width: "100%",
+                                      textAlign: "left",
+                                      padding: "10px 12px",
+                                      borderRadius: 14,
+                                      border,
+                                      background: bg,
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      gap: 12,
+                                      boxShadow: glow,
+                                      cursor: "pointer",
+                                      color: "#fff",
+                                      textDecoration: "none",
+                                    }}
+                                    title="Move-Details öffnen"
+                                  >
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ fontWeight: 1100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {m.deName}{" "}
+                                        {m.eff >= 2 ? (
+                                          <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>SEHR EFFEKTIV</span>
+                                        ) : m.eff === 0 ? (
+                                          <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>IMMUN</span>
+                                        ) : null}
+                                      </div>
+
+                                      <div
+                                        style={{
+                                          opacity: 0.92,
+                                          fontSize: 12,
+                                          display: "flex",
+                                          gap: 12,
+                                          flexWrap: "wrap",
+                                          alignItems: "center",
+                                          marginTop: 2,
+                                        }}
+                                      >
+                                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                          <img
+                                            src={typeIconUrl(m.type)}
+                                            alt=""
+                                            style={{
+                                              width: 16,
+                                              height: 16,
+                                              borderRadius: 8,
+                                              padding: 2,
+                                              background: "rgba(0,0,0,0.35)",
+                                              border: "1px solid rgba(255,255,255,0.12)",
+                                            }}
+                                            onError={(e) => {
+                                              e.currentTarget.style.display = "none";
+                                            }}
+                                          />
+                                          Typ: {TYPE_LABELS_DE[m.type] || cap(m.type)}
+                                        </span>
+
+                                        <span>Stärke: {m.power ?? "—"}</span>
+                                        <span>AP: {m.pp ?? "—"}</span>
+                                        <span>Genauigkeit: {m.accuracy != null ? `${m.accuracy}%` : "—"}</span>
+
+                                        {m.dc ? (
+                                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                            {catIcon ? (
+                                              <img
+                                                src={catIcon}
+                                                alt=""
+                                                style={{
+                                                  width: 16,
+                                                  height: 16,
+                                                  imageRendering: "pixelated",
+                                                  borderRadius: 6,
+                                                  padding: 1,
+                                                  background: "rgba(0,0,0,0.35)",
+                                                  border: "1px solid rgba(255,255,255,0.12)",
+                                                }}
+                                                onError={(e) => {
+                                                  e.currentTarget.style.display = "none";
+                                                }}
+                                              />
+                                            ) : null}
+                                            Klasse: {catLabel || cap(m.dc)}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    </div>
+
+                                    <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
+                                      <div style={badge}>x{m.eff}</div>
+                                      <div style={{ opacity: 0.65, fontSize: 12 }}>Effektiv</div>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* EDIT MODAL */}
+          {editOpen && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.60)",
+                backdropFilter: "blur(10px)",
+                zIndex: 99999,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 16,
+              }}
+              onClick={() => setEditOpen(false)}
+            >
+              <div
+                className="hideScroll"
+                style={{
+                  width: "min(900px, 96vw)",
+                  maxHeight: "92vh",
+                  overflow: "auto",
+                  borderRadius: 18,
+                  border: "1px solid rgba(255,255,255,0.14)",
+                  background: "rgba(10,10,16,0.92)",
+                  boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
+                  padding: 14,
+                  color: "#fff",
+                  display: "grid",
+                  gap: 12,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 1100, fontSize: 18 }}>Slot {activeSlot + 1} bearbeiten</div>
+                    <div style={{ opacity: 0.75, fontSize: 13 }}>
+                      Wählbar: <b>Level-Up + TM</b> in Gen <b>{gen}</b>
+                    </div>
+                  </div>
+                  <button style={{ ...btn, padding: "8px 10px" }} onClick={() => setEditOpen(false)}>
+                    Schließen
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "86px 1fr 110px",
+                    gap: 12,
+                    alignItems: "center",
+                    padding: 12,
+                    borderRadius: 16,
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    background: "rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 86,
+                      height: 86,
+                      borderRadius: 18,
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      background: "rgba(0,0,0,0.32)",
+                      display: "grid",
+                      placeItems: "center",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {myImg ? <img src={myImg} alt="" style={{ width: 78, height: 78, objectFit: "contain" }} /> : <div style={{ opacity: 0.6, fontWeight: 900 }}>—</div>}
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 1200, fontSize: 18, lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {myData?.displayDeName || displayNameForDexId(mySlot.dexId)}
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      {(myTypes || []).map((t) => (
+                        <TypePill key={t} t={t} compact />
+                      ))}
                     </div>
                   </div>
 
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ fontWeight: 1100, marginBottom: 8 }}>Empfehlung gegen Gegner</div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                    <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 6 }}>Level</div>
+                    <input
+                      style={{
+                        ...input,
+                        width: 72,
+                        padding: "8px 10px",
+                        height: 36,
+                        textAlign: "center",
+                      }}
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={mySlot.level ?? 50}
+                      onChange={(e) => setSlotLevel(activeSlot, e.target.value)}
+                    />
+                  </div>
+                </div>
 
-                    {enemyDexId && speedLine ? (
-                      <div
-                        style={{
-                          padding: "8px 10px",
-                          borderRadius: 14,
-                          fontWeight: 950,
-                          fontSize: 13,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 8,
-                          marginBottom: 10,
-                          ...speedPillStyle,
-                        }}
-                      >
-                        Initiative: {speedLine.text}
-                      </div>
-                    ) : null}
+                {myStats ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                    <StatBar label="KP" value={myStats.hp} compact />
+                    <StatBar label="Angriff" value={myStats.atk} compact />
+                    <StatBar label="Vert." value={myStats.def} compact />
+                    <StatBar label="Sp.-Ang." value={myStats.spa} compact />
+                    <StatBar label="Sp.-Vert." value={myStats.spd} compact />
+                    <StatBar label="Initiative" value={myStats.spe} compact />
+                  </div>
+                ) : null}
 
-                    {enemyDexId && showLevitateWarning ? (
-                      <div
-                        style={{
-                          padding: "8px 10px",
-                          borderRadius: 14,
-                          border: "1px solid rgba(255,200,120,0.40)",
-                          background: "rgba(255,200,120,0.12)",
-                          fontWeight: 950,
-                          fontSize: 13,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 8,
-                          marginBottom: 10,
-                        }}
-                      >
-                        Gegner hat<b>Schwebe</b>
-                      </div>
-                    ) : null}
+                <div>
+                  <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 6 }}>Pokémon wählen</div>
+                  <input style={input} value={editQuery} onChange={(e) => setEditQuery(e.target.value)} placeholder="Name oder Dex-ID…" />
+                  <SuggestList
+                    suggestions={editSuggestions}
+                    onPick={async (s) => {
+                      setEditQuery("");
+                      setMyFormList([]);
+                      setSlotDex(activeSlot, s.dexId);
+                      const list = await buildFormListFromBaseDexId(s.dexId);
+                      setMyFormList(list);
+                    }}
+                  />
+                </div>
 
-                    {!enemyDexId ? (
-                      <div style={{ opacity: 0.75 }}>Wähle rechts einen Gegner.</div>
-                    ) : !myMoveAdvice.list.length ? (
-                      <div style={{ opacity: 0.75 }}>Wähle im Bearbeiten-Editor deine 4 Attacken.</div>
+                {mySlot.dexId && myFormItems.length > 1 ? (
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <DarkPicker title="Form auswählen (Mega/Gigadynamax/Regional/Spezial)" value={mySlot.dexId} onChange={(v) => setSlotDex(activeSlot, Number(v))} items={myFormItems} search />
+                  </div>
+                ) : null}
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", padding: 12 }}>
+                    <div style={{ fontWeight: 1100, marginBottom: 10 }}>Deine 4 Attacken</div>
+
+                    {!mySlot.dexId ? (
+                      <div style={{ opacity: 0.75 }}>Erst Pokémon auswählen.</div>
                     ) : (
-                      <div style={{ display: "grid", gap: 8 }}>
-                        {myMoveAdvice.list.slice(0, 6).map((r) => {
-                          const badge = moveBadgeStyle(r.eff, r.eff >= 2 || r.eff === 0, "my");
-                          const { bg, border, glow } = moveRowBg(r.eff, "my");
-                          const catIcon = moveCategoryIconUrl(r.dc);
-                          const catLabel = r.dc ? MOVE_CLASS_LABEL_DE[String(r.dc).toLowerCase()] || cap(r.dc) : null;
+                      <div style={{ display: "grid", gap: 12 }}>
+                        {[0, 1, 2, 3].map((i) => {
+                          const taken = (function pickedMovesSetForSlotInline(slot) {
+                            const s = new Set();
+                            for (const m of (slot?.moves || []).filter(Boolean)) s.add(String(m).toLowerCase());
+                            return s;
+                          })(mySlot);
 
                           return (
-                            <button
-                              key={r.moveKey}
-                              onClick={() => goToMove(r.moveKey)}
-                              style={{
-                                width: "100%",
-                                textAlign: "left",
-                                padding: "10px 12px",
-                                borderRadius: 14,
-                                border,
-                                background: bg,
-                                display: "flex",
-                                justifyContent: "space-between",
-                                gap: 12,
-                                boxShadow: glow,
-                                cursor: "pointer",
-                                color: "#fff",
-                                textDecoration: "none",
-                              }}
-                              title="Move-Details öffnen"
-                            >
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 1100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {r.deName}{" "}
-                                  {r.eff >= 2 ? (
-                                    <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>SEHR EFFEKTIV</span>
-                                  ) : r.eff === 0 ? (
-                                    <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>IMMUN</span>
-                                  ) : null}
-                                </div>
-                                <div
-                                  style={{
-                                    opacity: 0.9,
-                                    fontSize: 12,
-                                    display: "flex",
-                                    gap: 12,
-                                    flexWrap: "wrap",
-                                    alignItems: "center",
-                                    marginTop: 2,
-                                  }}
-                                >
-                                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                    <img
-                                      src={typeIconUrl(r.type)}
-                                      alt=""
-                                      style={{
-                                        width: 16,
-                                        height: 16,
-                                        borderRadius: 8,
-                                        padding: 2,
-                                        background: "rgba(0,0,0,0.35)",
-                                        border: "1px solid rgba(255,255,255,0.12)",
-                                      }}
-                                      onError={(e) => {
-                                        e.currentTarget.style.display = "none";
-                                      }}
-                                    />
-                                    Typ: {TYPE_LABELS_DE[r.type] || cap(r.type)}
-                                  </span>
-                                  <span>Stärke: {r.power ?? "—"}</span>
-                                  <span>AP: {r.pp ?? "—"}</span>
-                                  <span>Genauigkeit: {r.accuracy != null ? `${r.accuracy}%` : "—"}</span>
-
-                                  {r.dc ? (
-                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                      {catIcon ? (
-                                        <img
-                                          src={catIcon}
-                                          alt=""
-                                          style={{
-                                            width: 16,
-                                            height: 16,
-                                            imageRendering: "pixelated",
-                                            borderRadius: 6,
-                                            padding: 1,
-                                            background: "rgba(0,0,0,0.35)",
-                                            border: "1px solid rgba(255,255,255,0.12)",
-                                          }}
-                                          onError={(e) => {
-                                            e.currentTarget.style.display = "none";
-                                          }}
-                                        />
-                                      ) : null}
-                                      Klasse: {catLabel || cap(r.dc)}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              </div>
-
-                              <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
-                                <div style={badge}>
-                                  {r.eff >= 2 ? "" : ""}x{r.eff}
-                                </div>
-                                <div style={{ opacity: 0.65, fontSize: 12 }}>Effektiv</div>
-                              </div>
-                            </button>
+                            <MovePicker
+                              key={i}
+                              label={`Attacke ${i + 1}`}
+                              value={mySlot.moves?.[i] || ""}
+                              onChange={(val) => setSlotMove(activeSlot, i, val)}
+                              allowedMoves={myAllowedMoves}
+                              moveCacheRef={moveCacheRef}
+                              loadMove={loadMove}
+                              enemyTypes={enemyTypes}
+                              enemyAbilityKeys={enemyAbilityKeys}
+                              myPokemonTitle={myData?.displayDeName || displayNameForDexId(mySlot.dexId)}
+                              myPokemonImg={myImg}
+                              takenMoves={taken}
+                              navigateToMove={goToMove}
+                              gen={gen}
+                            />
                           );
                         })}
                       </div>
                     )}
                   </div>
-                </>
-              )}
-            </div>
-          </div>
 
-          {/* ENEMY */}
-          <div style={card}>
-            <div
-              style={{
-                padding: 12,
-                borderBottom: "1px solid rgba(255,255,255,0.10)",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 12,
-              }}
-            >
-              <div style={{ fontWeight: 1100 }}>Gegner</div>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <div style={{ opacity: 0.8, fontSize: 13 }}>Level</div>
-                <input
-                  style={{ ...input, width: 80, padding: "7px 9px", height: 34 }}
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={enemyLevel}
-                  onChange={(e) => setEnemyLevel(e.target.value)}
-                />
-              </div>
-            </div>
+                  <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", padding: 12 }}>
+                    <div style={{ fontWeight: 1100, marginBottom: 10 }}>Schnellaktionen</div>
 
-            <div style={{ padding: 12 }}>
-              <div style={{ fontWeight: 950, opacity: 0.9, marginBottom: 6 }}>Gegner wählen</div>
-              <input style={input} value={enemyQuery} onChange={(e) => setEnemyQuery(e.target.value)} placeholder="Name oder Dex-ID…" />
-              <SuggestList
-                suggestions={enemySuggestions}
-                onPick={async (s) => {
-                  setEnemyDexId(s.dexId);
-                  setEnemyQuery("");
-                  const list = await buildFormListFromBaseDexId(s.dexId);
-                  setEnemyFormList(list);
-                }}
-              />
-
-              {!enemyDexId ? (
-                <div style={{ opacity: 0.75, marginTop: 10 }}>Wähle einen Gegner.</div>
-              ) : (
-                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "112px 1fr", gap: 12, alignItems: "start" }}>
-                  <div
-                    style={{
-                      borderRadius: 18,
-                      background: "linear-gradient(180deg, rgba(255,180,120,0.14), rgba(120,255,210,0.08))",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      display: "grid",
-                      placeItems: "center",
-                      padding: 10,
-                      minHeight: 112,
-                      overflow: "hidden",
-                    }}
-                  >
-                    {enemyLoading ? <div style={{ opacity: 0.75 }}>Lädt…</div> : enemyImg ? <img src={enemyImg} alt="" style={{ width: 92, height: 92, objectFit: "contain" }} /> : null}
-                  </div>
-
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 1200, fontSize: 18, lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {enemyData?.displayDeName || displayNameForDexId(enemyDexId)} <span style={{ opacity: 0.75, fontSize: 13 }}>• Level {enemyLevel}</span>
-                    </div>
-
-                    <div style={{ marginTop: 8 }}>
-                      {enemyTypes.map((t) => (
-                        <TypePill key={t} t={t} compact />
-                      ))}
-                    </div>
-
-                    {enemyAbilities.length ? (
-                      <div
-                        style={{
-                          marginTop: 10,
-                          padding: 10,
-                          borderRadius: 14,
-                          border: "1px solid rgba(255,255,255,0.12)",
-                          background: "rgba(0,0,0,0.18)",
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <button
+                        style={btn}
+                        onClick={() => {
+                          clearSlot(activeSlot);
+                          setEditOpen(false);
                         }}
                       >
-                        <div style={{ fontWeight: 1100, marginBottom: 6 }}>Fähigkeiten (Gegner)</div>
-                        <div style={{ display: "grid", gap: 6 }}>
-                          {enemyAbilities.map((a) => (
-                            <div key={a.key} style={{ fontSize: 13, lineHeight: 1.35 }}>
-                              <b>{a.deName}</b>
-                              {a.shortEffect ? <span style={{ opacity: 0.9 }}> — {a.shortEffect}</span> : <span style={{ opacity: 0.75 }}> — (Keine DE-Beschreibung)</span>}
-                            </div>
-                          ))}
-                        </div>
+                        Slot entfernen (X)
+                      </button>
+
+                      <button
+                        style={btn}
+                        onClick={() => {
+                          writeJSON(TEAM_KEY, team);
+                          writeJSON(UI_KEY, { gen, activeSlot, enemyDexId, enemyLevel });
+                          setEditOpen(false);
+                        }}
+                      >
+                        Speichern & schließen
+                      </button>
+
+                      <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>
+                        Hinweis: Effektivitäts-Badges werden nur bei <b>schadensmachenden</b> Attacken angezeigt. <br />
+                        Tipp: Doppel-Klick auf ein Move-Feld öffnet <b>/move/…</b>.
                       </div>
-                    ) : null}
-
-                    {enemyFormItems.length > 1 ? (
-                      <div style={{ marginTop: 10 }}>
-                        <DarkPicker title="Form auswählen" value={enemyDexId} onChange={(v) => setEnemyDexId(Number(v))} items={enemyFormItems} search />
-                      </div>
-                    ) : null}
-
-                    {enemyStats && (
-                      <div style={{ marginTop: 10, display: "grid", gap: 7 }}>
-                        <StatBar label="KP" value={enemyStats.hp} compact />
-                        <StatBar label="Angriff" value={enemyStats.atk} compact />
-                        <StatBar label="Vert." value={enemyStats.def} compact />
-                        <StatBar label="Sp.-Ang." value={enemyStats.spa} compact />
-                        <StatBar label="Sp.-Vert." value={enemyStats.spd} compact />
-                        <StatBar label="Initiative" value={enemyStats.spe} compact />
-                      </div>
-                    )}
-
-                    {enemyDefBuckets ? (
-                      <Collapsible title="Schwächen & Resistenzen" open={enemyWeakOpen} setOpen={setEnemyWeakOpen}>
-                        <TypeRow title="4× Schwäche" list={enemyDefBuckets["4x"]} />
-                        <TypeRow title="2× Schwäche" list={enemyDefBuckets["2x"]} />
-                        <TypeRow title="½× Resist" list={enemyDefBuckets["0.5x"]} />
-                        <TypeRow title="¼× Resist" list={enemyDefBuckets["0.25x"]} />
-                        <TypeRow title="Immun (0×)" list={enemyDefBuckets["0x"]} />
-                      </Collapsible>
-                    ) : null}
-
-                    {enemyDexId && mySlot.dexId ? (
-                      <div style={{ marginTop: 14 }}>
-                        <div style={{ fontWeight: 1100, marginBottom: 8 }}>Gegner-Attacken (Level {enemyLevel})</div>
-
-                        {!enemyAllMoves.length ? (
-                          <div style={{ opacity: 0.75, fontSize: 13 }}>(Lädt Moves…)</div>
-                        ) : (
-                          <div style={{ display: "grid", gap: 8 }}>
-                            {enemyAllMoves.map((m) => {
-                              const emph = m.eff >= 2 || m.eff === 0;
-                              const badge = moveBadgeStyle(m.eff, emph, "enemy");
-                              const { bg, border, glow } = moveRowBg(m.eff, "enemy");
-
-                              const catIcon = moveCategoryIconUrl(m.dc);
-                              const catLabel = m.dc ? MOVE_CLASS_LABEL_DE[String(m.dc).toLowerCase()] || cap(m.dc) : null;
-
-                              // Gegner-Zeile: exakt wie links (Badge + "Effektiv" Label rechts, Meta-Zeile in einer Zeile)
-                              return (
-                                <button
-                                  key={m.moveKey}
-                                  onClick={() => goToMove(m.moveKey)}
-                                  style={{
-                                    width: "100%",
-                                    textAlign: "left",
-                                    padding: "10px 12px",
-                                    borderRadius: 14,
-                                    border,
-                                    background: bg,
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: 12,
-                                    boxShadow: glow,
-                                    cursor: "pointer",
-                                    color: "#fff",
-                                    textDecoration: "none",
-                                  }}
-                                  title="Move-Details öffnen"
-                                >
-                                  <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontWeight: 1100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                      {m.deName}{" "}
-                                      {m.eff >= 2 ? (
-                                        <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>SEHR EFFEKTIV</span>
-                                      ) : m.eff === 0 ? (
-                                        <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>IMMUN</span>
-                                      ) : null}
-                                    </div>
-
-                                    <div
-                                      style={{
-                                        opacity: 0.92,
-                                        fontSize: 12,
-                                        display: "flex",
-                                        gap: 12,
-                                        flexWrap: "wrap",
-                                        alignItems: "center",
-                                        marginTop: 2,
-                                      }}
-                                    >
-                                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                        <img
-                                          src={typeIconUrl(m.type)}
-                                          alt=""
-                                          style={{
-                                            width: 16,
-                                            height: 16,
-                                            borderRadius: 8,
-                                            padding: 2,
-                                            background: "rgba(0,0,0,0.35)",
-                                            border: "1px solid rgba(255,255,255,0.12)",
-                                          }}
-                                          onError={(e) => {
-                                            e.currentTarget.style.display = "none";
-                                          }}
-                                        />
-                                        Typ: {TYPE_LABELS_DE[m.type] || cap(m.type)}
-                                      </span>
-
-                                      <span>Stärke: {m.power ?? "—"}</span>
-                                      <span>AP: {m.pp ?? "—"}</span>
-                                      <span>Genauigkeit: {m.accuracy != null ? `${m.accuracy}%` : "—"}</span>
-
-                                      {m.dc ? (
-                                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                          {catIcon ? (
-                                            <img
-                                              src={catIcon}
-                                              alt=""
-                                              style={{
-                                                width: 16,
-                                                height: 16,
-                                                imageRendering: "pixelated",
-                                                borderRadius: 6,
-                                                padding: 1,
-                                                background: "rgba(0,0,0,0.35)",
-                                                border: "1px solid rgba(255,255,255,0.12)",
-                                              }}
-                                              onError={(e) => {
-                                                e.currentTarget.style.display = "none";
-                                              }}
-                                            />
-                                          ) : null}
-                                          Klasse: {catLabel || cap(m.dc)}
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                  </div>
-
-                                  <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
-                                    <div style={badge}>
-                                      {m.eff >= 2 ? "" : ""}x{m.eff}
-                                    </div>
-                                    <div style={{ opacity: 0.65, fontSize: 12 }}>Effektiv</div>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
+                    </div>
                   </div>
                 </div>
-              )}
+
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                  <button style={btn} onClick={() => writeJSON(TEAM_KEY, team)}>
+                    Team speichern
+                  </button>
+                  <button style={btn} onClick={() => writeJSON(UI_KEY, { gen, activeSlot, enemyDexId, enemyLevel })}>
+                    UI speichern
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
-
-        {/* EDIT MODAL */}
-        {editOpen && (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.60)",
-              backdropFilter: "blur(10px)",
-              zIndex: 99999,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 16,
-            }}
-            onClick={() => setEditOpen(false)}
-          >
-            <div
-              className="hideScroll"
-              style={{
-                width: "min(900px, 96vw)",
-                maxHeight: "92vh",
-                overflow: "auto",
-                borderRadius: 18,
-                border: "1px solid rgba(255,255,255,0.14)",
-                background: "rgba(10,10,16,0.92)",
-                boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
-                padding: 14,
-                color: "#fff",
-                display: "grid",
-                gap: 12,
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                <div>
-                  <div style={{ fontWeight: 1100, fontSize: 18 }}>Slot {activeSlot + 1} bearbeiten</div>
-                  <div style={{ opacity: 0.75, fontSize: 13 }}>
-                    Wählbar: <b>Level-Up + TM</b> in Gen <b>{gen}</b>
-                  </div>
-                </div>
-                <button style={{ ...btn, padding: "8px 10px" }} onClick={() => setEditOpen(false)}>
-                  Schließen
-                </button>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "86px 1fr 110px",
-                  gap: 12,
-                  alignItems: "center",
-                  padding: 12,
-                  borderRadius: 16,
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.06)",
-                }}
-              >
-                <div
-                  style={{
-                    width: 86,
-                    height: 86,
-                    borderRadius: 18,
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    background: "rgba(0,0,0,0.32)",
-                    display: "grid",
-                    placeItems: "center",
-                    overflow: "hidden",
-                  }}
-                >
-                  {myImg ? <img src={myImg} alt="" style={{ width: 78, height: 78, objectFit: "contain" }} /> : <div style={{ opacity: 0.6, fontWeight: 900 }}>—</div>}
-                </div>
-
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 1200, fontSize: 18, lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {myData?.displayDeName || displayNameForDexId(mySlot.dexId)}
-                  </div>
-                  <div style={{ marginTop: 6 }}>
-                    {(myTypes || []).map((t) => (
-                      <TypePill key={t} t={t} compact />
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                  <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 6 }}>Level</div>
-                  <input
-                    style={{
-                      ...input,
-                      width: 72,
-                      padding: "8px 10px",
-                      height: 36,
-                      textAlign: "center",
-                    }}
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={mySlot.level ?? 50}
-                    onChange={(e) => setSlotLevel(activeSlot, e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {myStats ? (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                  <StatBar label="KP" value={myStats.hp} compact />
-                  <StatBar label="Angriff" value={myStats.atk} compact />
-                  <StatBar label="Vert." value={myStats.def} compact />
-                  <StatBar label="Sp.-Ang." value={myStats.spa} compact />
-                  <StatBar label="Sp.-Vert." value={myStats.spd} compact />
-                  <StatBar label="Initiative" value={myStats.spe} compact />
-                </div>
-              ) : null}
-
-              <div>
-                <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 6 }}>Pokémon wählen</div>
-                <input style={input} value={editQuery} onChange={(e) => setEditQuery(e.target.value)} placeholder="Name oder Dex-ID…" />
-                <SuggestList
-                  suggestions={editSuggestions}
-                  onPick={async (s) => {
-                    setEditQuery("");
-                    setMyFormList([]);
-                    setSlotDex(activeSlot, s.dexId);
-                    const list = await buildFormListFromBaseDexId(s.dexId);
-                    setMyFormList(list);
-                  }}
-                />
-              </div>
-
-              {mySlot.dexId && myFormItems.length > 1 ? (
-                <div style={{ display: "grid", gap: 6 }}>
-                  <DarkPicker title="Form auswählen (Mega/Gigadynamax/Regional/Spezial)" value={mySlot.dexId} onChange={(v) => setSlotDex(activeSlot, Number(v))} items={myFormItems} search />
-                </div>
-              ) : null}
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", padding: 12 }}>
-                  <div style={{ fontWeight: 1100, marginBottom: 10 }}>Deine 4 Attacken</div>
-
-                  {!mySlot.dexId ? (
-                    <div style={{ opacity: 0.75 }}>Erst Pokémon auswählen.</div>
-                  ) : (
-                    <div style={{ display: "grid", gap: 12 }}>
-                      {[0, 1, 2, 3].map((i) => {
-                        const taken = (function pickedMovesSetForSlotInline(slot) {
-                          const s = new Set();
-                          for (const m of (slot?.moves || []).filter(Boolean)) s.add(String(m).toLowerCase());
-                          return s;
-                        })(mySlot);
-
-                        return (
-                          <MovePicker
-                            key={i}
-                            label={`Attacke ${i + 1}`}
-                            value={mySlot.moves?.[i] || ""}
-                            onChange={(val) => setSlotMove(activeSlot, i, val)}
-                            allowedMoves={myAllowedMoves}
-                            moveCacheRef={moveCacheRef}
-                            loadMove={loadMove}
-                            enemyTypes={enemyTypes}
-                            enemyAbilityKeys={enemyAbilityKeys}
-                            myPokemonTitle={myData?.displayDeName || displayNameForDexId(mySlot.dexId)}
-                            myPokemonImg={myImg}
-                            takenMoves={taken}
-                            navigateToMove={goToMove}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", padding: 12 }}>
-                  <div style={{ fontWeight: 1100, marginBottom: 10 }}>Schnellaktionen</div>
-
-                  <div style={{ display: "grid", gap: 10 }}>
-                    <button
-                      style={btn}
-                      onClick={() => {
-                        clearSlot(activeSlot);
-                        setEditOpen(false);
-                      }}
-                    >
-                      Slot entfernen (X)
-                    </button>
-
-                    <button
-                      style={btn}
-                      onClick={() => {
-                        writeJSON(TEAM_KEY, team);
-                        writeJSON(UI_KEY, { gen, activeSlot, enemyDexId, enemyLevel });
-                        setEditOpen(false);
-                      }}
-                    >
-                      Speichern & schließen
-                    </button>
-
-                    <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>
-                      Hinweis: Effektivitäts-Badges werden nur bei <b>schadensmachenden</b> Attacken angezeigt. <br />
-                      Tipp: Doppel-Klick auf ein Move-Feld öffnet <b>/move/…</b>.
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                <button style={btn} onClick={() => writeJSON(TEAM_KEY, team)}>
-                  Team speichern
-                </button>
-                <button style={btn} onClick={() => writeJSON(UI_KEY, { gen, activeSlot, enemyDexId, enemyLevel })}>
-                  UI speichern
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
-    </div>
     </div>
   );
 }
