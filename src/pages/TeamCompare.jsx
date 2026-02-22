@@ -1702,9 +1702,8 @@ export default function TeamCompare() {
 
     const ls = extractLearnsetByMethod(enemyData.pokemon, versionGroup);
     const levelMoves = (ls.levelUp || []).filter((x) => (Number(x.level) || 0) <= L).map((x) => String(x.name).toLowerCase());
-    const machineMoves = (ls.machine || []).map((x) => String(x).toLowerCase());
 
-    return uniq([...levelMoves, ...machineMoves]).sort((a, b) => a.localeCompare(b));
+    return levelMoves.sort((a, b) => a.localeCompare(b));
   }, [enemyData, versionGroup, tick, enemyLevel]);
 
   const myAbilityKeysRaw = useMemo(() => extractAbilityKeys(myData?.pokemon), [myData, tick]);
