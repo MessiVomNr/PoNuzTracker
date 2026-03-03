@@ -404,9 +404,11 @@ const VERSION_GROUPS_BY_GEN = {
   5: ["black-white", "black-2-white-2"],
   6: ["x-y", "omega-ruby-alpha-sapphire"],
   7: ["sun-moon", "ultra-sun-ultra-moon"],
+  8: ["sword-shield", "brilliant-diamond-shining-pearl", "legends-arceus"],
+  9: ["scarlet-violet"],
 };
 
-const ALL_GENS = [1, 2, 3, 4, 5, 6, 7];
+const ALL_GENS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 const typeIconRow = {
   marginTop: 10,
@@ -1012,7 +1014,7 @@ export default function PokemonInfo() {
 
     const gensWithData = [];
 
-    for (let g = 1; g <= 7; g++) {
+    for (let g = 1; g <= 9; g++) {
       const allowed = new Set(VERSION_GROUPS_BY_GEN[g] || []);
       let has = false;
 
