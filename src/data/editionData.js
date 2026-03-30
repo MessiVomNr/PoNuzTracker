@@ -31,6 +31,8 @@ import guideGen52 from "../guides/guide_gen52";
 import guideGen62 from "../guides/guide_gen62";
 import guideGen7 from "../guides/guide_gen7";
 import guideGen72 from "../guides/guide_gen72";
+import { pokedexGen8 } from "../pokedex/pokedex_gen8";
+import { pokedexGen9 } from "../pokedex/pokedex_gen9";
 
 import { vms_gen1 as vmsGen1 } from "../vms/vms_gen1";
 import { vms_gen2 as vmsGen2 } from "../vms/vms_gen2";
@@ -74,6 +76,11 @@ const editionData = {
   "Mond":     { gen: 7, pokedex: pokedexGen7, locations: locationsGen7, guide: guideGen7, vms: vmsGen7 },
   "Ultrasonne": { gen: 72, pokedex: pokedexGen7, locations: locationsGen72, guide: guideGen72, vms: vmsGen72 },
   "Ultramond":  { gen: 72, pokedex: pokedexGen7, locations: locationsGen72, guide: guideGen72, vms: vmsGen72 },
+  "Schwert":  { gen: 8, pokedex: pokedexGen8, locations: locationsGen7, guide: guideGen7, vms: vmsGen7 },
+  "Schild":   { gen: 8, pokedex: pokedexGen8, locations: locationsGen7, guide: guideGen7, vms: vmsGen7 },
+  "Karmesin": { gen: 9, pokedex: pokedexGen9, locations: locationsGen7, guide: guideGen7, vms: vmsGen7 },
+  "Purpur":   { gen: 9, pokedex: pokedexGen9, locations: locationsGen7, guide: guideGen7, vms: vmsGen7 },
+  "Smaragd Romhack": { gen: 33, pokedex: pokedexGen9, locations: locationsGen3, guide: guideGen3, vms: vmsGen3 },
 };
 
 export default editionData;

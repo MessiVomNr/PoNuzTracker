@@ -41,4 +41,5 @@ export const versionToPokedex = {
   "Schild": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7, ...pokedexGen8,},
   "Karmesin": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7, ...pokedexGen8, ...pokedexGen9,},
   "Purpur": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7, ...pokedexGen8, ...pokedexGen9,},
+  "Smaragd Romhack": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7, ...pokedexGen8, ...pokedexGen9,},
 };

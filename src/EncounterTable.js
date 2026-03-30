@@ -183,10 +183,18 @@ function EncounterTable() {
   }, [duoRoom]);
 
   const gen = getGenFromEdition(effectiveEdition);
-  const genData = editionData[effectiveEdition]; // (aktuell nicht genutzt)
+  const genData = editionData[effectiveEdition] || null;
   const pokedex = versionToPokedex[effectiveEdition] || {};
-  const locationList = allLocations[`locationsGen${gen}`] || [];
-  const pokemonList = Object.values(pokedex);
+
+// WICHTIG:
+// 1. Erst editionsspezifische Locations aus editionData nehmen
+// 2. Nur wenn dort nichts hinterlegt ist, auf locationsGen{gen} zurückfallen
+  const locationList =
+    genData?.locations ||
+    allLocations[`locationsGen${gen}`] ||
+    [];
+
+const pokemonList = Object.values(pokedex);
 
   // ===== Level-Cap (aus GuidePage-Checklist) =====
   const levelCaps = levelCapsByGen[gen] || [];
@@ -303,33 +311,51 @@ function EncounterTable() {
     setSlotNames(normalizeSlotNames(isDuo ? duoSave?.slotNames : currentSave?.slotNames, slotCount));
   }, [isDuo, duoSave, activeSave, slotCount]);
 
-  const editSlotName = async (index) => {
-    const current = (slotNames[index] || "").trim();
-    const next = window.prompt(`Name für Spalte ${index + 1} (Spieler)`, current);
-    if (next === null) return;
+  const editSlotName = (index) => {
+  const current = (slotNames[index] || "").trim();
+  setSlotNameModal({
+    open: true,
+    index,
+    value: current,
+  });
+};
+const saveSlotName = async () => {
+  const index = slotNameModal.index;
+  if (index === null || index === undefined) {
+    setSlotNameModal({ open: false, index: null, value: "" });
+    return;
+  }
 
-    const cleaned = String(next).trim();
-    const updated = normalizeSlotNames([...slotNames], slotCount);
-    updated[index] = cleaned;
+  const cleaned = String(slotNameModal.value || "").trim();
+  const updated = normalizeSlotNames([...slotNames], slotCount);
+  updated[index] = cleaned;
 
-    setSlotNames(updated);
+  setSlotNames(updated);
+  setSlotNameModal({ open: false, index: null, value: "" });
 
-    try {
-      if (isDuo) {
-        await patchDuoSave({ slotNames: updated });
-      } else {
-        if (activeSave && savegames[activeSave]) {
-          savegames[activeSave].slotNames = updated;
-          localStorage.setItem("savegames", JSON.stringify(savegames));
-        }
+  try {
+    if (isDuo) {
+      await patchDuoSave({ slotNames: updated });
+    } else {
+      if (activeSave && savegames[activeSave]) {
+        savegames[activeSave].slotNames = updated;
+        localStorage.setItem("savegames", JSON.stringify(savegames));
       }
-    } catch (e) {
-      console.error(e);
     }
-  };
+  } catch (e) {
+    console.error(e);
+  }
+};
 
   // ===== Encounters state =====
   const [encounters, setEncounters] = useState(() => currentSave?.encounters || {});
+  const [confirmModal, setConfirmModal] = useState(null);
+  const [slotNameModal, setSlotNameModal] = useState({
+  open: false,
+  index: null,
+  value: "",
+});
+  // null | "reset" | "clear"
 
   useEffect(() => {
     if (!isDuo) return;
@@ -379,25 +405,48 @@ function EncounterTable() {
     });
   }, [slotNames, slotCount]);
 
+  const sinnerStatsStorageKey = useMemo(() => {
+  if (isDuo) return `globalSinnerStats_duo_${activeDuoRoomId}`;
+  return `globalSinnerStats_save_${activeSave}`;
+}, [isDuo, activeDuoRoomId, activeSave]);
+
+const [globalSinnerStats, setGlobalSinnerStats] = useState({});
+
+useEffect(() => {
+  try {
+    const raw = localStorage.getItem(sinnerStatsStorageKey);
+    const parsed = raw ? JSON.parse(raw) : {};
+    setGlobalSinnerStats(parsed || {});
+  } catch {
+    setGlobalSinnerStats({});
+  }
+}, [sinnerStatsStorageKey]);
+
   // ===== Counter (Entkommen/Besiegt pro Spieler) =====
   const sinnerStats = useMemo(() => {
-    const base = {};
-    for (const opt of sinnerOptions) {
-      base[opt.key] = { label: opt.label, escaped: 0, fainted: 0 };
-    }
+  const base = {};
 
-    Object.values(encounters || {}).forEach((row) => {
-      if (!row) return;
-      const status = row.status || "";
-      const sinnerKey = (row.sinner || "").trim(); // "p1" | "p2" | "p3" | ""
-      if (!sinnerKey || !base[sinnerKey]) return;
+  for (const opt of sinnerOptions) {
+    const saved = globalSinnerStats?.[opt.key] || {};
+    base[opt.key] = {
+      label: opt.label,
+      escaped: Number(saved.escaped || 0),
+      fainted: Number(saved.fainted || 0),
+    };
+  }
 
-      if (status === "Entkommen") base[sinnerKey].escaped += 1;
-      if (status === "Besiegt") base[sinnerKey].fainted += 1;
-    });
+  Object.values(encounters || {}).forEach((row) => {
+    if (!row) return;
+    const status = row.status || "";
+    const sinnerKey = (row.sinner || "").trim();
+    if (!sinnerKey || !base[sinnerKey]) return;
 
-    return Object.values(base);
-  }, [encounters, sinnerOptions]);
+    if (status === "Entkommen") base[sinnerKey].escaped += 1;
+    if (status === "Besiegt") base[sinnerKey].fainted += 1;
+  });
+
+  return Object.values(base);
+}, [encounters, sinnerOptions, globalSinnerStats]);
 
   const handleChange = async (location, field, value) => {
     const prev = encounters[location] || {};
@@ -447,15 +496,56 @@ function EncounterTable() {
     }
   };
 
-  const handleReset = async () => {
-    if (!window.confirm("Bist du sicher, dass du alle Einträge löschen möchtest?")) return;
+ const handleReset = async () => {
+  setConfirmModal("reset");
+};
+
+  const handleClearListOnly = async () => {
+  setConfirmModal("clear");
+};
+const confirmAction = async () => {
+  if (confirmModal === "reset") {
+    setEncounters({});
+    setGlobalSinnerStats({});
+    localStorage.removeItem(sinnerStatsStorageKey);
+
+    try {
+      await persistEncounters({});
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  if (confirmModal === "clear") {
+    const nextTotals = { ...(globalSinnerStats || {}) };
+
+    Object.values(encounters || {}).forEach((row) => {
+      if (!row) return;
+      const status = row.status || "";
+      const sinnerKey = (row.sinner || "").trim();
+      if (!sinnerKey) return;
+
+      if (!nextTotals[sinnerKey]) {
+        nextTotals[sinnerKey] = { escaped: 0, fainted: 0 };
+      }
+
+      if (status === "Entkommen") nextTotals[sinnerKey].escaped += 1;
+      if (status === "Besiegt") nextTotals[sinnerKey].fainted += 1;
+    });
+
+    setGlobalSinnerStats(nextTotals);
+    localStorage.setItem(sinnerStatsStorageKey, JSON.stringify(nextTotals));
+
     setEncounters({});
     try {
       await persistEncounters({});
     } catch (e) {
       console.error(e);
     }
-  };
+  }
+
+  setConfirmModal(null);
+};
 
   // Duplicate-Check bleibt auf Basis-Pokémon (Name) – Mega ist nur Anzeige/Form.
   const usedPokemon = useMemo(() => {
@@ -696,29 +786,45 @@ const usedFossilsBySlot = useMemo(() => {
           </div>
         </div>
 
-        <div className="button-row">
-          {Object.keys(filters).map((status) => (
-            <button
-              key={status}
-              onClick={() => toggleFilter(status)}
-              style={{ backgroundColor: filters[status] ? "#079e4b" : "#999" }}
-            >
-              {status}
-            </button>
-          ))}
+        <div className="button-row" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+  {Object.keys(filters).map((status) => (
+    <button
+      key={status}
+      onClick={() => toggleFilter(status)}
+      style={{ backgroundColor: filters[status] ? "#079e4b" : "#999" }}
+    >
+      {status}
+    </button>
+  ))}
 
-          <select
-            value={sortMode}
-            onChange={(e) => {
-              setSortMode(e.target.value);
-              localStorage.setItem("encounterSortMode", e.target.value);
-            }}
-          >
-            <option value="route">Nach Route</option>
-            <option value="offen-oben">Offene oben</option>
-            <option value="offen-unten">Offene unten</option>
-          </select>
-        </div>
+  <select
+    value={sortMode}
+    onChange={(e) => {
+      setSortMode(e.target.value);
+      localStorage.setItem("encounterSortMode", e.target.value);
+    }}
+  >
+    <option value="route">Nach Route</option>
+    <option value="offen-oben">Offene oben</option>
+    <option value="offen-unten">Offene unten</option>
+  </select>
+
+  <button
+    onClick={handleClearListOnly}
+    style={{ backgroundColor: "#d97706", color: "white", fontWeight: 800 }}
+    title="Leert nur die Encounter-Liste, behält aber die gesamten Sündiger-Zahlen"
+  >
+    Liste leeren
+  </button>
+
+  <button
+    onClick={handleReset}
+    style={{ backgroundColor: "#b91c1c", color: "white", fontWeight: 800 }}
+    title="Setzt alles zurück, inklusive gesamter Sündiger-Zahlen"
+  >
+    Alles zurücksetzen
+  </button>
+</div>
 
         <table>
           <thead>
@@ -998,10 +1104,188 @@ const usedFossilsBySlot = useMemo(() => {
             })}
           </tbody>
         </table>
+            </div>
 
-        <br />
-        <button onClick={handleReset}>Tabelle zurücksetzen</button>
-      </div>
+      {confirmModal && (
+        <div
+          onClick={() => setConfirmModal(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 999999,
+            background: "rgba(0,0,0,0.72)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "420px",
+              maxWidth: "92vw",
+              minHeight: "180px",
+              borderRadius: 18,
+              border: "1px solid rgba(255,255,255,0.16)",
+              background: "#111827",
+              boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
+              padding: 22,
+              color: "#ffffff",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+            }}
+          >
+            <div>
+              <h2 style={{ margin: 0, marginBottom: 12, color: "#fff", fontSize: 24 }}>
+                {confirmModal === "reset" ? "Alles zurücksetzen?" : "Liste leeren?"}
+              </h2>
+
+              <p style={{ margin: 0, color: "rgba(255,255,255,0.9)", lineHeight: 1.5 }}>
+                {confirmModal === "reset"
+                  ? "Alle Daten werden gelöscht, inklusive der gesamten Sündiger-Zahlen."
+                  : "Nur die Encounter-Liste wird geleert. Die gesamten Sündiger-Zahlen bleiben erhalten."}
+              </p>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 22 }}>
+              <button
+                onClick={() => setConfirmModal(null)}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  border: "1px solid rgba(255,255,255,0.14)",
+                  background: "rgba(255,255,255,0.06)",
+                  color: "white",
+                  cursor: "pointer",
+                  fontWeight: 800,
+                }}
+              >
+                Abbrechen
+              </button>
+
+              <button
+                onClick={confirmAction}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  border: "none",
+                  background: confirmModal === "reset" ? "#b91c1c" : "#d97706",
+                  color: "white",
+                  cursor: "pointer",
+                  fontWeight: 900,
+                }}
+              >
+                Bestätigen
+              </button>
+            </div>
+          </div>
+        </div>
+            )}
+      
+      {slotNameModal.open && (
+        <div
+          onClick={() => setSlotNameModal({ open: false, index: null, value: "" })}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 999999,
+            background: "rgba(0,0,0,0.72)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "420px",
+              maxWidth: "92vw",
+              borderRadius: 18,
+              border: "1px solid rgba(255,255,255,0.16)",
+              background: "#111827",
+              boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
+              padding: 22,
+              color: "#ffffff",
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+            }}
+          >
+            <h2 style={{ margin: 0 }}>
+              Name für Spalte {Number(slotNameModal.index) + 1}
+            </h2>
+
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.82)" }}>
+              Gib den Spielernamen für diese Spalte ein.
+            </p>
+
+            <input
+              autoFocus
+              value={slotNameModal.value}
+              onChange={(e) =>
+                setSlotNameModal((prev) => ({
+                  ...prev,
+                  value: e.target.value,
+                }))
+              }
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveSlotName();
+                if (e.key === "Escape") {
+                  setSlotNameModal({ open: false, index: null, value: "" });
+                }
+              }}
+              style={{
+                width: "100%",
+                padding: "12px 14px",
+                borderRadius: 12,
+                border: "1px solid rgba(255,255,255,0.14)",
+                background: "rgba(255,255,255,0.06)",
+                color: "white",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+              placeholder="z. B. Achim"
+            />
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                onClick={() => setSlotNameModal({ open: false, index: null, value: "" })}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  border: "1px solid rgba(255,255,255,0.14)",
+                  background: "rgba(255,255,255,0.06)",
+                  color: "white",
+                  cursor: "pointer",
+                  fontWeight: 800,
+                }}
+              >
+                Abbrechen
+              </button>
+
+              <button
+                onClick={saveSlotName}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  border: "none",
+                  background: "#079e4b",
+                  color: "white",
+                  cursor: "pointer",
+                  fontWeight: 900,
+                }}
+              >
+                Speichern
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

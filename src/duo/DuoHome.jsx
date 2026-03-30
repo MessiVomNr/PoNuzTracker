@@ -58,12 +58,18 @@ export default function DuoHome() {
       byGen.get(gen).push(ed);
     }
 
-    const genOrder = Array.from(byGen.keys()).sort((a, b) => {
-      const na = Number(a);
-      const nb = Number(b);
-      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
-      return String(a).localeCompare(String(b));
-    });
+  const customGenOrder = [1, 2, 3, 32, 33, 4, 42, 5, 52, 6, 62, 7, 72, 8, 9];
+
+  const genOrder = Array.from(byGen.keys()).sort((a, b) => {
+  const ia = customGenOrder.indexOf(Number(a));
+  const ib = customGenOrder.indexOf(Number(b));
+
+  if (ia !== -1 && ib !== -1) return ia - ib;
+  if (ia !== -1) return -1;
+  if (ib !== -1) return 1;
+
+  return String(a).localeCompare(String(b));
+});
 
     return genOrder.map((gen) => {
       const list = (byGen.get(gen) || []).slice().sort((a, b) => a.localeCompare(b));
@@ -239,12 +245,15 @@ const label = { display: "block", marginTop: 12, fontWeight: 800, opacity: 0.9 }
 
 const input = {
   width: "100%",
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(0,0,0,0.25)",
-  color: "white",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+  padding: "12px 14px",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(0,0,0,0.45)",
+  color: "#fff",
   outline: "none",
+  marginBottom: 14,
 };
 
 const btnGreen = {

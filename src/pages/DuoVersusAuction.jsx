@@ -3660,11 +3660,11 @@ function teamTitle(tid) {
     onChange={(e) => updateSettings({ generation: Number(e.target.value) })}
     style={selectDark}
   >
-    {[1, 2, 3, 4, 5, 6, 7].map((g) => (
-      <option key={g} value={g} style={selectOption}>
-        Gen {g} (bis #{getDexCapForGen(g)})
-      </option>
-    ))}
+    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((g) => (
+  <option key={g} value={g} style={selectOption}>
+    Gen {g} (bis #{getDexCapForGen(g)})
+  </option>
+))}
   </select>
 </Row>
 
