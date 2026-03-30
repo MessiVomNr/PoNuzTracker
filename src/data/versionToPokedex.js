@@ -5,6 +5,8 @@ import { pokedexGen4 } from "../pokedex/pokedex_gen4";
 import { pokedexGen5 } from "../pokedex/pokedex_gen5";
 import { pokedexGen6 } from "../pokedex/pokedex_gen6";
 import { pokedexGen7 } from "../pokedex/pokedex_gen7";
+import { pokedexGen8 } from "../pokedex/pokedex_gen8";
+import { pokedexGen9 } from "../pokedex/pokedex_gen9";
 
 export const versionToPokedex = {
   "Rot": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3 },
@@ -31,9 +33,12 @@ export const versionToPokedex = {
   "Y": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6 },
   "Omega Rubin": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6 },
   "Alpha Saphir": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6 },
-    "Sonne": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7 },
+  "Sonne": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7 },
   "Mond": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7 },
   "Ultrasonne": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7 },
   "Ultramond": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7 },
-
+  "Schwert": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7, ...pokedexGen8,},
+  "Schild": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7, ...pokedexGen8,},
+  "Karmesin": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7, ...pokedexGen8, ...pokedexGen9,},
+  "Purpur": { ...pokedexGen1, ...pokedexGen2, ...pokedexGen3, ...pokedexGen4, ...pokedexGen5, ...pokedexGen6, ...pokedexGen7, ...pokedexGen8, ...pokedexGen9,},
 };

@@ -5,3 +5,5 @@ export { pokedexGen4 } from "./pokedex_gen4";
 export { pokedexGen5 } from "./pokedex_gen5";
 export { pokedexGen6 } from "./pokedex_gen6";
 export { pokedexGen7 } from "./pokedex_gen7";
+export { pokedexGen8 } from "./pokedex_gen8";
+export { pokedexGen9 } from "./pokedex_gen9";
