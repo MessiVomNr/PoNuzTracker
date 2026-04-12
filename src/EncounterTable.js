@@ -397,6 +397,50 @@ const saveSlotName = async () => {
     }
   };
 
+    const persistGlobalSinnerStats = async (updatedStats) => {
+    if (isDuo) {
+      await patchDuoSave({ globalSinnerStats: updatedStats });
+      return;
+    }
+
+    if (activeSave && savegames[activeSave]) {
+      savegames[activeSave].globalSinnerStats = updatedStats;
+      localStorage.setItem("savegames", JSON.stringify(savegames));
+    }
+  };
+
+  const persistRunCounter = async (updatedRunCounter) => {
+    if (isDuo) {
+      await patchDuoSave({ runCounter: updatedRunCounter });
+      return;
+    }
+
+    if (activeSave && savegames[activeSave]) {
+      savegames[activeSave].runCounter = updatedRunCounter;
+      localStorage.setItem("savegames", JSON.stringify(savegames));
+    }
+  };
+
+  const persistMetaStats = async ({ updatedStats, updatedRunCounter }) => {
+    if (isDuo) {
+      const patch = {};
+      if (updatedStats !== undefined) patch.globalSinnerStats = updatedStats;
+      if (updatedRunCounter !== undefined) patch.runCounter = updatedRunCounter;
+      await patchDuoSave(patch);
+      return;
+    }
+
+    if (activeSave && savegames[activeSave]) {
+      if (updatedStats !== undefined) {
+        savegames[activeSave].globalSinnerStats = updatedStats;
+      }
+      if (updatedRunCounter !== undefined) {
+        savegames[activeSave].runCounter = updatedRunCounter;
+      }
+      localStorage.setItem("savegames", JSON.stringify(savegames));
+    }
+  };
+
   // ===== Spieler-Optionen für "Sündiger" =====
   const sinnerOptions = useMemo(() => {
     return [...Array(slotCount)].map((_, i) => {
@@ -405,22 +449,84 @@ const saveSlotName = async () => {
     });
   }, [slotNames, slotCount]);
 
-  const sinnerStatsStorageKey = useMemo(() => {
-  if (isDuo) return `globalSinnerStats_duo_${activeDuoRoomId}`;
-  return `globalSinnerStats_save_${activeSave}`;
-}, [isDuo, activeDuoRoomId, activeSave]);
+  const [globalSinnerStats, setGlobalSinnerStats] = useState(() => {
+  if (isDuo) return duoSave?.globalSinnerStats || {};
+  return currentSave?.globalSinnerStats || {};
+});
 
-const [globalSinnerStats, setGlobalSinnerStats] = useState({});
+const [runCounter, setRunCounter] = useState(() => {
+  if (isDuo) return Number(duoSave?.runCounter || 0);
+  return Number(currentSave?.runCounter || 0);
+});
+
+const [editStatsModal, setEditStatsModal] = useState({
+  open: false,
+  runCounter: 0,
+  sinnerStats: {},
+});
 
 useEffect(() => {
-  try {
-    const raw = localStorage.getItem(sinnerStatsStorageKey);
-    const parsed = raw ? JSON.parse(raw) : {};
-    setGlobalSinnerStats(parsed || {});
-  } catch {
-    setGlobalSinnerStats({});
+  if (isDuo) {
+    setGlobalSinnerStats(duoSave?.globalSinnerStats || {});
+    setRunCounter(Number(duoSave?.runCounter || 0));
+    return;
   }
-}, [sinnerStatsStorageKey]);
+
+  setGlobalSinnerStats(currentSave?.globalSinnerStats || {});
+  setRunCounter(Number(currentSave?.runCounter || 0));
+}, [isDuo, duoSave, currentSave, activeSave]);
+
+  const openEditStatsModal = () => {
+    const nextStats = {};
+
+    sinnerOptions.forEach((opt) => {
+      const saved = globalSinnerStats?.[opt.key] || {};
+      nextStats[opt.key] = {
+        escaped: Number(saved.escaped || 0),
+        fainted: Number(saved.fainted || 0),
+      };
+    });
+
+    setEditStatsModal({
+      open: true,
+      runCounter: Number(runCounter || 0),
+      sinnerStats: nextStats,
+    });
+  };
+
+  const closeEditStatsModal = () => {
+    setEditStatsModal({
+      open: false,
+      runCounter: 0,
+      sinnerStats: {},
+    });
+  };
+
+  const saveEditStatsModal = async () => {
+    const cleanedRunCounter = Math.max(0, Number(editStatsModal.runCounter || 0));
+
+    const cleanedStats = {};
+    sinnerOptions.forEach((opt) => {
+      const row = editStatsModal.sinnerStats?.[opt.key] || {};
+      cleanedStats[opt.key] = {
+        escaped: Math.max(0, Number(row.escaped || 0)),
+        fainted: Math.max(0, Number(row.fainted || 0)),
+      };
+    });
+
+    setGlobalSinnerStats(cleanedStats);
+    setRunCounter(cleanedRunCounter);
+
+    try {
+      await persistMetaStats({
+        updatedStats: cleanedStats,
+        updatedRunCounter: cleanedRunCounter,
+      });
+      closeEditStatsModal();
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // ===== Counter (Entkommen/Besiegt pro Spieler) =====
   const sinnerStats = useMemo(() => {
@@ -507,10 +613,14 @@ const confirmAction = async () => {
   if (confirmModal === "reset") {
     setEncounters({});
     setGlobalSinnerStats({});
-    localStorage.removeItem(sinnerStatsStorageKey);
+    setRunCounter(0);
 
     try {
       await persistEncounters({});
+      await persistMetaStats({
+        updatedStats: {},
+        updatedRunCounter: 0,
+      });
     } catch (e) {
       console.error(e);
     }
@@ -533,12 +643,18 @@ const confirmAction = async () => {
       if (status === "Besiegt") nextTotals[sinnerKey].fainted += 1;
     });
 
-    setGlobalSinnerStats(nextTotals);
-    localStorage.setItem(sinnerStatsStorageKey, JSON.stringify(nextTotals));
+    const nextRunCounter = Number(runCounter || 0) + 1;
 
+    setGlobalSinnerStats(nextTotals);
+    setRunCounter(nextRunCounter);
     setEncounters({});
+
     try {
       await persistEncounters({});
+      await persistMetaStats({
+        updatedStats: nextTotals,
+        updatedRunCounter: nextRunCounter,
+      });
     } catch (e) {
       console.error(e);
     }
@@ -772,9 +888,47 @@ const usedFossilsBySlot = useMemo(() => {
         )}
 
         {/* ✅ NEU: Counter-Box */}
-        <div style={sinnerStatsBox(dark)}>
-          <div style={{ fontWeight: 900, marginBottom: 6 }}>Sünden-Zähler</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center" }}>
+                <div style={sinnerStatsBox(dark)}>
+  <div
+    style={{
+      position: "relative",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 8,
+      minHeight: 38,
+    }}
+  >
+    <div
+      style={{
+        fontWeight: 900,
+        textAlign: "center",
+      }}
+    >
+      Run- & Sünden-Zähler
+    </div>
+
+    <button
+      onClick={openEditStatsModal}
+      title="Run-Counter und Sünden-Zahlen bearbeiten"
+      style={{
+        ...editIconBtn,
+        position: "absolute",
+        right: 0,
+        top: "50%",
+        transform: "translateY(-50%)",
+      }}
+    >
+      ✏️
+    </button>
+  </div>
+
+          <div style={runCounterCard(dark)}>
+            <div style={{ fontWeight: 900, fontSize: 14 }}>Run-Counter</div>
+            <div style={{ fontSize: 28, fontWeight: 950, lineHeight: 1.1 }}>{runCounter}</div>
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 12 }}>
             {sinnerStats.map((s) => (
               <div key={s.label} style={sinnerStatPill(dark)}>
                 <div style={{ fontWeight: 900 }}>{s.label}</div>
@@ -1185,6 +1339,166 @@ const usedFossilsBySlot = useMemo(() => {
         </div>
             )}
       
+            {editStatsModal.open && (
+        <div
+          onClick={closeEditStatsModal}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 999999,
+            background: "rgba(0,0,0,0.72)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "520px",
+              maxWidth: "94vw",
+              borderRadius: 18,
+              border: "1px solid rgba(255,255,255,0.16)",
+              background: "#111827",
+              boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
+              padding: 22,
+              color: "#ffffff",
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+            }}
+          >
+            <h2 style={{ margin: 0 }}>Run- und Sünden-Zähler bearbeiten</h2>
+
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.82)" }}>
+              Diese Werte werden gespeichert. Im Duo sehen alle Spieler sofort dieselben Zahlen.
+            </p>
+
+            <div style={{ display: "grid", gap: 8 }}>
+              <label style={{ fontWeight: 800 }}>Run-Counter</label>
+              <input
+                type="number"
+                min="0"
+                value={editStatsModal.runCounter}
+                onChange={(e) =>
+                  setEditStatsModal((prev) => ({
+                    ...prev,
+                    runCounter: e.target.value,
+                  }))
+                }
+                style={modalNumberInput}
+              />
+            </div>
+
+            <div style={{ display: "grid", gap: 12, marginTop: 4 }}>
+              {sinnerOptions.map((opt) => {
+                const row = editStatsModal.sinnerStats?.[opt.key] || { escaped: 0, fainted: 0 };
+
+                return (
+                  <div
+                    key={opt.key}
+                    style={{
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 14,
+                      padding: 12,
+                      background: "rgba(255,255,255,0.04)",
+                    }}
+                  >
+                    <div style={{ fontWeight: 900, marginBottom: 10 }}>{opt.label}</div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 10,
+                      }}
+                    >
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <label style={{ fontSize: 13, opacity: 0.9 }}>Entkommen</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={row.escaped}
+                          onChange={(e) =>
+                            setEditStatsModal((prev) => ({
+                              ...prev,
+                              sinnerStats: {
+                                ...prev.sinnerStats,
+                                [opt.key]: {
+                                  ...(prev.sinnerStats?.[opt.key] || {}),
+                                  escaped: e.target.value,
+                                },
+                              },
+                            }))
+                          }
+                          style={modalNumberInput}
+                        />
+                      </div>
+
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <label style={{ fontSize: 13, opacity: 0.9 }}>Besiegt</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={row.fainted}
+                          onChange={(e) =>
+                            setEditStatsModal((prev) => ({
+                              ...prev,
+                              sinnerStats: {
+                                ...prev.sinnerStats,
+                                [opt.key]: {
+                                  ...(prev.sinnerStats?.[opt.key] || {}),
+                                  fainted: e.target.value,
+                                },
+                              },
+                            }))
+                          }
+                          style={modalNumberInput}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
+              <button
+                onClick={closeEditStatsModal}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  border: "1px solid rgba(255,255,255,0.14)",
+                  background: "rgba(255,255,255,0.06)",
+                  color: "white",
+                  cursor: "pointer",
+                  fontWeight: 800,
+                }}
+              >
+                Abbrechen
+              </button>
+
+              <button
+                onClick={saveEditStatsModal}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  border: "none",
+                  background: "#079e4b",
+                  color: "white",
+                  cursor: "pointer",
+                  fontWeight: 900,
+                }}
+              >
+                Speichern
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {slotNameModal.open && (
         <div
           onClick={() => setSlotNameModal({ open: false, index: null, value: "" })}
@@ -1471,4 +1785,40 @@ const tableCss = (dark) => {
       backdrop-filter: blur(8px);
     }
   `;
+};
+
+const editIconBtn = {
+  padding: "6px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.08)",
+  color: "white",
+  cursor: "pointer",
+  fontSize: 14,
+  fontWeight: 900,
+  lineHeight: 1,
+};
+
+const runCounterCard = (dark) => ({
+  margin: "0 auto",
+  maxWidth: 150,
+  padding: "12px 14px",
+  borderRadius: 14,
+  textAlign: "center",
+  border: dark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.10)",
+  background: dark
+    ? "linear-gradient(135deg, rgba(67,233,123,0.14), rgba(255,255,255,0.04))"
+    : "rgba(7,158,75,0.08)",
+  boxShadow: dark ? "0 14px 30px rgba(0,0,0,0.26)" : "none",
+});
+
+const modalNumberInput = {
+  width: "100%",
+  padding: "12px 14px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.06)",
+  color: "white",
+  outline: "none",
+  boxSizing: "border-box",
 };

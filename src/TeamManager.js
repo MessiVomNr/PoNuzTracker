@@ -285,6 +285,7 @@ function TeamManager() {
   const [fullDex, setFullDex] = useState({});
   const [pokemonTypes, setPokemonTypes] = useState({}); // key: `${name}__${formKey}`
   const [linkMode, setLinkMode] = useState(effectiveLinkMode);
+  const [showHardResetModal, setShowHardResetModal] = useState(false);
 
   // ===== Load Dex + Teams + Box when sources change =====
   useEffect(() => {
@@ -413,6 +414,30 @@ function TeamManager() {
     updateTeam(teamIndex, newTeam).catch(console.error);
   };
 
+  const hardResetAllTeams = async () => {
+  const emptyTeams = Array(teamCount)
+      .fill(null)
+      .map(() => ["", "", "", "", "", ""]);
+
+    setTeams(emptyTeams);
+
+    try {
+      await persistTeams(emptyTeams);
+      setShowHardResetModal(false);
+    } catch (err) {
+      console.error("Fehler beim Hard-Reset der Teams:", err);
+      alert("Beim Zuruecksetzen der Teams ist ein Fehler aufgetreten.");
+    }
+  };
+
+  const openHardResetModal = () => {
+    setShowHardResetModal(true);
+  };
+
+  const closeHardResetModal = () => {
+    setShowHardResetModal(false);
+  };
+
   return (
     <div style={page}>
       <style>{BOX_STATIC_CSS}</style>
@@ -443,13 +468,25 @@ function TeamManager() {
         {duoError && <p style={{ color: "crimson" }}>{duoError}</p>}
 
         <div style={headerCard}>
-          <h1 style={{ margin: 0 }}>Dein Team ({linkMode})</h1>
-          <div style={{ marginTop: 10 }}>
-            <button style={btnGhost} onClick={() => navigate("/table")}>
-              Zurück zur Tabelle
-            </button>
-          </div>
-        </div>
+  <h1 style={{ margin: 0 }}>Dein Team ({linkMode})</h1>
+
+  <div
+    style={{
+      marginTop: 10,
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap",
+    }}
+  >
+    <button style={btnGhost} onClick={() => navigate("/table")}>
+      Zurück zur Tabelle
+    </button>
+
+    <button style={btnDanger} onClick={openHardResetModal}>
+  Team reset
+</button>
+  </div>
+</div>
 
         <div style={teamsWrap}>
           {teams.map((team, i) => (
@@ -616,7 +653,40 @@ function TeamManager() {
             </div>
           ))}
         </div>
+        {showHardResetModal && (
+          <div style={modalOverlay}>
+            <div style={modalCard}>
+              <h3 style={{ marginTop: 0, marginBottom: 10 }}>
+                Team wirklich zurücksetzen?
+              </h3>
 
+              <p style={{ marginTop: 0, marginBottom: 18, lineHeight: 1.5, color: "rgba(255,255,255,0.88)" }}>
+                Alle Pokemon werden aus dem Team entfernt.
+                <br />
+                Die Encounter-Liste und Box bleiben erhalten.
+              </p>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                <button style={btnModalCancel} onClick={closeHardResetModal}>
+                  Abbrechen
+                </button>
+
+                <button style={btnModalDanger} onClick={hardResetAllTeams}>
+                  Ja, Team leeren
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ height: 22 }} />
         <div style={{ height: 22 }} />
       </div>
     </div>
@@ -761,6 +831,58 @@ const btnGhost = {
   borderRadius: 14,
   border: "1px solid rgba(255,255,255,0.14)",
   background: "rgba(255,255,255,0.06)",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 950,
+};
+
+const btnDanger = {
+  padding: "10px 14px",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "linear-gradient(135deg, rgba(220,38,38,0.40), rgba(127,29,29,0.24))",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 950,
+};
+
+const modalOverlay = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.62)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 16,
+  zIndex: 9999,
+};
+
+const modalCard = {
+  width: "min(460px, 92vw)",
+  borderRadius: 20,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(14,14,22,0.96)",
+  backdropFilter: "blur(10px)",
+  boxShadow: "0 24px 70px rgba(0,0,0,0.55)",
+  padding: 20,
+  color: "white",
+};
+
+const btnModalCancel = {
+  padding: "10px 14px",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.07)",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 900,
+};
+
+const btnModalDanger = {
+  padding: "10px 14px",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "linear-gradient(135deg, rgba(220,38,38,0.95), rgba(127,29,29,0.92))",
   color: "white",
   cursor: "pointer",
   fontWeight: 950,

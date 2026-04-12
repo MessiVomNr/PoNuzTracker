@@ -512,6 +512,10 @@ const STARTERS = new Set([
   650, 651, 652, 653, 654, 655, 656, 657, 658,
   // Gen 7
   722, 723, 724, 725, 726, 727, 728, 729, 730,
+  // Gen 8
+  810, 811, 812, 813, 814, 815, 816, 817, 818,
+  // Gen 9
+  906, 907, 908, 909, 910, 911, 912, 913, 914,
 ]);
 
 const PSEUDO = new Set([
@@ -522,6 +526,14 @@ const PSEUDO = new Set([
   445, // Knakrack
   635, // Trikephalo
   706, // Grandiras
+  784, // Kommo-o
+  887, // Dragapult
+  1001, // Baojian
+  1002, // Dinglu
+  1003, // Yuyu
+  1004, // Chongjian
+  1007, // Koraidon 
+  1008, // Miraidon 
 ]);
 
 
@@ -552,6 +564,20 @@ const LEGENDARY = new Set([
   716, // Xerneas
   717, // Yveltal
   718, // Zygarde
+
+  // Gen 7
+  789, 790, 791, 792, // Cosmog Linie + Solgaleo/Lunala
+  800, // Necrozma
+
+  // Gen 8
+  888, // Zacian
+  889, // Zamazenta
+  890, // Eternatus
+  898, // Calyrex
+
+  // Gen 9
+  1007, // Koraidon
+  1008, // Miraidon
 ]);
 
 
@@ -583,6 +609,19 @@ const MYTHICAL = new Set([
   719, // Diancie
   720, // Hoopa
   721, //Volcanion
+
+  // Gen 7
+  801, // Magearna
+  802, // Marshadow
+  807, // Zeraora
+  808, // Meltan
+  809, // Melmetal
+
+  // Gen 8
+  893, // Zarude
+
+  // Gen 9
+  1010, // Pecharunt
 ]);
 
 
@@ -607,6 +646,19 @@ const SUB_LEGENDARY = new Set([
 
   // Gen 6
   785, 786, 787, 788, // Kapu-Reihe (optional, falls du sie schon drin hast)
+
+  // Gen 7
+  785, 786, 787, 788, // Tapus (falls nicht doppelt → ok)
+  791, 792, // optional je nach Regel
+
+  // Gen 8
+  891, // Kubfu
+  892, // Urshifu
+  894, 895, // Regieleki, Regidrago
+  896, 897, // Glastrier, Spectrier
+
+  // Gen 9
+  1001, 1002, 1003, 1004, // Ruinous Quartet
 ]);
 
 // Ultra Beasts (Gen 7)
@@ -781,13 +833,20 @@ async function isBaseFormDexId(dexIdRaw) {
   try {
     const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${dexId}`);
     if (!res.ok) throw new Error("species fetch failed");
+
     const data = await res.json();
-    const isBase = !data?.evolves_from_species; // null => Basisform
+    const isBase = !data?.evolves_from_species;
+
     baseFormFlagCache.set(dexId, !!isBase);
     return !!isBase;
-  } catch {
-    baseFormFlagCache.set(dexId, false);
-    return false;
+  } catch (err) {
+    console.warn("isBaseFormDexId failed for dexId:", dexId, err);
+
+    // Wichtig:
+    // Bei API-Fehlern nicht das Pokémon wegfiltern,
+    // sondern lieber drinlassen.
+    baseFormFlagCache.set(dexId, true);
+    return true;
   }
 }
 
@@ -1076,10 +1135,23 @@ async function makeAdmin(targetPlayerId, targetName) {
   const auction = room?.versus?.auction || null;
 
   const phase = auction?.phase || "lobby"; // lobby | auction | results
- const settings = auction?.settings || loadHostSettingsFromLS();
-  const genNum = clampInt(settings?.generation ?? 1, 1, 7);
+  const settings = auction?.settings || loadHostSettingsFromLS();
+  const genNum = clampInt(settings?.generation ?? 1, 1, 9);
   const teamOwners = auction?.teamOwners || {};
   
+  const outerStyle = {
+  ...outer,
+  backgroundImage:
+    phase === "auction"
+      ? "linear-gradient(rgba(0,0,0,0.78), rgba(0,0,0,0.78)), url('/backgrounds/background_draft.png')"
+      : "none",
+  backgroundSize: phase === "auction" ? "cover" : "auto",
+  backgroundPosition: phase === "auction" ? "center center" : "center center",
+  backgroundRepeat: "no-repeat",
+  backgroundColor: phase === "auction" ? "#05070b" : "transparent",
+  backgroundAttachment: phase === "auction" ? "fixed" : "scroll",
+};
+
   const draft = auction?.draft || {
     auctionCountDone: 0,
     current: null,
@@ -2507,7 +2579,7 @@ const normalizedSettings = {
   async function startDraft() {
     if (!meIsHost) return;
 
-    const gen = clampInt(settings.generation, 1, 7);
+    const gen = clampInt(settings.generation, 1, 9);
    const participants = clampInt(settings.participants ?? 0, 0, 20);
 let botCount = clampInt(settings.botCount ?? 0, 0, 9);
 
@@ -2695,7 +2767,7 @@ const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
     const resetAuction = {
       phase: "lobby",
       settings: {
-  generation: clampInt(settings.generation, 1, 7),
+  generation: clampInt(settings.generation, 1, 9),
   participants,
   botCount,
   botsConfig: Array.isArray(settings.botsConfig) ? settings.botsConfig : generateBotConfigs(botCount, Date.now()),
@@ -3559,8 +3631,24 @@ function teamTitle(tid) {
   if (err) return <div style={{ padding: 12, color: "crimson" }}>{err}</div>;
   if (room === null) return <div style={{ padding: 12, color: "crimson" }}>Room nicht gefunden.</div>;
 
+  const showDraftBackground = phase === "auction" || phase === "results";
+
+const draftBgStyle = {
+  position: "fixed",
+  inset: 0,
+  zIndex: -1,
+  backgroundImage:
+    "linear-gradient(rgba(0,0,0,0.78), rgba(0,0,0,0.78)), url('/backgrounds/background_draft.png')",
+  backgroundSize: "cover",
+  backgroundPosition: "center 30%",
+  backgroundRepeat: "no-repeat",
+  backgroundAttachment: "fixed",
+  backgroundColor: "#05070b",
+};
+
   return (
-    <div style={outer}>
+  <div style={outerStyle}>
+    {showDraftBackground && <div style={draftBgStyle} />}
       <div style={topLine}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
           <div style={{ fontWeight: 900 }}>Versus — Auction Draft</div>
@@ -4076,12 +4164,13 @@ return (
     ? "rgba(239,68,68,0.35)"
     : ownerOffline
       ? "rgba(239,68,68,0.85)"
-      : "rgba(34,197,94,0.35)",
+      : "rgba(34,197,94,0.5)",
   background: free
-    ? "rgba(239,68,68,0.05)"
+    ? "rgba(24,8,8,0.88)"
     : ownerOffline
       ? "rgba(239,68,68,0.14)"
-      : "rgba(34,197,94,0.05)",
+      : "rgba(34,197,94,0.08)",
+      boxShadow: "0 12px 28px rgba(0,0,0,0.42)",
 }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
@@ -4685,7 +4774,7 @@ if (!showDraftedAsIs) {
                   style={{
                     ...playerCard,
                     borderColor: free ? "rgba(239,68,68,0.35)" : "rgba(34,197,94,0.35)",
-                    background: free ? "rgba(239,68,68,0.05)" : "rgba(34,197,94,0.05)",
+                    background: free ? "rgba(34,197,94,0.08)" : "rgba(34,197,94,0.05)",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
@@ -4836,13 +4925,12 @@ function StatBar({ label, value, max }) {
 
 const outer = {
   width: "100%",
-  minHeight: "100vh",          // ✅ statt height:100%
+  minHeight: "100vh",
   display: "grid",
   gap: 10,
-
-  overflowX: "auto",           // ✅ Finger nach rechts
-  overflowY: "auto",           // ✅ Finger nach unten
-  WebkitOverflowScrolling: "touch", // ✅ iOS Momentum-Scroll
+  overflowX: "auto",
+  overflowY: "auto",
+  WebkitOverflowScrolling: "touch",
 };
 
 

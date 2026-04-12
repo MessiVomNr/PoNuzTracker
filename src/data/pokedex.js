@@ -5,6 +5,8 @@ import { pokedexGen4 as pokedex_gen4 } from "../pokedex/pokedex_gen4";
 import { pokedexGen5 as pokedex_gen5 } from "../pokedex/pokedex_gen5";
 import { pokedexGen6 as pokedex_gen6 } from "../pokedex/pokedex_gen6";
 import { pokedexGen7 as pokedex_gen7 } from "../pokedex/pokedex_gen7";
+import { pokedexGen8 as pokedex_gen8 } from "../pokedex/pokedex_gen8";
+import { pokedexGen9 as pokedex_gen9 } from "../pokedex/pokedex_gen9";
 
 
 export const pokedex = {
@@ -15,4 +17,6 @@ export const pokedex = {
   ...pokedex_gen5,
   ...pokedex_gen6,
   ...pokedex_gen7,
+  ...pokedex_gen8,
+  ...pokedex_gen9,
 };

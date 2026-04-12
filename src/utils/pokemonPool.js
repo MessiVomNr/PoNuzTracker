@@ -7,10 +7,12 @@ export const GEN_DEX_CAP = {
   5: 649,
   6: 721,
   7: 809,
+  8: 905,
+  9: 1025,
 };
 
 export function getDexCapForGen(gen) {
-  return GEN_DEX_CAP[gen] ?? 151;
+  return GEN_DEX_CAP[gen] ?? 1025;
 }
 
 export function makeShuffledPool(gen, { excludeDexIds = [] } = {}) {
