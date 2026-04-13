@@ -221,6 +221,60 @@ function sortBoxList(list, fullDex) {
   return arr;
 }
 
+function buildLinkedBoxRows(encounters, teams, teamCount, fullDex) {
+  const rows = [];
+
+  const encounterEntries = Object.entries(encounters || {}).sort(([keyA, a], [keyB, b]) => {
+    const routeA = String(a?.route || keyA || "");
+    const routeB = String(b?.route || keyB || "");
+    return routeA.localeCompare(routeB, "de", { sensitivity: "base" });
+  });
+
+  encounterEntries.forEach(([, entry]) => {
+    const names = Array.from({ length: teamCount }, (_, i) => entry?.[`pokemon${i + 1}`] || "");
+    const statuses = Array.from({ length: teamCount }, (_, i) => {
+      return teamCount === 1 ? (entry?.status ?? entry?.status1) : entry?.[`status${i + 1}`];
+    });
+
+    const hasCaughtPokemon = names.some((name, i) => name && statuses[i] === "Gefangen");
+    if (!hasCaughtPokemon) return;
+
+    const allAlreadyInTeam = names.every((name, i) => {
+      if (!name) return true;
+      return (teams?.[i] || []).includes(name);
+    });
+
+    if (allAlreadyInTeam) return;
+
+    rows.push({
+      route: entry?.route || "",
+      names,
+    });
+  });
+
+  rows.sort((a, b) => {
+    const aDex = Math.min(
+      ...a.names
+        .filter(Boolean)
+        .map((name) => Number(getDexIdFromName(name, fullDex) || 99999))
+    );
+
+    const bDex = Math.min(
+      ...b.names
+        .filter(Boolean)
+        .map((name) => Number(getDexIdFromName(name, fullDex) || 99999))
+    );
+
+    if (aDex !== bDex) return aDex - bDex;
+
+    const aRoute = String(a.route || "");
+    const bRoute = String(b.route || "");
+    return aRoute.localeCompare(bRoute, "de", { sensitivity: "base" });
+  });
+
+  return rows;
+}
+
 function TeamManager() {
   const navigate = useNavigate();
 
@@ -301,10 +355,10 @@ function TeamManager() {
     setAvailablePokemon(avail);
   }, [effectiveEdition, effectiveLinkMode, teamCount, encountersSource, teamsSource]);
 
-  // ===== Stabil sortierte Box-Listen (wichtig gegen Shuffle) =====
-  const sortedAvailablePokemon = useMemo(() => {
-    return (availablePokemon || []).map((list) => sortBoxList(list, fullDex));
-  }, [availablePokemon, fullDex]);
+    // ===== Gemeinsame Box-Reihen für gelinkte Pokémon =====
+  const linkedBoxRows = useMemo(() => {
+    return buildLinkedBoxRows(encountersSource, teams, teamCount, fullDex);
+  }, [encountersSource, teams, teamCount, fullDex]);
 
   // ===== Persist Teams helper =====
   const persistTeams = async (newTeams) => {
@@ -614,22 +668,41 @@ function TeamManager() {
                 </DragDropContext>
               </div>
 
-              <div style={glassCard}>
+                            <div style={glassCard}>
                 <h3 style={{ marginTop: 0 }}>Box {i + 1}</h3>
                 <div style={pokeboxList}>
-                  {sortedAvailablePokemon[i]?.map((p) => {
-                    if (isInTeam(p)) return null;
+                  {linkedBoxRows.map((row, rowIndex) => {
+                    const p = row.names[i] || "";
+
+                    if (!p) {
+                      return (
+                        <div
+                          key={`box-empty-${i}-${rowIndex}`}
+                          style={{
+                            ...pokeboxItem,
+                            opacity: 0.22,
+                            cursor: "default",
+                          }}
+                        />
+                      );
+                    }
 
                     const dexId = getDexIdFromName(p, fullDex);
-                    const imgUrl = dexId
-                      ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dexId}.png`
+                    const formKey = formByName[p] || "";
+                    const formId = dexId ? getFormIdFor(dexId, formKey) : null;
+                    const idToUse = formId || dexId;
+
+                    const imgUrl = idToUse
+                      ? formId
+                        ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${idToUse}.png`
+                        : `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${idToUse}.png`
                       : null;
 
                     return (
                       <button
-                        key={p}
+                        key={`box-${i}-${rowIndex}-${p}`}
                         onClick={() => toggleLinkedPokemon(i, p)}
-                        title={p}
+                        title={`${rowIndex + 1}. ${p}${row.route ? ` - ${row.route}` : ""}`}
                         className="pokeboxItemStatic"
                         style={pokeboxItem}
                       >
@@ -639,8 +712,8 @@ function TeamManager() {
                             alt={p}
                             className="pokeboxImgStatic"
                             onError={(e) => {
-                              if (dexId) {
-                                e.currentTarget.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexId}.png`;
+                              if (idToUse) {
+                                e.currentTarget.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${idToUse}.png`;
                               }
                             }}
                           />
