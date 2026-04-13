@@ -11,77 +11,172 @@ function getDexIdFromName(name, fullDex) {
 }
 
 /* =========================
-   Mega-Form IDs (PokeAPI Pokemon IDs)
-   formKey: "mega" | "mega-x" | "mega-y"
+   Spezial-Form IDs
 ========================= */
-const MEGA_FORM_IDS = {
-  // Gen 1
-  3: { mega: 10033 }, // Bisaflor
-  6: { "mega-x": 10034, "mega-y": 10035 }, // Glurak
-  9: { mega: 10036 }, // Turtok
-  15: { mega: 10090 }, // Bibor
-  18: { mega: 10073 }, // Tauboss
-  65: { mega: 10037 }, // Simsala
-  80: { mega: 10071 }, // Lahmus
-  94: { mega: 10038 }, // Gengar
-  115: { mega: 10039 }, // Kangama
-  127: { mega: 10040 }, // Pinsir
-  130: { mega: 10041 }, // Garados
-  142: { mega: 10042 }, // Aerodactyl
-  150: { "mega-x": 10043, "mega-y": 10044 }, // Mewtu
+const SPECIAL_FORM_IDS = {
+  // ===== Mega-Formen =====
+  3: { mega: 10033 },
+  6: { "mega-x": 10034, "mega-y": 10035 },
+  9: { mega: 10036 },
+  15: { mega: 10090 },
+  18: { mega: 10073 },
+  65: { mega: 10037 },
+  80: { mega: 10071 },
+  94: { mega: 10038 },
+  115: { mega: 10039 },
+  127: { mega: 10040 },
+  130: { mega: 10041 },
+  142: { mega: 10042 },
+  150: { "mega-x": 10043, "mega-y": 10044 },
 
-  // Gen 2
-  181: { mega: 10045 }, // Ampharos
-  208: { mega: 10072 }, // Stahlos
-  212: { mega: 10046 }, // Scherox
-  214: { mega: 10047 }, // Skaraborn
-  229: { mega: 10048 }, // Hundemon
-  248: { mega: 10049 }, // Despotar
+  181: { mega: 10045 },
+  208: { mega: 10072 },
+  212: { mega: 10046 },
+  214: { mega: 10047 },
+  229: { mega: 10048 },
+  248: { mega: 10049 },
 
-  // Gen 3
-  254: { mega: 10065 }, // Gewaldro
-  257: { mega: 10050 }, // Lohgock
-  260: { mega: 10064 }, // Sumpex
-  282: { mega: 10051 }, // Guardevoir
-  303: { mega: 10052 }, // Flunkifer
-  306: { mega: 10053 }, // Stolloss
-  308: { mega: 10054 }, // Meditalis
-  310: { mega: 10055 }, // Voltenso
-  319: { mega: 10070 }, // Tohaido
-  323: { mega: 10087 }, // Camerupt
-  334: { mega: 10067 }, // Altaria
-  354: { mega: 10056 }, // Banette
-  359: { mega: 10057 }, // Absol
-  362: { mega: 10074 }, // Firnontor
-  373: { mega: 10089 }, // Brutalanda
-  376: { mega: 10076 }, // Metagross
+  254: { mega: 10065 },
+  257: { mega: 10050 },
+  260: { mega: 10064 },
+  282: { mega: 10051 },
+  303: { mega: 10052 },
+  306: { mega: 10053 },
+  308: { mega: 10054 },
+  310: { mega: 10055 },
+  319: { mega: 10070 },
+  323: { mega: 10087 },
+  334: { mega: 10067 },
+  354: { mega: 10056 },
+  359: { mega: 10057 },
+  362: { mega: 10074 },
+  373: { mega: 10089 },
+  376: { mega: 10076 },
 
-  // Gen 4
-  380: { mega: 10062 }, // Latias
-  381: { mega: 10063 }, // Latios
-  445: { mega: 10058 }, // Knakrack
-  448: { mega: 10059 }, // Lucario
-  460: { mega: 10060 }, // Rexblisar
+  380: { mega: 10062 },
+  381: { mega: 10063 },
+  445: { mega: 10058 },
+  448: { mega: 10059 },
+  460: { mega: 10060 },
 
-  // Gen 5
-  531: { mega: 10061 }, // Ohrdoch
+  531: { mega: 10061 },
+  719: { mega: 10075 },
 
-  // Gen 6
-  719: { mega: 10075 }, // Diancie
+  // ===== Klassische Spezialformen =====
+  351: { sunny: 10013, rainy: 10014, snowy: 10015 },
+  386: { attack: 10001, defense: 10002, speed: 10003 },
+  413: { sandy: 10004, trash: 10005 },
+  421: { sunshine: 10028 },
+
+  479: {
+    heat: 10008,
+    wash: 10009,
+    frost: 10010,
+    fan: 10011,
+    mow: 10012,
+  },
+
+  487: { origin: 10007 },
+  492: { sky: 10006 },
+  550: { blue: 10016 },
+  555: { zen: 10017 },
+
+  641: { therian: 10019 },
+  642: { therian: 10020 },
+  645: { therian: 10021 },
+
+  646: { white: 10022, black: 10023 },
+  648: { pirouette: 10018 },
+  647: { resolute: 10024 },
+  718: { "10": 10025, complete: 10026 },
+
+  681: { blade: 10027 },
+  720: { unbound: 10086 },
+  745: { midnight: 10029, dusk: 10030 },
+  746: { school: 10031 },
+  800: { "dusk-mane": 10155, "dawn-wings": 10156, ultra: 10157 },
+
+  898: {
+    "ice-rider": 10191,
+    "shadow-rider": 10192,
+  },
+
+  964: { hero: 10256 },
+  1017: {
+    wellspring: 10273,
+    hearthflame: 10274,
+    cornerstone: 10275,
+  },
 };
 
-function megaBadgeLabel(formKey) {
+function formBadgeLabel(formKey) {
   if (!formKey) return "";
+
   if (formKey === "mega") return "Mega";
   if (formKey === "mega-x") return "Mega X";
   if (formKey === "mega-y") return "Mega Y";
+
+  if (formKey === "heat") return "Feuer";
+  if (formKey === "wash") return "Wasser";
+  if (formKey === "frost") return "Eis";
+  if (formKey === "fan") return "Flug";
+  if (formKey === "mow") return "Pflanze";
+
+  if (formKey === "attack") return "Angriff";
+  if (formKey === "defense") return "Verteid.";
+  if (formKey === "speed") return "Initiative";
+
+  if (formKey === "sandy") return "Sand";
+  if (formKey === "trash") return "Lumpen";
+  if (formKey === "sunshine") return "Sonne";
+
+  if (formKey === "origin") return "Urform";
+  if (formKey === "sky") return "Zenit";
+
+  if (formKey === "zen") return "Trance";
+  if (formKey === "pirouette") return "Pirouette";
+  if (formKey === "therian") return "Tiergeist";
+
+  if (formKey === "white") return "Weiss";
+  if (formKey === "black") return "Schwarz";
+
+  if (formKey === "sunny") return "Sonne";
+  if (formKey === "rainy") return "Regen";
+  if (formKey === "snowy") return "Schnee";
+
+  if (formKey === "blue") return "Blau";
+  if (formKey === "resolute") return "Resolut";
+
+  if (formKey === "10") return "10%";
+  if (formKey === "complete") return "Komplett";
+
+  if (formKey === "blade") return "Klinge";
+  if (formKey === "midnight") return "Mitternacht";
+  if (formKey === "dusk") return "Abend";
+  if (formKey === "school") return "Schwarm";
+
+  if (formKey === "dusk-mane") return "Abendmähne";
+  if (formKey === "dawn-wings") return "Morgenschwingen";
+  if (formKey === "ultra") return "Ultra";
+
+  if (formKey === "unbound") return "Entfesselt";
+
+  if (formKey === "ice-rider") return "Eisreiter";
+  if (formKey === "shadow-rider") return "Schattenreiter";
+
+  if (formKey === "hero") return "Held";
+
+  if (formKey === "wellspring") return "Quellmaske";
+  if (formKey === "hearthflame") return "Flammenmaske";
+  if (formKey === "cornerstone") return "Felsmaske";
+
   return "Form";
 }
 
 function getFormIdFor(baseDexId, formKey) {
   const base = Number(baseDexId);
   if (!base || !formKey) return null;
-  const forms = MEGA_FORM_IDS[base];
+  const forms = SPECIAL_FORM_IDS[base];
   if (!forms) return null;
   return forms[formKey] || null;
 }
@@ -622,7 +717,7 @@ function TeamManager() {
                                               }}
                                               title="Form aus der Encounter-Tabelle"
                                             >
-                                              {megaBadgeLabel(formKey)}
+                                              {formBadgeLabel(formKey)}
                                             </span>
                                           )}
                                         </div>
