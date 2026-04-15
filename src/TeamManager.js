@@ -183,6 +183,92 @@ function getFormIdFor(baseDexId, formKey) {
 
 const typeCache = {};
 
+const typeRelationsCache = {};
+
+const ALL_ATTACK_TYPES = [
+  "normal", "fire", "water", "electric", "grass", "ice",
+  "fighting", "poison", "ground", "flying", "psychic", "bug",
+  "rock", "ghost", "dragon", "dark", "steel", "fairy",
+];
+const TYPE_LABELS_DE = {
+  normal: "Normal",
+  fire: "Feuer",
+  water: "Wasser",
+  electric: "Elektro",
+  grass: "Pflanze",
+  ice: "Eis",
+  fighting: "Kampf",
+  poison: "Gift",
+  ground: "Boden",
+  flying: "Flug",
+  psychic: "Psycho",
+  bug: "Käfer",
+  rock: "Gestein",
+  ghost: "Geist",
+  dragon: "Drache",
+  dark: "Unlicht",
+  steel: "Stahl",
+  fairy: "Fee",
+};
+
+function typeLabelDe(typeKey) {
+  return TYPE_LABELS_DE[typeKey] || typeKey;
+}
+
+async function fetchTypeRelations(typeName) {
+  if (!typeName) return null;
+  if (typeRelationsCache[typeName]) return typeRelationsCache[typeName];
+
+  try {
+    const res = await fetch(`https://pokeapi.co/api/v2/type/${typeName}`);
+    const data = await res.json();
+
+    const relations = {
+      doubleFrom: data.damage_relations?.double_damage_from?.map((x) => x.name) || [],
+      halfFrom: data.damage_relations?.half_damage_from?.map((x) => x.name) || [],
+      noFrom: data.damage_relations?.no_damage_from?.map((x) => x.name) || [],
+    };
+
+    typeRelationsCache[typeName] = relations;
+    return relations;
+  } catch (err) {
+    console.error("Typ-Relations konnten nicht geladen werden:", err);
+    return null;
+  }
+}
+
+function getMultiplierFromRelations(defenderTypes, typeRelationsMap, attackType) {
+  let multiplier = 1;
+
+  defenderTypes.forEach((defType) => {
+    const rel = typeRelationsMap[defType];
+    if (!rel) return;
+
+    if (rel.noFrom.includes(attackType)) {
+      multiplier *= 0;
+      return;
+    }
+    if (rel.doubleFrom.includes(attackType)) {
+      multiplier *= 2;
+    }
+    if (rel.halfFrom.includes(attackType)) {
+      multiplier *= 0.5;
+    }
+  });
+
+  return multiplier;
+}
+
+function multiplierLabel(multiplier) {
+  if (multiplier === 0) return "0x";
+  if (multiplier === 0.25) return "0.25x";
+  if (multiplier === 0.5) return "0.5x";
+  if (multiplier === 1) return "1x";
+  if (multiplier === 2) return "2x";
+  if (multiplier === 4) return "4x";
+  return `${multiplier}x`;
+}
+
 async function fetchTypesFromAPI(pokeId) {
   if (typeCache[pokeId]) return typeCache[pokeId];
   try {
@@ -293,6 +379,17 @@ const BOX_STATIC_CSS = `
     transform: none !important;
     transition: none !important;
     animation: none !important;
+  }
+
+  .analysisModalScroll {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .analysisModalScroll::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
 
   .pokeboxItemStatic:focus-visible {
@@ -433,8 +530,13 @@ function TeamManager() {
   const [availablePokemon, setAvailablePokemon] = useState(() => Array(teamCount).fill([]));
   const [fullDex, setFullDex] = useState({});
   const [pokemonTypes, setPokemonTypes] = useState({}); // key: `${name}__${formKey}`
-  const [linkMode, setLinkMode] = useState(effectiveLinkMode);
-  const [showHardResetModal, setShowHardResetModal] = useState(false);
+const [typeRelationsMap, setTypeRelationsMap] = useState({});
+const [linkMode, setLinkMode] = useState(effectiveLinkMode);
+const [showHardResetModal, setShowHardResetModal] = useState(false);
+const [analysisModal, setAnalysisModal] = useState({
+  open: false,
+  teamIndex: 0,
+});
 
   // ===== Load Dex + Teams + Box when sources change =====
   useEffect(() => {
@@ -454,6 +556,114 @@ function TeamManager() {
   const linkedBoxRows = useMemo(() => {
     return buildLinkedBoxRows(encountersSource, teams, teamCount, fullDex);
   }, [encountersSource, teams, teamCount, fullDex]);
+const teamAnalysis = useMemo(() => {
+  return teams.map((team, teamIndex) => {
+    const members = team
+      .filter(Boolean)
+      .map((name) => {
+        const formKey = formByName[name] || "";
+        const typesKey = `${name}__${formKey || "base"}`;
+        const types = pokemonTypes[typesKey] || [];
+
+        return {
+          name,
+          formKey,
+          types,
+        };
+      })
+      .filter((mon) => mon.types.length > 0);
+
+    const attackSummary = ALL_ATTACK_TYPES.map((attackType) => {
+  let weakCount = 0;
+  let resistCount = 0;
+  let immuneCount = 0;
+  let neutralCount = 0;
+
+  let x4Count = 0;
+  let x2Count = 0;
+  let x05Count = 0;
+  let x025Count = 0;
+  let x0Count = 0;
+
+  let score = 0;
+
+  members.forEach((mon) => {
+    const mult = getMultiplierFromRelations(mon.types, typeRelationsMap, attackType);
+
+    if (mult === 0) {
+      immuneCount += 1;
+      x0Count += 1;
+      score -= 2;
+    } else if (mult === 4) {
+      weakCount += 1;
+      x4Count += 1;
+      score += 4;
+    } else if (mult === 2) {
+      weakCount += 1;
+      x2Count += 1;
+      score += 2;
+    } else if (mult === 0.25) {
+      resistCount += 1;
+      x025Count += 1;
+      score -= 2;
+    } else if (mult === 0.5) {
+      resistCount += 1;
+      x05Count += 1;
+      score -= 1;
+    } else {
+      neutralCount += 1;
+    }
+  });
+
+  return {
+    attackType,
+    weakCount,
+    resistCount,
+    immuneCount,
+    neutralCount,
+    x4Count,
+    x2Count,
+    x05Count,
+    x025Count,
+    x0Count,
+    score,
+  };
+})
+      .sort((a, b) => b.score - a.score);
+
+    const perPokemon = members.map((mon) => {
+      const weaknesses = ALL_ATTACK_TYPES
+        .map((attackType) => ({
+          attackType,
+          multiplier: getMultiplierFromRelations(mon.types, typeRelationsMap, attackType),
+        }))
+        .filter((x) => x.multiplier > 1)
+        .sort((a, b) => b.multiplier - a.multiplier);
+
+      const resistances = ALL_ATTACK_TYPES
+        .map((attackType) => ({
+          attackType,
+          multiplier: getMultiplierFromRelations(mon.types, typeRelationsMap, attackType),
+        }))
+        .filter((x) => x.multiplier < 1)
+        .sort((a, b) => a.multiplier - b.multiplier);
+
+      return {
+        ...mon,
+        weaknesses,
+        resistances,
+      };
+    });
+
+    return {
+      teamIndex,
+      members,
+      dangerousTypes: attackSummary.filter((x) => x.score > 0).slice(0, 6),
+      safeTypes: [...attackSummary].reverse().filter((x) => x.score < 0).slice(0, 6),
+      perPokemon,
+    };
+  });
+}, [teams, formByName, pokemonTypes, typeRelationsMap]);
 
   // ===== Persist Teams helper =====
   const persistTeams = async (newTeams) => {
@@ -469,23 +679,44 @@ function TeamManager() {
 
   // ===== Load types for all Pokémon in teams (inkl. Mega-Form) =====
   useEffect(() => {
-    teams.flat().forEach(async (name) => {
-      if (!name) return;
+  teams.flat().forEach(async (name) => {
+    if (!name) return;
 
-      const formKey = formByName[name] || "";
-      const cacheKey = `${name}__${formKey || "base"}`;
-      if (pokemonTypes[cacheKey]) return;
+    const formKey = formByName[name] || "";
+    const cacheKey = `${name}__${formKey || "base"}`;
+    if (pokemonTypes[cacheKey]) return;
 
-      const baseDexId = getDexIdFromName(name, fullDex);
-      if (!baseDexId) return;
+    const baseDexId = getDexIdFromName(name, fullDex);
+    if (!baseDexId) return;
 
-      const formId = getFormIdFor(baseDexId, formKey);
-      const idToUse = formId || Number(baseDexId);
+    const formId = getFormIdFor(baseDexId, formKey);
+    const idToUse = formId || Number(baseDexId);
 
-      const types = await fetchTypesFromAPI(idToUse);
-      setPokemonTypes((prev) => ({ ...prev, [cacheKey]: types }));
+    const types = await fetchTypesFromAPI(idToUse);
+    setPokemonTypes((prev) => ({ ...prev, [cacheKey]: types }));
+  });
+}, [teams, fullDex, pokemonTypes, formByName]);
+
+useEffect(() => {
+  const neededTypes = new Set();
+
+  Object.values(pokemonTypes || {}).forEach((types) => {
+    (types || []).forEach((t) => {
+      if (t) neededTypes.add(t);
     });
-  }, [teams, fullDex, pokemonTypes, formByName]);
+  });
+
+  neededTypes.forEach(async (typeName) => {
+    if (typeRelationsMap[typeName]) return;
+    const rel = await fetchTypeRelations(typeName);
+    if (!rel) return;
+
+    setTypeRelationsMap((prev) => {
+      if (prev[typeName]) return prev;
+      return { ...prev, [typeName]: rel };
+    });
+  });
+}, [pokemonTypes, typeRelationsMap]);
 
   // ===== Remove Pokémon from Team if not in encounters anymore =====
   useEffect(() => {
@@ -675,7 +906,29 @@ function TeamManager() {
           {teams.map((team, i) => (
             <div key={i} style={teamCol}>
               <div style={glassCard}>
-                <h2 style={{ marginTop: 0 }}>Team {i + 1}</h2>
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 10,
+    }}
+  >
+    <h2 style={{ marginTop: 0, marginBottom: 0 }}>Team {i + 1}</h2>
+
+    <button
+      style={btnGhost}
+      onClick={() =>
+        setAnalysisModal({
+          open: true,
+          teamIndex: i,
+        })
+      }
+    >
+      Analyse
+    </button>
+  </div>
 
                 <DragDropContext onDragEnd={(res) => onDragEnd(res, i)}>
                   <Droppable droppableId={`team-${i}`}>
@@ -855,6 +1108,152 @@ function TeamManager() {
             </div>
           ))}
         </div>
+        {analysisModal.open && (() => {
+  const analysis = teamAnalysis[analysisModal.teamIndex];
+  if (!analysis) return null;
+
+  return (
+    <div
+      style={modalOverlay}
+      onClick={() => setAnalysisModal({ open: false, teamIndex: 0 })}
+    >
+      <div
+  className="analysisModalScroll"
+  style={modalCardWide}
+  onClick={(e) => e.stopPropagation()}
+>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            alignItems: "center",
+          }}
+        >
+          <h3 style={{ marginTop: 0, marginBottom: 0 }}>
+            Analyse für Team {analysisModal.teamIndex + 1}
+          </h3>
+
+          <button
+            style={btnModalCancel}
+            onClick={() => setAnalysisModal({ open: false, teamIndex: 0 })}
+          >
+            Schließen
+          </button>
+        </div>
+
+        {!analysis.members.length ? (
+          <p style={{ marginTop: 18, color: "rgba(255,255,255,0.88)" }}>
+            Für dieses Team sind noch keine Typdaten vorhanden oder das Team ist leer.
+          </p>
+        ) : (
+          <>
+            <div style={{ marginTop: 18 }}>
+  <div style={{ fontWeight: 900, marginBottom: 10 }}>
+    Besonders gefährlich gegen dich
+  </div>
+
+  <div style={analysisTable}>
+    <div style={analysisTableHeader}>
+      <div></div>
+      <div>4x</div>
+      <div>2x</div>
+      <div>0.5x</div>
+      <div>0.25x</div>
+      <div>0x</div>
+    </div>
+
+    {analysis.dangerousTypes.length ? (
+      analysis.dangerousTypes.map((row) => (
+        <div key={`danger-${row.attackType}`} style={analysisTableRowDanger}>
+          <div style={{ fontWeight: 900, textAlign: "left" }}>{typeLabelDe(row.attackType)}</div>
+          <div>{row.x4Count}</div>
+          <div>{row.x2Count}</div>
+          <div>{row.x05Count}</div>
+          <div>{row.x025Count}</div>
+          <div>{row.x0Count}</div>
+        </div>
+      ))
+    ) : (
+      <div style={{ opacity: 0.8 }}>
+        Keine auffälligen Gesamt-Schwächen gefunden.
+      </div>
+    )}
+  </div>
+</div>
+
+            <div style={{ marginTop: 18 }}>
+  <div style={{ fontWeight: 900, marginBottom: 10 }}>
+    Was dein Team gut abfängt
+  </div>
+
+  <div style={analysisTable}>
+    <div style={analysisTableHeader}>
+      <div></div>
+      <div>4x</div>
+      <div>2x</div>
+      <div>0.5x</div>
+      <div>0.25x</div>
+      <div>0x</div>
+    </div>
+
+    {analysis.safeTypes.length ? (
+      analysis.safeTypes.map((row) => (
+        <div key={`safe-${row.attackType}`} style={analysisTableRowSafe}>
+          <div style={{ fontWeight: 900, textAlign: "left" }}>{typeLabelDe(row.attackType)}</div>
+          <div>{row.x4Count}</div>
+          <div>{row.x2Count}</div>
+          <div>{row.x05Count}</div>
+          <div>{row.x025Count}</div>
+          <div>{row.x0Count}</div>
+        </div>
+      ))
+    ) : (
+      <div style={{ opacity: 0.8 }}>
+        Noch keine starken Resistenzen erkannt.
+      </div>
+    )}
+  </div>
+</div>
+
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontWeight: 900, marginBottom: 10 }}>Pro Pokémon</div>
+              <div style={{ display: "grid", gap: 12 }}>
+                {analysis.perPokemon.map((mon) => (
+                  <div key={`analysis-mon-${mon.name}`} style={analysisMonCard}>
+                    <div style={{ fontWeight: 900, marginBottom: 6 }}>{mon.name}</div>
+
+                    <div style={{ fontSize: 13, opacity: 0.92, marginBottom: 6 }}>
+                      Typen: {mon.types.map((t) => typeLabelDe(t)).join(" / ")}
+                    </div>
+
+                    <div style={{ fontSize: 13, marginBottom: 4 }}>
+                      <strong>Schwächen:</strong>{" "}
+                      {mon.weaknesses.length
+                        ? mon.weaknesses
+                            .map((w) => `${typeLabelDe(w.attackType)} (${multiplierLabel(w.multiplier)})`)
+                            .join(", ")
+                        : "keine"}
+                    </div>
+
+                    <div style={{ fontSize: 13 }}>
+                      <strong>Resistenzen/Immunitäten:</strong>{" "}
+                      {mon.resistances.length
+                        ? mon.resistances
+                            .map((r) => `${typeLabelDe(r.attackType)} (${multiplierLabel(r.multiplier)})`)
+                            .join(", ")
+                        : "keine"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+})()}
         {showHardResetModal && (
           <div style={modalOverlay}>
             <div style={modalCard}>
@@ -1068,6 +1467,63 @@ const modalCard = {
   boxShadow: "0 24px 70px rgba(0,0,0,0.55)",
   padding: 20,
   color: "white",
+};
+
+const modalCardWide = {
+  width: "min(780px, 96vw)",
+  maxHeight: "85vh",
+  overflowY: "auto",
+  borderRadius: 20,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(14,14,22,0.96)",
+  backdropFilter: "blur(10px)",
+  boxShadow: "0 24px 70px rgba(0,0,0,0.55)",
+  padding: 20,
+  color: "white",
+};
+
+const analysisMonCard = {
+  padding: 12,
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.04)",
+};
+
+const analysisTable = {
+  display: "grid",
+  gap: 6,
+};
+
+const analysisTableHeader = {
+  display: "grid",
+  gridTemplateColumns: "1.2fr repeat(5, 0.8fr)",
+  fontSize: 12,
+  opacity: 0.7,
+  padding: "0 6px",
+  textAlign: "center",
+  alignItems: "center",
+};
+
+const analysisTableRowDanger = {
+  display: "grid",
+  gridTemplateColumns: "1.2fr repeat(5, 0.8fr)",
+  padding: "10px 12px",
+  borderRadius: 12,
+  background: "rgba(220,38,38,0.16)",
+  border: "1px solid rgba(220,38,38,0.28)",
+  textAlign: "center",
+  alignItems: "center",
+};
+
+const analysisTableRowSafe = {
+  display: "grid",
+  gridTemplateColumns: "1.2fr repeat(5, 0.8fr)",
+  padding: "10px 12px",
+  borderRadius: 12,
+  background: "rgba(34,197,94,0.14)",
+  border: "1px solid rgba(34,197,94,0.24)",
+  textAlign: "center",
+  alignItems: "center",
 };
 
 const btnModalCancel = {
