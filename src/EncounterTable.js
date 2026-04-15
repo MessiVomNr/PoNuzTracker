@@ -12,6 +12,7 @@ import { updateDuoSave } from "./duo/duoService";
 import { upsertRecentRoom } from "./duo/recentRooms";
 import levelCapsByGen from "./guides/level_caps";
 import { getFossilPoolForRunGen } from "./data/fossilsByGen";
+import { evolutionFamiliesByDex } from "./data/evolutionFamilies";
 
 function getDexIdFromName(pokemonName, pokedex) {
   const entry = Object.entries(pokedex).find(([, name]) => name === pokemonName);
@@ -19,6 +20,11 @@ function getDexIdFromName(pokemonName, pokedex) {
   return entry[0].replace("pokedex", "");
 }
 
+function getFamilyDexIds(dexId) {
+  const id = Number(dexId);
+  if (!id) return [];
+  return evolutionFamiliesByDex[id] || [id];
+}
 // ===== Spezial-Formen (PokeAPI IDs / Anzeigeoptionen) =====
 // formKey wird in encounters als form1/form2/form3 gespeichert
 // Beispiele:
@@ -406,7 +412,15 @@ function EncounterTable() {
     [];
 
 const pokemonList = Object.values(pokedex);
-
+const nameToDexId = useMemo(() => {
+  const map = new Map();
+  Object.entries(pokedex || {}).forEach(([key, name]) => {
+    if (!name) return;
+    const dexId = Number(String(key).replace("pokedex", ""));
+    if (dexId) map.set(name, dexId);
+  });
+  return map;
+}, [pokedex]);
   // ===== Level-Cap (aus GuidePage-Checklist) =====
   const levelCaps = levelCapsByGen[gen] || [];
 
@@ -884,18 +898,139 @@ const confirmAction = async () => {
 };
 
   // Duplicate-Check bleibt auf Basis-Pokémon (Name) – Mega ist nur Anzeige/Form.
-  const usedPokemon = useMemo(() => {
-    return new Set(
-      Object.values(encounters)
-        .flatMap((e) =>
-          Object.entries(e)
-            .filter(([k]) => k.startsWith("pokemon"))
-            .map(([, val]) => val)
-        )
-        .filter(Boolean)
-    );
-  }, [encounters]);
+  const familyStatusByName = useMemo(() => {
+  const exactMap = new Map();
+  const familyPresenceByDex = new Map();
 
+  Object.entries(encounters || {}).forEach(([loc, entry]) => {
+    const rowStatus = entry?.status || "";
+
+    Object.entries(entry || {}).forEach(([key, val]) => {
+      if (!key.startsWith("pokemon")) return;
+      if (!val) return;
+
+      const dexId = Number(nameToDexId.get(val));
+      if (!dexId) return;
+
+      // exaktes Pokémon
+      const prevExact = exactMap.get(val) || {
+        count: 0,
+        statuses: [],
+        locations: [],
+      };
+
+      prevExact.count += 1;
+
+      if (rowStatus && !prevExact.statuses.includes(rowStatus)) {
+        prevExact.statuses.push(rowStatus);
+      }
+
+      if (loc && !prevExact.locations.includes(loc)) {
+        prevExact.locations.push(loc);
+      }
+
+      exactMap.set(val, prevExact);
+
+      // Familien-Präsenz nach Dex
+      const familyDexIds = getFamilyDexIds(dexId);
+      familyDexIds.forEach((famDexId) => {
+        const famKey = Number(famDexId);
+        const prevFamily = familyPresenceByDex.get(famKey) || {
+          count: 0,
+          statuses: [],
+          locations: [],
+          members: [],
+        };
+
+        prevFamily.count += 1;
+
+        if (rowStatus && !prevFamily.statuses.includes(rowStatus)) {
+          prevFamily.statuses.push(rowStatus);
+        }
+
+        if (loc && !prevFamily.locations.includes(loc)) {
+          prevFamily.locations.push(loc);
+        }
+
+        if (!prevFamily.members.includes(val)) {
+          prevFamily.members.push(val);
+        }
+
+        familyPresenceByDex.set(famKey, prevFamily);
+      });
+    });
+  });
+
+  const finalMap = new Map();
+
+  pokemonList.forEach((name) => {
+    const dexId = Number(nameToDexId.get(name));
+    if (!dexId) {
+      finalMap.set(name, {
+        alreadyOwned: false,
+        isFamilyMatch: false,
+        statuses: [],
+        statusText: "",
+      });
+      return;
+    }
+
+    const exactInfo = exactMap.get(name) || null;
+    const familyInfo = familyPresenceByDex.get(dexId) || null;
+
+    const exactAlreadyOwned = (exactInfo?.count || 0) > 0;
+    const familyAlreadyOwned = (familyInfo?.count || 0) > 0;
+    const isFamilyMatch = !exactAlreadyOwned && familyAlreadyOwned;
+
+    const statuses = exactAlreadyOwned
+      ? exactInfo?.statuses || []
+      : familyInfo?.statuses || [];
+
+    const uniqueStatuses = [...new Set(statuses)];
+    const alreadyOwned = exactAlreadyOwned || familyAlreadyOwned;
+
+    finalMap.set(name, {
+      alreadyOwned,
+      isFamilyMatch,
+      statuses: uniqueStatuses,
+      statusText: getOwnedStatusText(uniqueStatuses, isFamilyMatch),
+    });
+  });
+
+  return finalMap;
+}, [encounters, pokemonList, nameToDexId]);
+
+function getOwnedStatusText(statuses = [], isFamilyMatch = false) {
+  if (statuses.includes("Gefangen")) {
+    return isFamilyMatch ? "Familie schon gefangen" : "schon gefangen";
+  }
+
+  if (statuses.includes("Besiegt")) {
+    return isFamilyMatch ? "Familie schon besiegt" : "schon besiegt";
+  }
+
+  if (statuses.includes("Entkommen")) {
+    return isFamilyMatch ? "Familie schon entkommen" : "schon entkommen";
+  }
+
+  return isFamilyMatch ? "Familie schon im Run" : "schon im Run";
+}
+function getOwnedStatusIcon(statuses = []) {
+  if (statuses.includes("Gefangen")) {
+    return (
+      <img
+        src={process.env.PUBLIC_URL + "/pokeball.png"}
+        alt="Gefangen"
+        style={{ height: 16, width: 16, objectFit: "contain", display: "block" }}
+      />
+    );
+  }
+
+  if (statuses.includes("Besiegt")) return "☠️";
+  if (statuses.includes("Entkommen")) return "👟";
+
+  return "•";
+}
   let filteredLocations = locationList.filter((loc) => {
     const status = encounters[loc]?.status || "Offen";
     return filters[status];
@@ -965,19 +1100,25 @@ const usedFossilsBySlot = useMemo(() => {
         ...styles,
         color: dark ? "#fff" : "#000",
       }),
-      option: (styles, { isFocused, isSelected }) => ({
-        ...styles,
-        backgroundColor: dark
-          ? isSelected
-            ? "rgba(67,233,123,0.22)"
-            : isFocused
-            ? "rgba(255,255,255,0.10)"
-            : "transparent"
-          : isFocused
-          ? "#eee"
-          : "#fff",
-        color: dark ? "#fff" : "#000",
-      }),
+      option: (styles, { isFocused, isSelected, data }) => ({
+  ...styles,
+  backgroundColor: dark
+    ? isSelected
+      ? "rgba(67,233,123,0.22)"
+      : isFocused
+      ? "rgba(255,255,255,0.10)"
+      : "transparent"
+    : isFocused
+    ? "#eee"
+    : "#fff",
+  color: dark
+    ? data?.alreadyOwned
+      ? "rgba(255,255,255,0.78)"
+      : "#fff"
+    : "#000",
+  fontStyle: data?.alreadyOwned ? "italic" : "normal",
+  opacity: data?.alreadyOwned ? 0.88 : 1,
+}),
     };
   };
 
@@ -1284,8 +1425,40 @@ const usedFossilsBySlot = useMemo(() => {
   const fossilOptions = fossilPool;
 
   // normale Pokémon-Auswahl
-  const available = pokemonList.filter((p) => !usedPokemon.has(p) || p === selected);
-  const dexId = selected ? getDexIdFromName(selected, pokedex) : null;
+  const available = pokemonList;
+
+const selectOptions = available.map((name) => {
+  const info = familyStatusByName.get(name) || {
+    alreadyOwned: false,
+    isFamilyMatch: false,
+    statuses: [],
+    statusText: "",
+  };
+
+  const isCurrentSelected = selected === name;
+  const alreadyOwned = !isCurrentSelected && info.alreadyOwned;
+
+  return {
+    value: name,
+    label: name,
+    customLabel: alreadyOwned ? (
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 18 }}>
+          {getOwnedStatusIcon(info.statuses)}
+        </span>
+        <span>
+          {name} ({info.statusText})
+        </span>
+      </div>
+    ) : (
+      name
+    ),
+    alreadyOwned,
+    isFamilyMatch: info.isFamilyMatch,
+  };
+});
+
+const dexId = selected ? nameToDexId.get(selected) : null;
   const formOptions = dexId ? getFormOptionsForDexId(dexId) : [];
   const hasForms = formOptions.length > 0;
   const sprite = dexId ? spriteUrlFor(dexId, formKey) : null;
@@ -1300,7 +1473,8 @@ const usedFossilsBySlot = useMemo(() => {
           <div style={{ flex: 1, minWidth: 180 }}>
             <CreatableSelect
               key={`${loc}-${i}-${theme}`}
-              options={available.map((name) => ({ label: name, value: name }))}
+              options={selectOptions}
+              formatOptionLabel={(option) => option.customLabel || option.label}
               value={selected ? { label: selected, value: selected } : null}
               onChange={(sel) => handleChange(loc, slotName, sel?.value || "")}
               isClearable
@@ -1388,7 +1562,8 @@ const usedFossilsBySlot = useMemo(() => {
         <div style={{ flex: 1, minWidth: 180 }}>
           <CreatableSelect
             key={`${loc}-${i}-${theme}`}
-            options={available.map((name) => ({ label: name, value: name }))}
+            options={selectOptions}
+            formatOptionLabel={(option) => option.customLabel || option.label}
             value={selected ? { label: selected, value: selected } : null}
             onChange={(sel) => handleChange(loc, slotName, sel?.value || "")}
             isClearable
