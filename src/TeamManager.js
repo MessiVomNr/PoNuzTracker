@@ -417,16 +417,16 @@ function TeamManager() {
 
   // ===== Form-Lookup: Name -> formKey (mega/mega-x/mega-y/"") =====
   const formByName = useMemo(() => {
-    const map = {};
-    Object.values(encountersSource || {}).forEach((entry) => {
-      for (let i = 1; i <= 3; i++) {
-        const n = entry?.[`pokemon${i}`];
-        const f = entry?.[`form${i}`] || "";
-        if (n) map[n] = f;
-      }
-    });
-    return map;
-  }, [encountersSource]);
+  const map = {};
+  Object.values(encountersSource || {}).forEach((entry) => {
+    for (let i = 1; i <= teamCount; i++) {
+      const n = entry?.[`pokemon${i}`];
+      const f = entry?.[`form${i}`] || "";
+      if (n) map[n] = f;
+    }
+  });
+  return map;
+}, [encountersSource, teamCount]);
 
   // ===== UI State =====
   const [teams, setTeams] = useState(() => Array(teamCount).fill(["", "", "", "", "", ""]));
@@ -489,22 +489,22 @@ function TeamManager() {
 
   // ===== Remove Pokémon from Team if not in encounters anymore =====
   useEffect(() => {
-    const allEncountered = new Set();
-    Object.values(encountersSource || {}).forEach((entry) => {
-      for (let i = 1; i <= 3; i++) {
-        const mon = entry[`pokemon${i}`];
-        if (mon) allEncountered.add(mon);
-      }
-    });
-
-    const cleanedTeams = teams.map((team) => team.map((mon) => (mon && allEncountered.has(mon) ? mon : "")));
-
-    const changed = JSON.stringify(cleanedTeams) !== JSON.stringify(teams);
-    if (changed) {
-      setTeams(cleanedTeams);
-      persistTeams(cleanedTeams).catch(console.error);
+  const allEncountered = new Set();
+  Object.values(encountersSource || {}).forEach((entry) => {
+    for (let i = 1; i <= teamCount; i++) {
+      const mon = entry[`pokemon${i}`];
+      if (mon) allEncountered.add(mon);
     }
-  }, [encountersSource, teams]);
+  });
+
+  const cleanedTeams = teams.map((team) => team.map((mon) => (mon && allEncountered.has(mon) ? mon : "")));
+
+  const changed = JSON.stringify(cleanedTeams) !== JSON.stringify(teams);
+  if (changed) {
+    setTeams(cleanedTeams);
+    persistTeams(cleanedTeams).catch(console.error);
+  }
+}, [encountersSource, teams, teamCount]);
 
   const updateTeam = async (index, newTeam) => {
     const newTeams = [...teams];
@@ -526,34 +526,57 @@ function TeamManager() {
   const isInTeam = (name) => teams.some((team) => team.includes(name));
 
   const toggleLinkedPokemon = async (clickedIndex, name) => {
-    const linkedGroup = findLinkedGroup(name, clickedIndex);
-    if (!linkedGroup) return;
-
+  if (teamCount === 1) {
     const newTeams = [...teams];
-    const isAdding = !teams[clickedIndex].includes(name);
+    const team = [...newTeams[0]];
+    const isAdding = !team.includes(name);
 
-    linkedGroup.forEach((mon, i) => {
-      if (!mon) return;
-      const team = [...newTeams[i]];
-
-      if (isAdding) {
-        const emptyIndex = team.findIndex((x) => !x);
-        if (!team.includes(mon) && emptyIndex >= 0) {
-          team[emptyIndex] = mon;
-        }
-      } else {
-        const index = team.indexOf(mon);
-        if (index >= 0) {
-          team[index] = "";
-        }
+    if (isAdding) {
+      const emptyIndex = team.findIndex((x) => !x);
+      if (!team.includes(name) && emptyIndex >= 0) {
+        team[emptyIndex] = name;
       }
+    } else {
+      const index = team.indexOf(name);
+      if (index >= 0) {
+        team[index] = "";
+      }
+    }
 
-      newTeams[i] = team;
-    });
-
+    newTeams[0] = team;
     setTeams(newTeams);
     await persistTeams(newTeams);
-  };
+    return;
+  }
+
+  const linkedGroup = findLinkedGroup(name, clickedIndex);
+  if (!linkedGroup) return;
+
+  const newTeams = [...teams];
+  const isAdding = !teams[clickedIndex].includes(name);
+
+  linkedGroup.forEach((mon, i) => {
+    if (!mon) return;
+    const team = [...newTeams[i]];
+
+    if (isAdding) {
+      const emptyIndex = team.findIndex((x) => !x);
+      if (!team.includes(mon) && emptyIndex >= 0) {
+        team[emptyIndex] = mon;
+      }
+    } else {
+      const index = team.indexOf(mon);
+      if (index >= 0) {
+        team[index] = "";
+      }
+    }
+
+    newTeams[i] = team;
+  });
+
+  setTeams(newTeams);
+  await persistTeams(newTeams);
+};
 
   const onDragEnd = (result, teamIndex) => {
     if (!result.destination) return;
@@ -596,28 +619,39 @@ function TeamManager() {
 
       <div style={content}>
         {isDuo && (
-          <div style={topBar}>
-            <div>
-              <strong style={{ color: "#079e4b" }}>Duo Online aktiv</strong> — Room: <b>{activeDuoRoomId}</b>
-            </div>
-            <button
-              style={btnGreen}
-              onClick={() => {
-                localStorage.removeItem("activeDuoRoomId");
-                localStorage.removeItem("activeSave");
-                localStorage.removeItem("current_slot");
-                sessionStorage.setItem("blockAutoResume", "1");
-                navigate("/duo", { replace: true });
-              }}
-            >
-              Lobby verlassen
-            </button>
-          </div>
-        )}
+  <div style={topBar}>
+    <div>
+      <strong style={{ color: "#079e4b" }}>
+        {effectiveLinkMode === "solo"
+          ? "Solo Online aktiv"
+          : effectiveLinkMode === "trio"
+          ? "Trio Online aktiv"
+          : "Duo Online aktiv"}
+      </strong>{" "}
+      — Room: <b>{activeDuoRoomId}</b>
+    </div>
+    <button
+      style={btnGreen}
+      onClick={() => {
+        localStorage.removeItem("activeDuoRoomId");
+        localStorage.removeItem("activeSave");
+        localStorage.removeItem("current_slot");
+        sessionStorage.setItem("blockAutoResume", "1");
+        navigate("/duo", { replace: true });
+      }}
+    >
+      Lobby verlassen
+    </button>
+  </div>
+)}
         {duoError && <p style={{ color: "crimson" }}>{duoError}</p>}
 
         <div style={headerCard}>
-  <h1 style={{ margin: 0 }}>Dein Team ({linkMode})</h1>
+  <h1 style={{ margin: 0 }}>
+  Dein Team (
+  {linkMode === "solo" ? "Solo" : linkMode === "trio" ? "Trio" : "Duo"}
+  )
+</h1>
 
   <div
     style={{

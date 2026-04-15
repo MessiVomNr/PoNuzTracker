@@ -32,13 +32,19 @@ function roomRef(roomId) {
   return doc(db, "duoRooms", String(roomId).toUpperCase());
 }
 
+function normalizeLinkMode(linkMode) {
+  if (linkMode === "solo") return "solo";
+  if (linkMode === "trio") return "trio";
+  return "duo";
+}
+
 function defaultSave({ edition = "Rot", linkMode = "duo", title = "" } = {}) {
   return {
     encounters: {},
     team: ["", "", "", "", "", ""],
     gymsDefeated: 0,
     edition,
-    linkMode,
+    linkMode: normalizeLinkMode(linkMode),
     title: (title || "").trim(),
   };
 }

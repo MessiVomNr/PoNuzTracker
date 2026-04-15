@@ -138,15 +138,16 @@ export default function DuoHome() {
         />
 
         <label style={label}>Modus</label>
-        <select
-          className="darkSelect"
-          value={mode}
-          onChange={(e) => setMode(e.target.value)}
-          style={input}
-        >
-          <option value="duo">Duo</option>
-          <option value="trio">Trio</option>
-        </select>
+<select
+  className="darkSelect"
+  value={mode}
+  onChange={(e) => setMode(e.target.value)}
+  style={input}
+>
+  <option value="solo">Solo</option>
+  <option value="duo">Duo</option>
+  <option value="trio">Trio</option>
+</select>
 
         <label style={label}>Edition</label>
         <DarkSelect

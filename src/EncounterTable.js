@@ -799,11 +799,20 @@ useEffect(() => {
     }
 
     if (field === "status") {
-      for (let i = 1; i <= slotCount; i++) updated[location][`status${i}`] = value;
-      if (value !== "Entkommen" && value !== "Besiegt") {
-        updated[location].sinner = "";
-      }
+  for (let i = 1; i <= slotCount; i++) updated[location][`status${i}`] = value;
+
+  if (slotCount === 1) {
+    if (value === "Entkommen" || value === "Besiegt") {
+      updated[location].sinner = "p1";
+    } else {
+      updated[location].sinner = "";
     }
+  } else {
+    if (value !== "Entkommen" && value !== "Besiegt") {
+      updated[location].sinner = "";
+    }
+  }
+}
 
     setEncounters(updated);
     try {
@@ -1018,22 +1027,29 @@ const usedFossilsBySlot = useMemo(() => {
         <style>{tableCss(dark)}</style>
 
         {/* Duo Status + Exit */}
-        {isDuo && (
-          <div style={{ marginBottom: 10 }}>
-            <strong style={{ color: "#079e4b" }}>Duo Online aktiv</strong> — Room: <b>{activeDuoRoomId}</b>{" "}
-            <button
-              onClick={() => {
-                localStorage.removeItem("activeDuoRoomId");
-                localStorage.removeItem("activeSave");
-                localStorage.removeItem("current_slot");
-                sessionStorage.setItem("blockAutoResume", "1");
-                navigate("/duo", { replace: true });
-              }}
-            >
-              Lobby verlassen
-            </button>
-          </div>
-        )}
+       {isDuo && (
+  <div style={{ marginBottom: 10 }}>
+    <strong style={{ color: "#079e4b" }}>
+      {effectiveLinkMode === "solo"
+        ? "Solo Online aktiv"
+        : effectiveLinkMode === "trio"
+        ? "Trio Online aktiv"
+        : "Duo Online aktiv"}
+    </strong>{" "}
+    — Room: <b>{activeDuoRoomId}</b>{" "}
+    <button
+      onClick={() => {
+        localStorage.removeItem("activeDuoRoomId");
+        localStorage.removeItem("activeSave");
+        localStorage.removeItem("current_slot");
+        sessionStorage.setItem("blockAutoResume", "1");
+        navigate("/duo", { replace: true });
+      }}
+    >
+      Lobby verlassen
+    </button>
+  </div>
+)}
         {duoError && <p style={{ color: "crimson" }}>{duoError}</p>}
 
         {/* Run Title + Presence */}
@@ -1076,8 +1092,14 @@ const usedFossilsBySlot = useMemo(() => {
         {/* Titelzeile + Actions rechts oben */}
         <div style={headerRow}>
           <h1 style={{ marginTop: 6, marginBottom: 0 }}>
-            {effectiveEdition} Encounter-Tabelle ({effectiveLinkMode.toUpperCase()})
-          </h1>
+  {effectiveEdition} Encounter-Tabelle (
+  {effectiveLinkMode === "solo"
+    ? "Solo"
+    : effectiveLinkMode === "trio"
+    ? "Trio"
+    : "Duo"}
+  )
+</h1>
 
           <div style={topRightActions}>
             <button onClick={() => navigate("/team")}>Zum Team</button>
