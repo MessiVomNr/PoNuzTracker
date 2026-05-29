@@ -106,7 +106,7 @@ export const pokedexGen9 = {
   "pokedex1010": "Eisenblatt",
   "pokedex1011": "Sirapfel",
   "pokedex1012": "Mortcha",
-  "pokedex1013": "Mortcha",
+  "pokedex1013": "Fatalitcha",
   "pokedex1014": "Boninu",
   "pokedex1015": "Benesaru",
   "pokedex1016": "Beatori",

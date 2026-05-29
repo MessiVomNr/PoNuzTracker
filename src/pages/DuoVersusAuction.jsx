@@ -49,6 +49,67 @@ const evoInFlight = new Map(); // dexId -> Promise
 const typeCache = {}; // dexId -> ["water","flying",...]
 const statsCache = {}; // dexId -> { hp, atk, def, spa, spd, spe, total }
 
+const AUCTION_MODES = {
+  CLASSIC: "classic",
+  BLIND_SINGLE: "blind_single",
+  BLIND_MULTI: "blind_multi",
+};
+
+const AUCTION_MODE_LABELS = {
+  [AUCTION_MODES.CLASSIC]: "Normaler Live-Auction Draft",
+  [AUCTION_MODES.BLIND_SINGLE]: "Blind-Auction Einzel",
+  [AUCTION_MODES.BLIND_MULTI]: "Blind-Auction Multi",
+};
+
+function getAuctionMode(settings) {
+  const mode = String(settings?.auctionMode || AUCTION_MODES.CLASSIC);
+  return Object.values(AUCTION_MODES).includes(mode) ? mode : AUCTION_MODES.CLASSIC;
+}
+
+function isBlindAuctionMode(settings) {
+  const mode = getAuctionMode(settings);
+  return mode === AUCTION_MODES.BLIND_SINGLE || mode === AUCTION_MODES.BLIND_MULTI;
+}
+
+function getPokemonAuctionKey(poke) {
+  if (!poke) return "";
+  if (poke.formKey) return `mega:${poke.formKey}`;
+  return `dex:${Number(poke.dexId || 0)}`;
+}
+
+function getRoundOptionsFromDraft(draft) {
+  const options = Array.isArray(draft?.currentOptions) ? draft.currentOptions.filter(Boolean) : [];
+  if (options.length) return options;
+  return draft?.current ? [draft.current] : [];
+}
+
+function makeDraftTeamPokemon(poke, price) {
+  const draftedDexId = Number(poke?.dexId || 0);
+  const baseDexId = Number(poke?.baseDexId ?? poke?.dexId ?? 0);
+
+  return {
+    dexId: draftedDexId,
+    baseDexId,
+    price,
+    formKey: poke?.formKey || null,
+    name: poke?.name || getPokemonName(draftedDexId),
+    imageUrl: poke?.imageUrl || dexIdToImageUrl(draftedDexId),
+  };
+}
+
+function sortBlindBidsDesc(a, b) {
+  const amountDiff = Number(b?.amount || 0) - Number(a?.amount || 0);
+  if (amountDiff !== 0) return amountDiff;
+
+  // Tie-Break: früheres Gebot gewinnt.
+  const aTime = Number(a?.updatedAtMs || 0);
+  const bTime = Number(b?.updatedAtMs || 0);
+  if (aTime !== bTime) return aTime - bTime;
+
+  return String(a?.teamId || "").localeCompare(String(b?.teamId || ""));
+}
+
+
 /* =========================================================
    Mega Forms (Gen 6+ only)
    - Pool item format: "mega:<pokeapi-form-name>"
@@ -461,6 +522,11 @@ const DEFAULT_HOST_SETTINGS = {
   botCount: 0,
   botsConfig: [],
 
+  // Auktionsart
+  auctionMode: AUCTION_MODES.CLASSIC,
+  blindMultiCount: 3,
+  blindMultiLoserCompensation: false,
+
   // Draft-Modus Default: "Alle erlauben (bleibt wie gedraftet)"
   baseFormsOnly: false,
   keepEvolvedForms: true,
@@ -761,6 +827,61 @@ function botNameFor(roomId, botIndex1Based) {
   return `${name} #${tag}`;
 }
 
+const BOT_TEAM_ADJECTIVES = [
+  "Wilde", "Schlaue", "Freche", "Zähe", "Listige", "Rasende",
+  "Eisige", "Glühende", "Nervöse", "Ruhige", "Kühne", "Düstere",
+  "Goldene", "Gierige", "Chaotische", "Taktische", "Mutige", "Sparsame"
+];
+
+const BOT_TEAM_NOUNS = [
+  "Bidder", "Trainer", "Draftlords", "Sparfüchse", "Münzmeister", "Pokéhaie",
+  "Kaderplaner", "Overbidders", "Auktionsbären", "Sniper", "All-In-Asse", "Budget-Bosse",
+  "Glücksritter", "Team Rocket", "Panic-Picker", "Preisdrücker", "Zocker", "Pokéjäger"
+];
+
+function makeRandomBotDraftName(seedRaw) {
+  const seed = String(seedRaw || `${Date.now()}|${Math.random()}`);
+  const h = stableHashInt(seed);
+  const adj = BOT_TEAM_ADJECTIVES[h % BOT_TEAM_ADJECTIVES.length];
+  const noun = BOT_TEAM_NOUNS[Math.floor(h / 17) % BOT_TEAM_NOUNS.length];
+  const tag = String((h % 90) + 10);
+  return `${adj} ${noun} #${tag}`;
+}
+
+function sanitizeTeamName(raw) {
+  return String(raw || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 28);
+}
+
+function buildTeamNamesForOwners(count, owners, previousNames = {}, previousOwners = {}, roomId = "room", opts = {}) {
+  const next = {};
+  const forceBotNames = !!opts.forceBotNames;
+  const seed = String(opts.seed || "lobby");
+
+  for (let i = 0; i < count; i++) {
+    const tid = teamIdFor(i);
+    const owner = owners?.[tid] ?? null;
+    const prevOwner = previousOwners?.[tid] ?? null;
+    const prevName = sanitizeTeamName(previousNames?.[tid] || "");
+
+    if (owner && String(owner).startsWith("bot:")) {
+      next[tid] = forceBotNames || !prevName
+        ? makeRandomBotDraftName(`${roomId}|${tid}|${owner}|${seed}`)
+        : prevName;
+      continue;
+    }
+
+    // Wenn auf diesem Slot vorher ein Bot saß, übernehmen wir dessen Namen nicht für Menschen.
+    if (prevName && !(prevOwner && String(prevOwner).startsWith("bot:"))) {
+      next[tid] = prevName;
+    }
+  }
+
+  return next;
+}
+
 function clampInt(v, min, max) {
   const n = Number(v);
   if (Number.isNaN(n)) return min;
@@ -815,6 +936,31 @@ function findNextAllowedFromPool(pool, startIndex, bannedSet) {
     idx += 1;
   }
   return { nextDex: null, nextIndex: idx };
+}
+
+async function findNextAllowedManyFromPool(pool, startIndex, bannedSet, countRaw) {
+  const count = clampInt(countRaw, 2, 6);
+  const options = [];
+  let idx = startIndex;
+  let lastIndex = startIndex;
+
+  while (idx < (pool?.length || 0) && options.length < count) {
+    const found = findNextAllowedFromPool(pool, idx, bannedSet);
+    if (!found?.nextDex) {
+      lastIndex = found?.nextIndex ?? idx;
+      break;
+    }
+
+    const cur = await poolItemToCurrent(found.nextDex);
+    if (cur) {
+      options.push(cur);
+      lastIndex = found.nextIndex;
+    }
+
+    idx = (found.nextIndex ?? idx) + 1;
+  }
+
+  return { options, nextIndex: lastIndex };
 }
 
 // ===========================
@@ -1129,32 +1275,71 @@ async function makeAdmin(targetPlayerId, targetName) {
 //  return () => document.body.classList.remove("versus-page");
 //}, []);
 
+useEffect(() => {
+  const styleId = "draft-hide-scrollbar-style";
+
+  let style = document.getElementById(styleId);
+  if (!style) {
+    style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = `
+      html.draft-hide-scrollbar,
+      body.draft-hide-scrollbar {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      html.draft-hide-scrollbar::-webkit-scrollbar,
+      body.draft-hide-scrollbar::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+        display: none;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.documentElement.classList.add("draft-hide-scrollbar");
+  document.body.classList.add("draft-hide-scrollbar");
+
+  return () => {
+    document.documentElement.classList.remove("draft-hide-scrollbar");
+    document.body.classList.remove("draft-hide-scrollbar");
+  };
+}, []);
+
   const roomRef = useMemo(() => doc(db, "versusRooms", roomId), [roomId]);
 
   // ===== Shared Auction State in Firestore =====
   const auction = room?.versus?.auction || null;
 
-  const phase = auction?.phase || "lobby"; // lobby | auction | results
+  const phase = auction?.phase || "lobby"; // lobby | auction | blindReveal | results
   const settings = auction?.settings || loadHostSettingsFromLS();
   const genNum = clampInt(settings?.generation ?? 1, 1, 9);
   const teamOwners = auction?.teamOwners || {};
+  const teamNames = auction?.teamNames || {};
+  const hasDraftBackground = phase === "lobby" || phase === "auction" || phase === "blindReveal" || phase === "results";
+  const draftBgOverlay = phase === "lobby" ? "rgba(0,0,0,0.88)" : "rgba(0,0,0,0.78)";
   
   const outerStyle = {
   ...outer,
-  backgroundImage:
-    phase === "auction"
-      ? "linear-gradient(rgba(0,0,0,0.78), rgba(0,0,0,0.78)), url('/backgrounds/background_draft.png')"
-      : "none",
-  backgroundSize: phase === "auction" ? "cover" : "auto",
-  backgroundPosition: phase === "auction" ? "center center" : "center center",
+  backgroundImage: hasDraftBackground
+    ? `linear-gradient(${draftBgOverlay}, ${draftBgOverlay}), url('/backgrounds/background_draft.png')`
+    : "none",
+  backgroundSize: hasDraftBackground ? "cover" : "auto",
+  backgroundPosition: phase === "lobby" ? "center 24%" : "center 30%",
   backgroundRepeat: "no-repeat",
-  backgroundColor: phase === "auction" ? "#05070b" : "transparent",
-  backgroundAttachment: phase === "auction" ? "fixed" : "scroll",
+  backgroundColor: hasDraftBackground ? "#05070b" : "transparent",
+  backgroundAttachment: hasDraftBackground ? "fixed" : "scroll",
+  position: "relative",
 };
 
   const draft = auction?.draft || {
     auctionCountDone: 0,
     current: null,
+    currentOptions: [],
+    blindBids: {},
+    blindReveal: null,
 
     teamIds: [],
     budgets: {},
@@ -1170,7 +1355,14 @@ async function makeAdmin(targetPlayerId, targetName) {
 
     bannedDexIds: [],
   };
-  
+
+  const auctionMode = getAuctionMode(settings);
+  const isBlindMode = isBlindAuctionMode(settings);
+  const isBlindSingleMode = auctionMode === AUCTION_MODES.BLIND_SINGLE;
+  const isBlindMultiMode = auctionMode === AUCTION_MODES.BLIND_MULTI;
+  const currentOptions = getRoundOptionsFromDraft(draft);
+  const blindBidCount = Object.keys(draft?.blindBids || {}).length;
+
 const activePlayers = useMemo(() => {
   // wir nehmen "active" wenn vorhanden, sonst gilt jeder als aktiv
   return playersList.filter((p) => p && p.active !== false);
@@ -1331,6 +1523,51 @@ const teamIds = useMemo(() => {
 
   // Local-only input
   const [bidInput, setBidInput] = useState(100);
+  const [blindOptionKey, setBlindOptionKey] = useState("");
+
+  useEffect(() => {
+    if (!isBlindMultiMode) {
+      setBlindOptionKey("");
+      return;
+    }
+
+    const keys = (currentOptions || []).map((p) => getPokemonAuctionKey(p)).filter(Boolean);
+    if (!keys.length) {
+      setBlindOptionKey("");
+      return;
+    }
+
+    setBlindOptionKey((prev) => (keys.includes(prev) ? prev : keys[0]));
+  }, [isBlindMultiMode, JSON.stringify((currentOptions || []).map((p) => getPokemonAuctionKey(p)))]);
+
+  const displayPokemon = useMemo(() => {
+    if (!isBlindMultiMode) return draft?.current || null;
+
+    return (
+      (currentOptions || []).find((p) => getPokemonAuctionKey(p) === blindOptionKey) ||
+      (currentOptions || [])[0] ||
+      draft?.current ||
+      null
+    );
+  }, [
+    isBlindMultiMode,
+    blindOptionKey,
+    draft?.current?.dexId,
+    draft?.current?.formKey,
+    JSON.stringify((currentOptions || []).map((p) => getPokemonAuctionKey(p))),
+  ]);
+
+  const myBlindBid = myTeamId ? draft?.blindBids?.[myTeamId] || null : null;
+  const [teamNameInput, setTeamNameInput] = useState("");
+
+  useEffect(() => {
+    if (!myTeamId) {
+      setTeamNameInput("");
+      return;
+    }
+
+    setTeamNameInput(teamNames?.[myTeamId] || "");
+  }, [myTeamId, teamNames?.[myTeamId]]);
 
   function round100(n) {
     const x = Number(n || 0);
@@ -1368,7 +1605,7 @@ const teamIds = useMemo(() => {
     let alive = true;
 
     (async () => {
-      const dexId = Number(draft?.current?.dexId);
+      const dexId = Number(displayPokemon?.dexId);
       if (!dexId) {
         setCurTypes([]);
         return;
@@ -1395,14 +1632,14 @@ const teamIds = useMemo(() => {
     return () => {
       alive = false;
     };
-  }, [draft?.current?.dexId]);
+  }, [displayPokemon?.dexId]);
 
   // ✅ NEW: Current Pokemon base stats (PokeAPI)
   useEffect(() => {
     let alive = true;
 
     (async () => {
-      const dexId = Number(draft?.current?.dexId || 0);
+      const dexId = Number(displayPokemon?.dexId || 0);
       if (!dexId) {
         setCurStats(null);
         return;
@@ -1445,7 +1682,7 @@ const teamIds = useMemo(() => {
     return () => {
       alive = false;
     };
-  }, [draft?.current?.dexId]);
+  }, [displayPokemon?.dexId]);
 
   // ===== Evolution UI state (current Pokémon) =====
   const [evoLine, setEvoLine] = useState([]);
@@ -2141,7 +2378,7 @@ const submitBidSafe = () => {
     let alive = true;
 
     (async () => {
-      const curDex = draft?.current?.dexId;
+      const curDex = displayPokemon?.dexId;
       if (!curDex) {
         setEvoLine([]);
         return;
@@ -2160,7 +2397,7 @@ const submitBidSafe = () => {
     return () => {
       alive = false;
     };
-  }, [draft?.current?.dexId]);
+  }, [displayPokemon?.dexId]);
 
   // ===== Base-form display map for team boxes (only 1st evolution shown) =====
   const [baseDexMap, setBaseDexMap] = useState({}); // originalDexId -> baseDexId
@@ -2355,9 +2592,13 @@ const initial = {
   phase: "lobby",
   settings: initSettings,
   teamOwners: initOwners,
+  teamNames: buildTeamNamesForOwners(totalTeams, initOwners, {}, {}, roomId, { seed: "initial" }),
   draft: {
     auctionCountDone: 0,
     current: null,
+    currentOptions: [],
+    blindBids: {},
+    blindReveal: null,
 
     teamIds: [],
     budgets: {},
@@ -2450,9 +2691,14 @@ const normalizedSettings = {
     if (owners[tid] && String(owners[tid]).startsWith("bot:")) delete owners[tid];
   }
 
+  const nextTeamNames = buildTeamNamesForOwners(totalTeams, owners, teamNames, teamOwners, roomId, {
+    seed: `settings|${finalPlayers}|${finalBots}`,
+  });
+
   await updateDoc(roomRef, {
     "versus.auction.settings": normalizedSettings,
     "versus.auction.teamOwners": owners,
+    "versus.auction.teamNames": nextTeamNames,
     "versus.auction.updatedAt": serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -2666,7 +2912,7 @@ const owners = ensureTeamOwners(totalTeams, teamOwners);
 
 // ✅ Bots erstellen (IDs MUSS "bot:X" sein, passend zu owners)
 //    startTeamIndex ist 0-based team index, also: humans starten bei 0..finalParticipants-1
-const bots = buildBots({
+let bots = buildBots({
   botConfigs: botConfigsResolved,
   startTeamIndex: finalParticipants,
 });
@@ -2675,6 +2921,18 @@ const bots = buildBots({
 for (const b of bots) {
   owners[b.teamId] = b.id;
 }
+
+const draftNameSeed = `${Date.now()}|${Math.random()}`;
+const teamNamesForDraft = buildTeamNamesForOwners(totalTeams, owners, teamNames, teamOwners, roomId, {
+  forceBotNames: true,
+  seed: draftNameSeed,
+});
+
+// Bot-Displayname im Draft = zufälliger zusammengesetzter Teamname.
+bots = bots.map((b) => ({
+  ...b,
+  name: teamNamesForDraft?.[b.teamId] || b.name || makeRandomBotDraftName(`${roomId}|${b.id}|${draftNameSeed}`),
+}));
 
 
 // ✅ Settings-Werte sicher auslesen (verhindert "is not defined" + sorgt für Defaults)
@@ -2701,12 +2959,70 @@ if (gen >= 6) {
 // ✅ Pool-Filter anwenden (Legendär/Sublegi/Mythisch/Pseudo + baseFormsOnly)
 const pool = await buildFilteredPool(rawPool, settings, gen);
 
-// ✅ Start-Current bestimmen (erstes erlaubtes Item)
+// ✅ Start-Current bestimmen
+const auctionModeStart = getAuctionMode(settings);
+const blindMultiCount = clampInt(settings?.blindMultiCount ?? 3, 2, 6);
+const startsBlind = isBlindAuctionMode({ auctionMode: auctionModeStart });
 const bannedSet = new Set(); // beim Start noch nichts gebannt
-const { nextDex, nextIndex } = findNextAllowedFromPool(pool, 0, bannedSet);
 
-const current = nextDex ? await poolItemToCurrent(nextDex) : null;
-const poolIndex = nextIndex ?? 0;
+let current = null;
+let currentOptions = [];
+let poolIndex = 0;
+
+if (auctionModeStart === AUCTION_MODES.BLIND_MULTI) {
+  const multi = await findNextAllowedManyFromPool(pool, 0, bannedSet, blindMultiCount);
+  currentOptions = multi.options || [];
+  current = currentOptions[0] || null;
+  poolIndex = multi.nextIndex ?? 0;
+} else {
+  const { nextDex, nextIndex } = findNextAllowedFromPool(pool, 0, bannedSet);
+  current = nextDex ? await poolItemToCurrent(nextDex) : null;
+  currentOptions = current ? [current] : [];
+  poolIndex = nextIndex ?? 0;
+}
+
+// ✅ Blind-Modi: Bots geben schon beim Start der Runde ein verdecktes Gebot ab.
+// Das fixt besonders Runde 1, weil wir nicht erst auf einen späteren useEffect warten müssen.
+const initialBlindBids = {};
+if (startsBlind && currentOptions.length) {
+  const nowMs = Date.now();
+  const picksLeftAtStart = Math.max(1, totalPokemon);
+  const isFinalAtStart = auctionModeStart === AUCTION_MODES.BLIND_MULTI
+    ? picksLeftAtStart <= currentOptions.length
+    : picksLeftAtStart <= 1;
+
+  for (let i = 0; i < bots.length; i++) {
+    const bot = bots[i];
+    const budget = Number(budgets?.[bot.teamId] ?? 0);
+    if (budget < 100) continue;
+
+    const chosenOption = auctionModeStart === AUCTION_MODES.BLIND_MULTI
+      ? chooseBotBlindOption(bot, currentOptions)
+      : currentOptions[0];
+
+    if (!chosenOption) continue;
+
+    const amount = makeSmartBotBidAmount({
+      bot,
+      budgetRaw: budget,
+      poke: chosenOption,
+      highestBidRaw: 0,
+      picksLeftRaw: picksLeftAtStart,
+      isFinalRound: isFinalAtStart,
+      isBlind: true,
+      teamCountRaw: localTeamIds.length,
+    });
+
+    if (amount < 100) continue;
+
+    initialBlindBids[bot.teamId] = {
+      teamId: bot.teamId,
+      optionKey: getPokemonAuctionKey(chosenOption),
+      amount: Math.min(amount, botMaxBidFromBudget(budget)),
+      updatedAtMs: nowMs + i,
+    };
+  }
+}
 
     await updateDoc(roomRef, {
       "versus.auction.phase": "auction",
@@ -2718,6 +3034,9 @@ const poolIndex = nextIndex ?? 0;
         totalPokemon,
         botsConfig: botConfigsLobby,
         secondsPerBid,
+        auctionMode: auctionModeStart,
+        blindMultiCount,
+        blindMultiLoserCompensation: !!settings.blindMultiLoserCompensation,
         keepEvolvedForms: !!settings.keepEvolvedForms,
         baseFormsOnly: !!settings.baseFormsOnly,
         allowLegendary: !!settings.allowLegendary,
@@ -2726,9 +3045,13 @@ const poolIndex = nextIndex ?? 0;
         allowPseudo: !!settings.allowPseudo,
       },
       "versus.auction.teamOwners": owners,
+      "versus.auction.teamNames": teamNamesForDraft,
       "versus.auction.draft": {
         auctionCountDone: 0,
         current,
+        currentOptions,
+        blindBids: initialBlindBids,
+        blindReveal: null,
         teamIds: localTeamIds,
         budgets,
         teams,
@@ -2738,10 +3061,10 @@ const poolIndex = nextIndex ?? 0;
         totalPokemon,
         highestBid: 0,
         highestTeamId: null,
-        hasStarted: false,
+        hasStarted: startsBlind && !!current,
         bannedDexIds: [],
       },
-      "versus.auction.timer": { running: false, paused: false, remaining: secondsPerBid },
+      "versus.auction.timer": { running: startsBlind && !!current, paused: false, remaining: secondsPerBid },
       "versus.auction.updatedAt": serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -2774,6 +3097,9 @@ const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
   budgetPerTeam: Math.max(0, clampInt(settings.budgetPerTeam, 0, 9999999)),
   totalPokemon: Math.max(1, clampInt(settings.totalPokemon, 1, 999)),
   secondsPerBid,
+  auctionMode: getAuctionMode(settings),
+  blindMultiCount: clampInt(settings?.blindMultiCount ?? 3, 2, 6),
+  blindMultiLoserCompensation: !!settings.blindMultiLoserCompensation,
   keepEvolvedForms: !!settings.keepEvolvedForms,
   baseFormsOnly: !!settings.baseFormsOnly,
   allowLegendary: !!settings.allowLegendary,
@@ -2791,10 +3117,22 @@ const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
   }
   return owners;
 })(),
+      teamNames: (() => {
+  const owners = ensureTeamOwners(totalTeams, {});
+  for (let i = 0; i < botCount; i++) {
+    const teamIndex = participants + i;
+    const tid = teamIdFor(teamIndex);
+    owners[tid] = `bot:${i + 1}`;
+  }
+  return buildTeamNamesForOwners(totalTeams, owners, teamNames, teamOwners, roomId, { seed: `restart|${participants}|${botCount}` });
+})(),
 
       draft: {
         auctionCountDone: 0,
         current: null,
+        currentOptions: [],
+        blindBids: {},
+    blindReveal: null,
 
         teamIds: [],
         budgets: {},
@@ -2902,6 +3240,68 @@ const secondsPerBid = Math.max(5, clampInt(settings.secondsPerBid, 5, 60));
       });
     });
   }
+
+  async function placeBlindBid(amountRaw, optionKeyRaw = null) {
+    if (phase !== "auction") return;
+    if (!myTeamId) return;
+    if (!draft.teamIds.includes(myTeamId)) return;
+
+    const amt = clampInt(amountRaw, 0, 999999999);
+    if (amt < 100) return;
+    if (amt % 100 !== 0) return;
+
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(roomRef);
+      if (!snap.exists()) throw new Error("Room nicht gefunden.");
+
+      const data = snap.data();
+      const a = data?.versus?.auction;
+      if (!a) throw new Error("Auction nicht initialisiert.");
+      if (a.phase !== "auction") return;
+
+      const d = a.draft || {};
+      const s = a.settings || settings;
+      const modeHere = getAuctionMode(s);
+      if (!isBlindAuctionMode({ auctionMode: modeHere })) return;
+
+      const optionsHere = getRoundOptionsFromDraft(d);
+      if (!optionsHere.length) return;
+
+      const validKeys = optionsHere.map((p) => getPokemonAuctionKey(p)).filter(Boolean);
+      const optionKey =
+        modeHere === AUCTION_MODES.BLIND_MULTI
+          ? String(optionKeyRaw || "")
+          : getPokemonAuctionKey(optionsHere[0]);
+
+      if (!validKeys.includes(optionKey)) return;
+
+      const budgetsHere = d.budgets || {};
+      const budget = budgetsHere[myTeamId] ?? 0;
+      if (amt > budget) return;
+
+      const secondsPerBid = clampInt(s.secondsPerBid ?? 10, 5, 60);
+      const timerHere = a.timer || {};
+      const timerRunning = !!timerHere.running && !timerHere.paused;
+      const remaining = timerRunning
+        ? Number(timerHere.remaining ?? secondsPerBid)
+        : secondsPerBid;
+
+      tx.update(roomRef, {
+        [`versus.auction.draft.blindBids.${myTeamId}`]: {
+          teamId: myTeamId,
+          optionKey,
+          amount: amt,
+          updatedAtMs: Date.now(),
+        },
+        "versus.auction.draft.hasStarted": true,
+        "versus.auction.timer.paused": false,
+        "versus.auction.timer.running": true,
+        "versus.auction.timer.remaining": Math.max(1, remaining),
+        "versus.auction.updatedAt": serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    });
+  }
 function clampBidToRules(v) {
   const budget = Number(myBudget() || 0);
 
@@ -2931,7 +3331,13 @@ function doAllIn() {
 }
 
 function submitBid() {
-  placeBid(clampBidToRules(bidInput));
+  const safeBid = clampBidToRules(bidInput);
+  if (isBlindMode) {
+    placeBlindBid(safeBid, blindOptionKey);
+    return;
+  }
+
+  placeBid(safeBid);
 }
 
 useEffect(() => {
@@ -3019,6 +3425,285 @@ const onlyBotsMode = humansInTeams.length === 0;
     });
   });
 }
+async function placeBotBlindBid(botTeamId, amountRaw, optionKeyRaw = null) {
+  if (!meIsHost) return;
+  if (phase !== "auction") return;
+  if (!botTeamId) return;
+
+  const amt = clampInt(amountRaw, 0, 999999999);
+  if (amt < 100) return;
+  if (amt % 100 !== 0) return;
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef);
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+    const a = data?.versus?.auction;
+    if (!a || a.phase !== "auction") return;
+
+    const d = a.draft || {};
+    const s = a.settings || settings;
+    const modeHere = getAuctionMode(s);
+    if (!isBlindAuctionMode({ auctionMode: modeHere })) return;
+
+    const optionsHere = getRoundOptionsFromDraft(d);
+    if (!optionsHere.length) return;
+
+    const validKeys = optionsHere.map((p) => getPokemonAuctionKey(p)).filter(Boolean);
+    const optionKey =
+      modeHere === AUCTION_MODES.BLIND_MULTI
+        ? String(optionKeyRaw || "")
+        : getPokemonAuctionKey(optionsHere[0]);
+
+    if (!validKeys.includes(optionKey)) return;
+
+    const budgetsHere = d.budgets || {};
+    const budget = budgetsHere[botTeamId] ?? 0;
+    if (amt > budget) return;
+
+    const secondsPerBid = clampInt(s.secondsPerBid ?? 10, 5, 60);
+    const timerHere = a.timer || {};
+    const remaining = timerHere.running
+      ? Number(timerHere.remaining ?? secondsPerBid)
+      : secondsPerBid;
+
+    tx.update(roomRef, {
+      [`versus.auction.draft.blindBids.${botTeamId}`]: {
+        teamId: botTeamId,
+        optionKey,
+        amount: amt,
+        updatedAtMs: Date.now(),
+      },
+      "versus.auction.draft.hasStarted": true,
+      "versus.auction.timer.paused": false,
+      "versus.auction.timer.running": true,
+      "versus.auction.timer.remaining": Math.max(1, remaining),
+      "versus.auction.updatedAt": serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+function botMaxBidFromBudget(budgetRaw) {
+  const budget = Number(budgetRaw || 0);
+  return Math.floor(budget / 100) * 100;
+}
+
+function makeSmartBotBidAmount({ bot, budgetRaw, poke, highestBidRaw = 0, highestTeamId = null, picksLeftRaw = 1, isFinalRound = false, isBlind = false, teamCountRaw = null }) {
+  const budget = Number(budgetRaw || 0);
+  const maxBid = botMaxBidFromBudget(budget);
+  if (maxBid < 100) return 0;
+
+  if (!isBlind && highestTeamId && highestTeamId === bot?.teamId) return 0;
+
+  // Letzte Runde: Bots sollen nicht mit viel Geld rausgehen.
+  if (isFinalRound) return maxBid;
+
+  const flags = getSpecialFlags(Number(poke?.dexId || 0), { isMega: !!poke?.formKey });
+  const diff = String(bot?.difficulty || "normal").toLowerCase();
+  const picksLeft = Math.max(1, Number(picksLeftRaw || 1));
+  // Beim Draft-Start ist draft.teamIds im React-State noch leer.
+  // Darum kann startDraft die echte Teamanzahl direkt uebergeben.
+  const teamCount = Math.max(
+    1,
+    Number(teamCountRaw || 0) || (Array.isArray(draft?.teamIds) ? draft.teamIds.length : 1)
+  );
+
+  // Grobe Planung: Wie viele Picks wird dieses Team wahrscheinlich noch bekommen?
+  const expectedOwnPicksLeft = Math.max(1, Math.ceil(picksLeft / teamCount));
+  const budgetPerExpectedPick = budget / expectedOwnPicksLeft;
+
+  let strength = 0.62;
+  if (diff === "easy") strength = 0.42;
+  if (diff === "normal") strength = 0.66;
+  if (diff === "hard") strength = 0.88;
+  if (diff === "veryhard") strength = 1.08;
+  if (diff === "chaos") strength = 0.45 + Math.random() * 1.15;
+
+  if (flags.starter) strength += 0.08;
+  if (flags.pseudo) strength += 0.18;
+  if (flags.subLegendary) strength += 0.22;
+  if (flags.legendary || flags.mythical || flags.ultraBeast) strength += 0.32;
+  if (flags.mega) strength += 0.24;
+
+  const behavior1 = normalizeBehavior(bot?.behavior1);
+  const behavior2 = normalizeBehavior(bot?.behavior2);
+  if (behavior1 === "allin" || behavior2 === "allin") strength += 0.18;
+  if (behavior1 === "sparfuchs" || behavior2 === "sparfuchs") strength -= 0.16;
+  if (behavior1 === "sniper" || behavior2 === "sniper") strength += 0.08;
+
+  const randomFactor = 0.82 + Math.random() * 0.56;
+  let raw = budgetPerExpectedPick * strength * randomFactor;
+
+  // Mindestdruck: Bots sollen bei großem Budget nicht nur 100/200 bieten.
+  let minPct = 0.10;
+  if (diff === "easy") minPct = 0.07;
+  if (diff === "normal") minPct = 0.10;
+  if (diff === "hard") minPct = 0.14;
+  if (diff === "veryhard") minPct = 0.18;
+  if (flags.legendary || flags.mythical || flags.ultraBeast || flags.mega) minPct += 0.05;
+  if (flags.pseudo || flags.subLegendary) minPct += 0.03;
+
+  // Wichtig: Der Mindestdruck darf nicht fuer alle Bots exakt gleich sein.
+  // Sonst bieten in Runde 1 alle Bots denselben Betrag, weil alle mit gleichem Budget starten.
+  const minPressureRandom = 0.72 + Math.random() * 0.62;
+  const minPressure = budget * minPct * minPressureRandom;
+
+  raw = Math.max(raw, minPressure);
+
+  let bid = round100(raw);
+  const highestBid = Number(highestBidRaw || 0);
+  if (!isBlind && highestBid > 0) bid = Math.max(bid, highestBid + 100);
+
+  return Math.min(maxBid, bid);
+}
+
+function makeSimpleBlindBotBidAmount(bot, budgetRaw, poke) {
+  const picksLeft = Math.max(
+    1,
+    Number(draft?.totalPokemon ?? 0) - Number(draft?.auctionCountDone ?? 0)
+  );
+  const isFinalRound = isBlindMultiMode
+    ? picksLeft <= Math.max(1, getRoundOptionsFromDraft(draft).length)
+    : picksLeft <= 1;
+
+  return makeSmartBotBidAmount({
+    bot,
+    budgetRaw,
+    poke,
+    highestBidRaw: 0,
+    picksLeftRaw: picksLeft,
+    isFinalRound,
+    isBlind: true,
+  });
+}
+
+function scorePokemonForBotChoice(bot, poke) {
+  const flags = getSpecialFlags(Number(poke?.dexId || 0), { isMega: !!poke?.formKey });
+  const diff = String(bot?.difficulty || "normal").toLowerCase();
+
+  let score = 1;
+  if (flags.starter) score += 0.25;
+  if (flags.pseudo) score += 0.55;
+  if (flags.subLegendary) score += 0.7;
+  if (flags.legendary || flags.mythical || flags.ultraBeast) score += 1.05;
+  if (flags.mega) score += 0.85;
+
+  if (diff === "easy") score *= 0.85;
+  if (diff === "hard") score *= 1.15;
+  if (diff === "veryhard") score *= 1.3;
+  if (diff === "chaos") score *= 0.75 + Math.random() * 1.1;
+
+  // Kleine Streuung, damit nicht alle Bots immer exakt dieselbe Option nehmen.
+  return score * (0.75 + Math.random() * 0.65);
+}
+
+function chooseBotBlindOption(bot, optionsRaw) {
+  const options = Array.isArray(optionsRaw) ? optionsRaw.filter(Boolean) : [];
+  if (!options.length) return null;
+  if (options.length === 1) return options[0];
+
+  const diff = String(bot?.difficulty || "normal").toLowerCase();
+  const scored = options
+    .map((p) => ({ poke: p, score: scorePokemonForBotChoice(bot, p) }))
+    .sort((a, b) => b.score - a.score);
+
+  // Schlechte Bots/Chaos picken öfter zufällig, gute Bots picken öfter das stärkste/seltenste.
+  const randomChance =
+    diff === "easy" ? 0.45 :
+    diff === "normal" ? 0.25 :
+    diff === "chaos" ? 0.55 :
+    0.12;
+
+  if (Math.random() < randomChance) {
+    return options[Math.floor(Math.random() * options.length)];
+  }
+
+  // Sehr harte Bots nehmen fast immer die beste Option, sonst eine der Top-Optionen.
+  if (diff === "veryhard") return scored[0].poke;
+
+  const topCount = Math.min(scored.length, diff === "hard" ? 2 : 3);
+  return scored[Math.floor(Math.random() * topCount)].poke;
+}
+
+useEffect(() => {
+  if (!meIsHost) return;
+  if (phase !== "auction") return;
+  if (!isBlindMode) return;
+  if (timer?.paused) return;
+
+  const bots = Array.isArray(draft?.bots) ? draft.bots : [];
+  const options = getRoundOptionsFromDraft(draft);
+  if (!bots.length || !options.length) return;
+
+  const blindBids = draft?.blindBids || {};
+
+  // Wichtig:
+  // Nicht nur "einmal pro Runde" triggern, sondern solange nachlegen,
+  // bis jeder Bot mit Budget ein Blind-Gebot abgegeben hat.
+  // Dadurch bieten Bots auch in Runde 1 zuverlässig.
+  const missingBots = bots.filter((bot) => {
+    const budget = Number(draft?.budgets?.[bot.teamId] ?? 0);
+    if (budget < 100) return false;
+    return !blindBids?.[bot.teamId];
+  });
+
+  if (!missingBots.length) return;
+
+  let cancelled = false;
+  const timeouts = [];
+
+  missingBots.forEach((bot, index) => {
+    const budget = Number(draft?.budgets?.[bot.teamId] ?? 0);
+    const chosenOption = isBlindMultiMode ? chooseBotBlindOption(bot, options) : options[0];
+    if (!chosenOption) return;
+
+    const amount = makeSimpleBlindBotBidAmount(bot, budget, chosenOption);
+    if (amount < 100) return;
+
+    // Runde 1 und Folgerunden: Bots bieten immer früh genug.
+    // Gestaffelt, damit Firestore nicht alle Writes exakt gleichzeitig bekommt.
+    const delay = 150 + index * 130 + Math.floor(Math.random() * 350);
+
+    const submitBotBlind = () => {
+      if (cancelled) return;
+
+      const live = draftLiveRef.current || {};
+      const liveBids = live?.blindBids || {};
+      const liveBudget = Number(live?.budgets?.[bot.teamId] ?? budget);
+      if (liveBudget < 100) return;
+      if (liveBids?.[bot.teamId]) return;
+
+      placeBotBlindBid(bot.teamId, Math.min(amount, botMaxBidFromBudget(liveBudget)), getPokemonAuctionKey(chosenOption)).catch(() => {});
+    };
+
+    const t = setTimeout(submitBotBlind, delay);
+    const retry = setTimeout(submitBotBlind, delay + 900);
+
+    timeouts.push(t, retry);
+  });
+
+  return () => {
+    cancelled = true;
+    for (const t of timeouts) clearTimeout(t);
+  };
+}, [
+  meIsHost,
+  phase,
+  isBlindMode,
+  isBlindMultiMode,
+  auctionMode,
+  timer?.paused,
+  timer?.running,
+  draft?.auctionCountDone,
+  draft?.poolIndex,
+  JSON.stringify(draft?.bots || []),
+  JSON.stringify(draft?.budgets || {}),
+  JSON.stringify(draft?.blindBids || {}),
+  JSON.stringify((currentOptions || []).map((p) => getPokemonAuctionKey(p))),
+]);
+
 async function forceBotStartFromSpectator() {
   if (!meIsHost) return;
   if (phase !== "auction") return;
@@ -3033,10 +3718,25 @@ async function forceBotStartFromSpectator() {
   if (bots.length === 0) return;
 
   // irgendein Bot-Team mit Budget >=100
-  const botTeamId = bots.find((b) => Number(draft?.budgets?.[b.teamId] ?? 0) >= 100)?.teamId;
-  if (!botTeamId) return;
+  const bot = bots.find((b) => Number(draft?.budgets?.[b.teamId] ?? 0) >= 100);
+  if (!bot?.teamId) return;
 
-  await placeBotBid(botTeamId, 100);
+  const picksLeft = Math.max(
+    1,
+    Number(draft?.totalPokemon ?? 0) - Number(draft?.auctionCountDone ?? 0)
+  );
+  const amount = makeSmartBotBidAmount({
+    bot,
+    budgetRaw: Number(draft?.budgets?.[bot.teamId] ?? 0),
+    poke: draft?.current,
+    highestBidRaw: 0,
+    highestTeamId: null,
+    picksLeftRaw: picksLeft,
+    isFinalRound: picksLeft <= 1,
+    isBlind: false,
+  }) || 100;
+
+  await placeBotBid(bot.teamId, amount);
 }
 
 const lastBotReactKeyRef = useRef("");
@@ -3135,6 +3835,7 @@ useEffect(() => {
 useEffect(() => {
   if (!meIsHost) return;
   if (phase !== "auction") return;
+  if (isBlindMode) return;
   if (!draft?.current) return;
 
   const bots = Array.isArray(draft?.bots) ? draft.bots : [];
@@ -3195,7 +3896,7 @@ if (opening) {
   let cancelled = false;
   const timeouts = [];
 
-  const scheduleStartBid = (teamId, delayMs) => {
+  const scheduleStartBid = (botInfo, delayMs) => {
     const t = setTimeout(() => {
       if (cancelled) return;
 
@@ -3206,7 +3907,23 @@ if (opening) {
 
       if (!liveOpening) return;
 
-      placeBotBid(teamId, 100).catch(() => {});
+      const livePicksLeft = Math.max(
+        1,
+        Number(live?.totalPokemon ?? 0) - Number(live?.auctionCountDone ?? 0)
+      );
+      const liveBudget = Number(live?.budgets?.[botInfo.teamId] ?? botInfo.budget ?? 0);
+      const amount = makeSmartBotBidAmount({
+        bot: botInfo.bot,
+        budgetRaw: liveBudget,
+        poke: live?.current,
+        highestBidRaw: 0,
+        highestTeamId: null,
+        picksLeftRaw: livePicksLeft,
+        isFinalRound: livePicksLeft <= 1,
+        isBlind: false,
+      }) || 100;
+
+      placeBotBid(botInfo.teamId, amount).catch(() => {});
     }, Math.max(0, delayMs));
     timeouts.push(t);
   };
@@ -3218,11 +3935,11 @@ if (opening) {
       normalizeBehavior(x.b1) === "sniper" || normalizeBehavior(x.b2) === "sniper";
 
     if (isSniper) {
-      // Sniper "spät": 5s + random 0..2s
-      scheduleStartBid(x.teamId, 5000 + Math.floor(Math.random() * 2000));
+      // Sniper wartet etwas, aber nicht so lange, dass Runde 1 leer bleibt.
+      scheduleStartBid(x, 1200 + Math.floor(Math.random() * 900));
     } else {
-      // alle anderen: 700..1700ms
-      scheduleStartBid(x.teamId, 700 + Math.floor(Math.random() * 1000));
+      // alle anderen starten sicher und früh.
+      scheduleStartBid(x, 450 + Math.floor(Math.random() * 700));
     }
   }
 
@@ -3278,7 +3995,7 @@ const remainingMons = Math.max(
 const avgPrice = totalBudgetRemaining / remainingMons;
 
 
-  const bid = decideBotBid({
+  const suggestedBid = decideBotBid({
     bot: b,
     myBudget,
     highestBid: hb,
@@ -3292,6 +4009,19 @@ const avgPrice = totalBudgetRemaining / remainingMons;
     remainingSec,
     myTeamSize: (draft.teams?.[b.teamId] ?? []).length,
   });
+
+  const aggressiveBid = makeSmartBotBidAmount({
+    bot: b,
+    budgetRaw: myBudget,
+    poke: draft.current,
+    highestBidRaw: hb,
+    highestTeamId: ht,
+    picksLeftRaw: picksLeft,
+    isFinalRound: picksLeft <= 1,
+    isBlind: false,
+  });
+
+  const bid = Math.max(Number(suggestedBid || 0), Number(aggressiveBid || 0));
 
   if (bid && bid > hb) {
     candidates.push({ teamId: b.teamId, bid, budget: myBudget });
@@ -3457,6 +4187,402 @@ if (opening) {
     return () => clearInterval(iv);
   }, [meIsHost, phase, timer?.running, timer?.paused, roomRef]);
 
+  async function awardBlindRound(a, fallbackSettings) {
+    const d = a?.draft || {};
+    const s = a?.settings || fallbackSettings || settings;
+    const modeHere = getAuctionMode(s);
+    const isMulti = modeHere === AUCTION_MODES.BLIND_MULTI;
+    const useLoserCompensation = isMulti && !!s?.blindMultiLoserCompensation;
+
+    const options = getRoundOptionsFromDraft(d);
+    if (!options.length) {
+      await updateDoc(roomRef, {
+        "versus.auction.phase": "results",
+        "versus.auction.timer": { running: false, paused: false, remaining: 0 },
+        "versus.auction.updatedAt": serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      return;
+    }
+
+    const bidsObj = d.blindBids || {};
+    const budgetsNow = d.budgets || {};
+    const optionKeys = options.map((p) => getPokemonAuctionKey(p)).filter(Boolean);
+    const singleOptionKey = optionKeys[0] || "";
+
+    const revealResults = [];
+    const winners = [];
+    const overbidLosersByTeam = new Map(); // teamId -> eigenes überbotenes Gebot + Ziel-Pokémon
+
+    for (const option of options) {
+      const optionKey = getPokemonAuctionKey(option);
+
+      const bidsForOption = Object.values(bidsObj)
+        .map((b) => {
+          const teamId = String(b?.teamId || "");
+          const amount = Number(b?.amount || 0);
+          const rawOptionKey = String(b?.optionKey || "");
+          const resolvedOptionKey = isMulti ? rawOptionKey : (rawOptionKey || singleOptionKey);
+          const budget = Number(budgetsNow?.[teamId] ?? 0);
+          return {
+            teamId,
+            optionKey: resolvedOptionKey,
+            amount,
+            updatedAtMs: Number(b?.updatedAtMs || 0),
+            valid: !!teamId && amount >= 100 && amount <= budget,
+          };
+        })
+        .filter((b) => {
+          if (!b.teamId) return false;
+          if (b.optionKey !== optionKey) return false;
+          return b.amount >= 100;
+        })
+        .sort(sortBlindBidsDesc);
+
+      const validBids = bidsForOption.filter((b) => b.valid);
+      const top = validBids[0] || null;
+
+      if (top) {
+        winners.push({
+          teamId: top.teamId,
+          price: Number(top.amount || 0),
+          poke: option,
+          optionKey,
+        });
+
+        if (useLoserCompensation) {
+          for (const bid of validBids) {
+            if (bid.teamId && bid.teamId !== top.teamId) {
+              overbidLosersByTeam.set(bid.teamId, {
+                teamId: bid.teamId,
+                price: Number(bid.amount || 0),
+                bidOptionKey: optionKey,
+                bidPoke: option,
+                updatedAtMs: Number(bid.updatedAtMs || 0),
+              });
+            }
+          }
+        }
+      }
+
+      revealResults.push({
+        optionKey,
+        poke: option,
+        winnerTeamId: top?.teamId || null,
+        winningAmount: top ? Number(top.amount || 0) : 0,
+        noBid: validBids.length === 0,
+        bids: bidsForOption.map((b) => ({
+          teamId: b.teamId,
+          amount: Number(b.amount || 0),
+          valid: !!b.valid,
+          won: !!top && b.teamId === top.teamId,
+        })),
+      });
+    }
+
+    const prevBanned = Array.isArray(d.bannedDexIds) ? d.bannedDexIds : [];
+    const bannedSet = new Set(prevBanned.map((x) => Number(x)).filter(Boolean));
+
+    async function banEvolutionLineFor(poke) {
+      const evoLineHere = await getEvolutionLineByDexId(poke.dexId);
+      const evoDexIds = (evoLineHere || []).map((x) => Number(x.dexId)).filter(Boolean);
+      if (evoDexIds.length === 0) evoDexIds.push(Number(poke.dexId));
+      for (const id of evoDexIds) bannedSet.add(Number(id));
+    }
+
+    for (const w of winners) {
+      await banEvolutionLineFor(w.poke);
+    }
+
+    const pool = d.pool || [];
+    const nextSearchStartIdx = Number(d.poolIndex ?? 0) + 1;
+    const compensations = [];
+    const skippedCompensations = [];
+
+    if (useLoserCompensation && overbidLosersByTeam.size > 0) {
+      const alreadyWonTeams = new Set(winners.map((w) => w.teamId));
+      const winnerOptionKeys = new Set(winners.map((w) => w.optionKey));
+      const usedOptionKeysThisRound = new Set(winners.map((w) => w.optionKey));
+      const loserInfos = Array.from(overbidLosersByTeam.values())
+        .filter((info) => info?.teamId && !alreadyWonTeams.has(info.teamId))
+        // Höchste überbotene Gebote bekommen zuerst Ausgleich.
+        // Wenn nicht genug unterschiedliche Pokémon frei sind, gehen die niedrigsten Gebote leer aus.
+        .sort((a, b) => {
+          const amountDiff = Number(b.price || 0) - Number(a.price || 0);
+          if (amountDiff !== 0) return amountDiff;
+          return Number(a.updatedAtMs || 0) - Number(b.updatedAtMs || 0);
+        });
+
+      function pickRandomOption(list) {
+        const arr = Array.isArray(list) ? list.filter(Boolean) : [];
+        if (!arr.length) return null;
+        return arr[Math.floor(Math.random() * arr.length)] || null;
+      }
+
+      for (const loser of loserInfos) {
+        const teamId = loser.teamId;
+        const price = Number(loser.price || 0);
+        const budget = Number(budgetsNow?.[teamId] ?? 0);
+        if (price < 100 || budget < price) continue;
+
+        // Ausgleich kommt NUR aus derselben Blind-Multi-Auswahl.
+        // Keine Duplikate in derselben Runde: Was ein Gewinner oder ein anderer Ausgleich schon bekommen hat,
+        // darf kein zweites Team bekommen.
+        const availableOtherOptions = options.filter((p) => {
+          const key = getPokemonAuctionKey(p);
+          return key && key !== loser.bidOptionKey && !usedOptionKeysThisRound.has(key);
+        });
+
+        const compPoke = pickRandomOption(availableOtherOptions);
+
+        if (!compPoke) {
+          skippedCompensations.push({
+            teamId,
+            price,
+            sourceOptionKey: loser.bidOptionKey,
+            sourcePoke: loser.bidPoke || null,
+            reason: "Keine freie Alternative aus dieser Auswahl",
+          });
+          continue;
+        }
+
+        const compKey = getPokemonAuctionKey(compPoke);
+        usedOptionKeysThisRound.add(compKey);
+
+        const compensation = {
+          teamId,
+          price, // eigenes Gebot wird trotzdem bezahlt
+          poke: compPoke,
+          optionKey: `comp:${teamId}:${compKey}`,
+          sourceOptionKey: loser.bidOptionKey,
+          sourcePoke: loser.bidPoke || null,
+        };
+
+        compensations.push(compensation);
+        await banEvolutionLineFor(compPoke);
+      }
+    }
+
+    const awardedPokemon = [...winners, ...compensations];
+    // Blind-Draft zählt nach Bietrunden, nicht nach Anzahl der vergebenen Pokémon.
+    const nextAuctionCount = Number(d.auctionCountDone || 0) + 1;
+    const totalPokemon = Number(d.totalPokemon ?? s.totalPokemon ?? 12);
+    const doneByCount = nextAuctionCount >= totalPokemon;
+
+    const startIdx = nextSearchStartIdx;
+    const secondsPerBid = clampInt(s.secondsPerBid ?? 10, 5, 60);
+    const blindMultiCount = clampInt(s?.blindMultiCount ?? 3, 2, 6);
+
+    let nextCurrent = null;
+    let nextCurrentOptions = [];
+    let nextPoolIndex = startIdx;
+
+    if (!doneByCount) {
+      if (isMulti) {
+        const multi = await findNextAllowedManyFromPool(pool, startIdx, bannedSet, blindMultiCount);
+        nextCurrentOptions = multi.options || [];
+        nextCurrent = nextCurrentOptions[0] || null;
+        nextPoolIndex = multi.nextIndex ?? startIdx;
+      } else {
+        const { nextDex, nextIndex } = findNextAllowedFromPool(pool, startIdx, bannedSet);
+        nextCurrent = nextDex ? await poolItemToCurrent(nextDex) : null;
+        nextCurrentOptions = nextCurrent ? [nextCurrent] : [];
+        nextPoolIndex = nextIndex ?? startIdx;
+      }
+    }
+
+    const shouldFinish = doneByCount || !nextCurrent;
+
+    await runTransaction(db, async (tx) => {
+      const snap2 = await tx.get(roomRef);
+      if (!snap2.exists()) return;
+
+      const data2 = snap2.data();
+      const a2 = data2?.versus?.auction;
+      if (!a2 || a2.phase !== "auction") return;
+
+      const d2 = a2.draft || {};
+      const liveOptions = getRoundOptionsFromDraft(d2).map((p) => getPokemonAuctionKey(p)).join(",");
+      const oldOptions = options.map((p) => getPokemonAuctionKey(p)).join(",");
+      if (liveOptions !== oldOptions) return;
+
+      const budgets = { ...(d2.budgets || {}) };
+      const teams = { ...(d2.teams || {}) };
+
+      for (const w of awardedPokemon) {
+        const curBudget = Number(budgets?.[w.teamId] ?? 0);
+        const price = Number(w.price || 0);
+        if (curBudget < price) continue;
+
+        budgets[w.teamId] = Math.max(0, curBudget - price);
+
+        const teamArr = Array.isArray(teams[w.teamId]) ? [...teams[w.teamId]] : [];
+        teamArr.push(makeDraftTeamPokemon(w.poke, price));
+        teams[w.teamId] = teamArr;
+      }
+
+      tx.update(roomRef, {
+        "versus.auction.phase": "blindReveal",
+        "versus.auction.draft": {
+          ...d2,
+          budgets,
+          teams,
+          bannedDexIds: Array.from(bannedSet),
+          auctionCountDone: nextAuctionCount,
+          blindBids: d2.blindBids || {},
+          blindReveal: {
+            mode: modeHere,
+            isMulti,
+            results: revealResults,
+            winners: winners.map((w) => ({
+              teamId: w.teamId,
+              price: w.price,
+              optionKey: w.optionKey,
+              poke: w.poke,
+            })),
+            compensations: compensations.map((w) => ({
+              teamId: w.teamId,
+              price: w.price,
+              optionKey: w.optionKey,
+              poke: w.poke,
+              sourceOptionKey: w.sourceOptionKey || null,
+              sourcePoke: w.sourcePoke || null,
+            })),
+            skippedCompensations: skippedCompensations.map((w) => ({
+              teamId: w.teamId,
+              price: w.price,
+              sourceOptionKey: w.sourceOptionKey || null,
+              sourcePoke: w.sourcePoke || null,
+              reason: w.reason || "Keine freie Alternative aus dieser Auswahl",
+            })),
+            loserCompensationEnabled: useLoserCompensation,
+            nextCurrent,
+            nextCurrentOptions,
+            nextPoolIndex,
+            shouldFinish,
+            secondsPerBid,
+            nextAuctionCount,
+            totalPokemon,
+          },
+          hasStarted: false,
+          highestBid: 0,
+          highestTeamId: null,
+        },
+        "versus.auction.timer": { running: false, paused: false, remaining: 0 },
+        "versus.auction.updatedAt": serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    });
+  }
+
+  async function continueBlindAfterReveal() {
+    if (!meIsHost) return;
+    if (phase !== "blindReveal") return;
+
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(roomRef);
+      if (!snap.exists()) return;
+
+      const data = snap.data();
+      const a = data?.versus?.auction;
+      if (!a || a.phase !== "blindReveal") return;
+
+      const d = a.draft || {};
+      const reveal = d.blindReveal || {};
+      const shouldFinish = !!reveal.shouldFinish || !reveal.nextCurrent;
+
+      if (shouldFinish) {
+        tx.update(roomRef, {
+          "versus.auction.phase": "results",
+          "versus.auction.draft": {
+            ...d,
+            current: null,
+            currentOptions: [],
+            blindBids: {},
+            blindReveal: null,
+            hasStarted: false,
+            highestBid: 0,
+            highestTeamId: null,
+          },
+          "versus.auction.timer": { running: false, paused: false, remaining: 0 },
+          "versus.auction.updatedAt": serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        return;
+      }
+
+      const secondsPerBid = clampInt(reveal.secondsPerBid ?? a?.settings?.secondsPerBid ?? 10, 5, 60);
+      const nextOptions = Array.isArray(reveal.nextCurrentOptions)
+        ? reveal.nextCurrentOptions
+        : (reveal.nextCurrent ? [reveal.nextCurrent] : []);
+
+      // ✅ Auch nach dem Reveal direkt wieder Bot-Gebote vorbereiten.
+      // Falls der useEffect einmal zu spät kommt, sind Bots trotzdem sofort in der Runde.
+      const nextBlindBids = {};
+      if (nextOptions.length) {
+        const botsHere = Array.isArray(d?.bots) ? d.bots : [];
+        const budgetsHere = d?.budgets || {};
+        const nextDone = Number(reveal.nextAuctionCount ?? d.auctionCountDone ?? 0);
+        const totalPokemonHere = Number(reveal.totalPokemon ?? d.totalPokemon ?? a?.settings?.totalPokemon ?? 1);
+        const picksLeft = Math.max(1, totalPokemonHere - nextDone);
+        const isFinalRound = getAuctionMode(a?.settings || settings) === AUCTION_MODES.BLIND_MULTI
+          ? picksLeft <= nextOptions.length
+          : picksLeft <= 1;
+        const nowMs = Date.now();
+
+        for (let i = 0; i < botsHere.length; i++) {
+          const bot = botsHere[i];
+          const budget = Number(budgetsHere?.[bot.teamId] ?? 0);
+          if (budget < 100) continue;
+
+          const chosenOption = getAuctionMode(a?.settings || settings) === AUCTION_MODES.BLIND_MULTI
+            ? chooseBotBlindOption(bot, nextOptions)
+            : nextOptions[0];
+
+          if (!chosenOption) continue;
+
+          const amount = makeSmartBotBidAmount({
+            bot,
+            budgetRaw: budget,
+            poke: chosenOption,
+            highestBidRaw: 0,
+            picksLeftRaw: picksLeft,
+            isFinalRound,
+            isBlind: true,
+            teamCountRaw: Array.isArray(d?.teamIds) ? d.teamIds.length : null,
+          });
+
+          if (amount < 100) continue;
+
+          nextBlindBids[bot.teamId] = {
+            teamId: bot.teamId,
+            optionKey: getPokemonAuctionKey(chosenOption),
+            amount: Math.min(amount, botMaxBidFromBudget(budget)),
+            updatedAtMs: nowMs + i,
+          };
+        }
+      }
+
+      tx.update(roomRef, {
+        "versus.auction.phase": "auction",
+        "versus.auction.draft": {
+          ...d,
+          poolIndex: Number(reveal.nextPoolIndex ?? d.poolIndex ?? 0),
+          current: reveal.nextCurrent || null,
+          currentOptions: nextOptions,
+          blindBids: nextBlindBids,
+          blindReveal: null,
+          hasStarted: true,
+          highestBid: 0,
+          highestTeamId: null,
+        },
+        "versus.auction.timer": { running: true, paused: false, remaining: secondsPerBid },
+        "versus.auction.updatedAt": serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    });
+  }
+
   // When timer hits 0 -> host awards (with evo-line banning)
   useEffect(() => {
     if (!meIsHost) return;
@@ -3477,6 +4603,11 @@ if (opening) {
 
         const d = a.draft || {};
         const s = a.settings || settings;
+
+        if (isBlindAuctionMode(s)) {
+          await awardBlindRound(a, s);
+          return;
+        }
 
         if (!d.hasStarted || !d.highestTeamId || !d.highestBid || !d.current) {
           await updateDoc(roomRef, {
@@ -3554,6 +4685,8 @@ if (opening) {
                 bannedDexIds,
                 auctionCountDone: nextAuctionCount,
                 current: null,
+                currentOptions: [],
+                blindBids: {},
                 hasStarted: false,
                 highestBid: 0,
                 highestTeamId: null,
@@ -3576,6 +4709,8 @@ if (opening) {
               auctionCountDone: nextAuctionCount,
               poolIndex: nextIndex,
               current: nextCurrent,
+              currentOptions: nextCurrent ? [nextCurrent] : [],
+              blindBids: {},
               hasStarted: false,
               highestBid: 0,
               highestTeamId: null,
@@ -3592,26 +4727,73 @@ if (opening) {
   }, [meIsHost, phase, timer?.running, timer?.paused, timer?.remaining, roomRef, settings]);
 
   // ===== UI helpers =====
+  async function saveMyTeamName() {
+    if (!myTeamId || !myPlayerId) return;
+    const nextName = sanitizeTeamName(teamNameInput);
+
+    await updateDoc(roomRef, {
+      [`versus.auction.teamNames.${myTeamId}`]: nextName,
+      "versus.auction.updatedAt": serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  function renderTeamRenameBox(tid) {
+    if (!teamIsMine(tid)) return null;
+
+    return (
+      <div
+        style={{
+          marginTop: 8,
+          padding: 8,
+          borderRadius: 10,
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "rgba(0,0,0,0.18)",
+          display: "grid",
+          gap: 6,
+        }}
+      >
+        <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 900 }}>Eigenes Team umbenennen</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+          <input
+            type="text"
+            value={teamNameInput}
+            maxLength={28}
+            placeholder={labelPlayer(myPlayerId, room)}
+            onChange={(e) => setTeamNameInput(e.target.value)}
+            style={input}
+          />
+          <button type="button" style={btnGhostSmall} onClick={saveMyTeamName}>
+            Speichern
+          </button>
+        </div>
+        <div style={{ fontSize: 11, opacity: 0.65 }}>
+          Leer speichern = Spielername wird wieder angezeigt.
+        </div>
+      </div>
+    );
+  }
+
   function findBotByOwnerId(ownerId) {
   const bots = draft?.bots || [];
   return bots.find((b) => b?.id === ownerId) || null;
 }
 
 function teamTitle(tid) {
+  const customName = sanitizeTeamName(teamNames?.[tid] || "");
+  if (customName) return customName;
+
   const owner = teamOwners?.[tid] ?? null;
   if (!owner) return "Frei";
 
   const isBot = String(owner).startsWith("bot:");
 
-  // ⭐ Botnamen NUR während Draft / Results anzeigen
   if (isBot) {
-    if (phase === "auction" || phase === "results") {
-      const bot = (draft?.bots || []).find((b) => b.teamId === tid);
-      return bot?.name || `Bot`;
-    }
+    const bot = (draft?.bots || []).find((b) => b.teamId === tid || b.id === owner);
+    if (bot?.name) return bot.name;
 
-    // Lobby / Setup → nur "Bot"
-    return "Bot";
+    const botIndex = Number(String(owner).slice(4)) || Number(String(tid).replace("team", "")) || 1;
+    return makeRandomBotDraftName(`${roomId}|${tid}|bot|${botIndex}|lobby`);
   }
 
   return labelPlayer(owner, room);
@@ -3631,16 +4813,16 @@ function teamTitle(tid) {
   if (err) return <div style={{ padding: 12, color: "crimson" }}>{err}</div>;
   if (room === null) return <div style={{ padding: 12, color: "crimson" }}>Room nicht gefunden.</div>;
 
-  const showDraftBackground = phase === "auction" || phase === "results";
+  const showDraftBackground = hasDraftBackground;
 
 const draftBgStyle = {
   position: "fixed",
   inset: 0,
   zIndex: -1,
   backgroundImage:
-    "linear-gradient(rgba(0,0,0,0.78), rgba(0,0,0,0.78)), url('/backgrounds/background_draft.png')",
+    `linear-gradient(${draftBgOverlay}, ${draftBgOverlay}), url('/backgrounds/background_draft.png')`,
   backgroundSize: "cover",
-  backgroundPosition: "center 30%",
+  backgroundPosition: phase === "lobby" ? "center 24%" : "center 30%",
   backgroundRepeat: "no-repeat",
   backgroundAttachment: "fixed",
   backgroundColor: "#05070b",
@@ -3654,7 +4836,7 @@ const draftBgStyle = {
           <div style={{ fontWeight: 900 }}>Versus — Auction Draft</div>
 
           {/* ✅ Zurück zur Lobby Button (immer sichtbar in auction/results) */}
-          {(phase === "auction" || phase === "results") && (
+          {(phase === "auction" || phase === "blindReveal" || phase === "results") && (
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button type="button" style={btnGhostSmall} onClick={goLobby} title="Zur Versus-Lobby">
                 ← Zurück zur Lobby
@@ -3819,7 +5001,7 @@ const draftBgStyle = {
                     />
                   </Row>
 
-                  <Row label="Sekunden nach Gebot (Reset)">
+                  <Row label="Sekunden / Runde">
                     <input
                       type="number"
                       min={5}
@@ -3828,6 +5010,53 @@ const draftBgStyle = {
                       onChange={(e) => updateSettings({ secondsPerBid: Number(e.target.value) })}
                     />
                   </Row>
+
+                  <Row label="Auktionsart">
+                    <select
+                      value={getAuctionMode(settings)}
+                      onChange={(e) => updateSettings({ auctionMode: e.target.value })}
+                      style={selectDark}
+                    >
+                      <option value={AUCTION_MODES.CLASSIC} style={selectOption}>
+                        Normal: Live-Gebote sichtbar
+                      </option>
+                      <option value={AUCTION_MODES.BLIND_SINGLE} style={selectOption}>
+                        Blind: 1 Pokémon verdeckt
+                      </option>
+                      <option value={AUCTION_MODES.BLIND_MULTI} style={selectOption}>
+                        Blind: mehrere Pokémon gleichzeitig
+                      </option>
+                    </select>
+                  </Row>
+
+                  {getAuctionMode(settings) === AUCTION_MODES.BLIND_MULTI && (
+                    <>
+                      <Row label="Blind-Multi Auswahl">
+                        <select
+                          value={settings.blindMultiCount ?? 3}
+                          onChange={(e) => updateSettings({ blindMultiCount: Number(e.target.value) })}
+                          style={selectDark}
+                        >
+                          {[2, 3, 4, 5, 6].map((n) => (
+                            <option key={n} value={n} style={selectOption}>
+                              {n} Pokémon gleichzeitig
+                            </option>
+                          ))}
+                        </select>
+                      </Row>
+
+                      <Row label="Blind-Multi Ausgleich">
+                        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={!!settings.blindMultiLoserCompensation}
+                            onChange={(e) => updateSettings({ blindMultiLoserCompensation: e.target.checked })}
+                          />
+                          <span>Überbotene Bieter bekommen ein anderes Auswahl-Pokémon und zahlen ihr Gebot</span>
+                        </label>
+                      </Row>
+                    </>
+                  )}
 
                   <Row label="Draft-Modus">
   <select
@@ -3968,6 +5197,7 @@ const botCfg = botCfgIdx >= 0 ? (settings.botsConfig || [])[botCfgIdx] : null;
                       </div>
 
                       <div style={{ marginTop: 6, fontWeight: 800 }}>{teamTitle(tid)}</div>
+                      {renderTeamRenameBox(tid)}
 
 {isBotSlot && meIsHost && botCfg && (
   <div style={{ marginTop: 10, padding: 10, borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.18)" }}>
@@ -4206,6 +5436,7 @@ return (
 
                       </div>
                     </div>
+                    {renderTeamRenameBox(tid)}
 
                     {/* ✅ Draft: Team beitreten, wenn Team frei */}
                     {phase === "auction" && free && !myTeamId && (
@@ -4274,12 +5505,14 @@ return (
     const total = Number(draft.totalPokemon ?? 0);
     const done = Number(draft.auctionCountDone ?? 0);
     const cur = draft.current ? Math.min(total, done + 1) : Math.min(total, done);
-    return `Aktuelles Pokémon (${cur}/${total})`;
+    return isBlindMultiMode
+      ? `Aktuelle Blind-Auswahl (${cur}/${total})`
+      : `Aktuelles Pokémon (${cur}/${total})`;
   })()}
 </div>
 
 
-            {draft.current ? (
+            {displayPokemon ? (
               // ✅ NEW: Left stats + right centered pokemon
               <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16, alignItems: "start" }}>
                 {/* LEFT: Stats */}
@@ -4310,12 +5543,12 @@ return (
                   <div style={{ ...pokeHeroWrap, justifySelf: "center" }}>
                     <button
                       style={pokeHeroBtn}
-                      onClick={() => openPokemonDetails(draft.current.dexId)}
+                      onClick={() => openPokemonDetails(displayPokemon.dexId)}
                       title="Pokémon-Details öffnen"
                     >
                       <img
-                        src={draft.current.imageUrl}
-                        alt={draft.current.name}
+                        src={displayPokemon.imageUrl}
+                        alt={displayPokemon.name}
                         style={pokeHeroImg}
                       />
                     </button>
@@ -4330,7 +5563,7 @@ return (
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-end" }}>
                         <div>
                           <div style={{ fontSize: 12, opacity: 0.85, marginTop: 6 }}>
-                            Höchstgebot
+                            {isBlindMode ? "Dein verdecktes Gebot" : "Höchstgebot"}
                           </div>
 
                           <div
@@ -4342,27 +5575,31 @@ return (
                               transition: "transform 160ms ease",
                             }}
                           >
-                            {draft.highestBid || 0}€
+                            {isBlindMode ? (myBlindBid?.amount || 0) : (draft.highestBid || 0)}€
                           </div>
 
                           <div style={{ fontSize: 12, opacity: 0.9, marginTop: 2 }}>
-                            von <b>{draft.highestTeamId ? teamTitle(draft.highestTeamId) : "—"}</b>
+                            {isBlindMode ? (
+                              <>Gebote abgegeben: <b>{blindBidCount}</b></>
+                            ) : (
+                              <>von <b>{draft.highestTeamId ? teamTitle(draft.highestTeamId) : "—"}</b></>
+                            )}
                           </div>
                         </div>
 
                         <div style={pokeHeroRightBadge}>
                           <div style={{ fontSize: 11, opacity: 0.8, fontWeight: 600 }}>Dex</div>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>#{draft.current.dexId}</div>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>#{displayPokemon.dexId}</div>
                         </div>
                       </div>
                     </div>
                   </div>
 
                   <div style={{ textAlign: "center", justifySelf: "center" }}>
-                    <div style={{ fontSize: 20, fontWeight: 900 }}>{draft.current.name}</div>
+                    <div style={{ fontSize: 20, fontWeight: 900 }}>{displayPokemon.name}</div>
 
                     {(() => {
-                      const tag = getSpecialTag(draft.current.dexId, { isMega: !!draft.current?.formKey });
+                      const tag = getSpecialTag(displayPokemon.dexId, { isMega: !!displayPokemon?.formKey });
                       if (!tag) return null;
 
                       return (
@@ -4572,15 +5809,100 @@ return (
 </div>
 
             <div style={{ opacity: 0.8, marginBottom: 12 }}>
-              {timer.running ? (timer.paused ? "Pausiert" : "Läuft") : "Startet bei erstem Gebot (≥ 100)"}
+              {timer.running
+                ? (timer.paused ? "Pausiert" : "Läuft")
+                : (isBlindMode ? "Wartet auf nächste Blind-Runde" : "Startet bei erstem Gebot (≥ 100)")}
             </div>
 
             <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 10, marginTop: 10 }}>
               <div style={{ fontWeight: 900, marginBottom: 8 }}>Bieten</div>
 
+              {isBlindMultiMode && (
+                <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, opacity: 0.82 }}>
+                    Wähle genau ein Pokémon aus und gib dein verdecktes Gebot ab. Pokémon ohne Gebot verschwinden nach der Runde.
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+                    {(currentOptions || []).map((p) => {
+                      const key = getPokemonAuctionKey(p);
+                      const selected = blindOptionKey === key;
+                      const hasMyBid = isBlindMultiMode && myBlindBid?.optionKey === key;
+
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setBlindOptionKey(key)}
+                          style={{
+                            padding: 10,
+                            borderRadius: 14,
+                            border: hasMyBid
+                              ? "2px solid rgba(250,204,21,0.95)"
+                              : selected
+                                ? "2px solid rgba(34,197,94,0.9)"
+                                : "1px solid rgba(255,255,255,0.14)",
+                            background: hasMyBid
+                              ? "rgba(250,204,21,0.16)"
+                              : selected
+                                ? "rgba(34,197,94,0.16)"
+                                : "rgba(0,0,0,0.18)",
+                            color: "inherit",
+                            cursor: "pointer",
+                            display: "grid",
+                            justifyItems: "center",
+                            gap: 4,
+                            position: "relative",
+                            boxShadow: hasMyBid
+                              ? "0 0 0 1px rgba(250,204,21,0.35), 0 0 18px rgba(250,204,21,0.18)"
+                              : "none",
+                          }}
+                          title={hasMyBid ? `Dein Gebot: ${myBlindBid?.amount || 0}€` : "Auf dieses Pokémon bieten"}
+                        >
+                          <img
+                            src={p.imageUrl || dexIdToImageUrl(p.dexId)}
+                            alt={p.name}
+                            width={64}
+                            height={64}
+                            style={{ imageRendering: "pixelated" }}
+                          />
+                          <div style={{ fontWeight: 900, fontSize: 12, textAlign: "center" }}>{p.name}</div>
+                          <div style={{ opacity: 0.75, fontSize: 11 }}>#{p.dexId}</div>
+                          {hasMyBid && (
+                            <div
+                              style={{
+                                marginTop: 4,
+                                padding: "4px 8px",
+                                borderRadius: 999,
+                                background: "rgba(250,204,21,0.95)",
+                                color: "#111827",
+                                fontSize: 11,
+                                fontWeight: 950,
+                                boxShadow: "0 6px 14px rgba(0,0,0,0.28)",
+                              }}
+                            >
+                              Dein Gebot: {myBlindBid?.amount || 0}€
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {isBlindMode && myBlindBid && (
+                <div style={{ marginBottom: 10, fontSize: 12, opacity: 0.86 }}>
+                  Dein aktuelles Blind-Gebot: <b>{myBlindBid.amount}€</b>
+                  {isBlindMultiMode ? (
+                    <> auf <b>{(currentOptions || []).find((p) => getPokemonAuctionKey(p) === myBlindBid.optionKey)?.name || "—"}</b></>
+                  ) : null}
+                </div>
+              )}
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
                 {/* ✅ Spectator-Host: Startbutton, wenn kein Team */}
-{meIsHost && !myTeamId && !draft.hasStarted && Number(draft.highestBid ?? 0) === 0 && !draft.highestTeamId ? (
+{!isBlindMode && meIsHost && !myTeamId && !draft.hasStarted && Number(draft.highestBid ?? 0) === 0 && !draft.highestTeamId ? (
   <div style={{ marginBottom: 10 }}>
     <button
       onClick={forceBotStartFromSpectator}
@@ -4605,33 +5927,39 @@ return (
                   disabled={!myTeamId}
                 />
                 <button
-                  onClick={() => placeBid(bidInput)}
+                  onClick={() => submitBid()}
                   style={{ ...btnPrimary, opacity: myTeamId ? 1 : 0.5 }}
                   disabled={!myTeamId}
-                  title={myTeamId ? "Muss höher sein als das aktuelle Höchstgebot" : "Du musst erst ein Team wählen (Lobby)"}
+                  title={
+                    myTeamId
+                      ? (isBlindMode ? "Verdecktes Gebot abgeben oder ändern" : "Muss höher sein als das aktuelle Höchstgebot")
+                      : "Du musst erst ein Team wählen (Lobby)"
+                  }
                 >
-                  Bieten
+                  {isBlindMode ? "Verdeckt bieten" : "Bieten"}
                 </button>
               </div>
 
-              {/* ✅ Neue Quick-Buttons */}
+              {/* ✅ Quick-Buttons */}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
                 <button style={btnGhost} onClick={() => setBidInput(100)} disabled={!myTeamId}>
                   100
                 </button>
 
-                <button
-                  style={btnGhost}
-                  onClick={() => {
-                    const next = round100((draft.highestBid || 0) + 100);
-                    setBidInput(next);
-                    placeBid(next);
-                  }}
-                  disabled={!myTeamId || !draft.current}
-                  title="Bietet automatisch 100 über dem aktuellen Höchstgebot"
-                >
-                  Aktuelles Gebot +100
-                </button>
+                {!isBlindMode && (
+                  <button
+                    style={btnGhost}
+                    onClick={() => {
+                      const next = round100((draft.highestBid || 0) + 100);
+                      setBidInput(next);
+                      placeBid(next);
+                    }}
+                    disabled={!myTeamId || !draft.current}
+                    title="Bietet automatisch 100 über dem aktuellen Höchstgebot"
+                  >
+                    Aktuelles Gebot +100
+                  </button>
+                )}
 
                 <button style={btnGhost} onClick={() => setBidInput((v) => Math.max(100, (v || 0) - 100))} disabled={!myTeamId}>
                   -100
@@ -4707,6 +6035,223 @@ return (
           </section>
         </div>
       )}
+
+      {phase === "blindReveal" && (() => {
+        const reveal = draft?.blindReveal || {};
+        const results = Array.isArray(reveal?.results) ? reveal.results : [];
+        const compensations = Array.isArray(reveal?.compensations) ? reveal.compensations : [];
+        const skippedCompensations = Array.isArray(reveal?.skippedCompensations) ? reveal.skippedCompensations : [];
+        const shouldFinish = !!reveal?.shouldFinish || !reveal?.nextCurrent;
+
+        return (
+          <section style={panel}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 }}>
+              <div>
+                <div style={{ fontWeight: 950, fontSize: 22 }}>Blind-Reveal</div>
+                <div style={{ opacity: 0.8, fontSize: 13 }}>
+                  Gebote sind aufgedeckt. {meIsHost ? "Host kann danach fortfahren." : "Warte auf den Host."}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <div style={{ fontWeight: 900, opacity: 0.9 }}>
+                  Bietrunden: {Number(draft?.auctionCountDone || 0)} / {Number(draft?.totalPokemon || settings?.totalPokemon || 0)}
+                </div>
+
+                {meIsHost ? (
+                  <button type="button" style={btnPrimary} onClick={continueBlindAfterReveal}>
+                    {shouldFinish ? "Zu den Ergebnissen" : "Nächstes Pokémon"}
+                  </button>
+                ) : (
+                  <div style={{ opacity: 0.75, fontWeight: 800 }}>Host entscheidet weiter…</div>
+                )}
+              </div>
+            </div>
+
+            {results.length === 0 ? (
+              <div style={{ opacity: 0.8 }}>Keine Reveal-Daten vorhanden.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 12 }}>
+                {results.map((r, idx) => {
+                  const poke = r?.poke || {};
+                  const bids = Array.isArray(r?.bids) ? r.bids : [];
+                  const winnerName = r?.winnerTeamId ? teamTitle(r.winnerTeamId) : null;
+
+                  return (
+                    <div
+                      key={`blind-reveal-${r?.optionKey || idx}`}
+                      style={{
+                        padding: 12,
+                        borderRadius: 16,
+                        border: "1px solid rgba(255,255,255,0.14)",
+                        background: "rgba(0,0,0,0.28)",
+                        display: "grid",
+                        gridTemplateColumns: "120px 1fr",
+                        gap: 14,
+                        alignItems: "start",
+                      }}
+                    >
+                      <button style={imgBtn} onClick={() => openPokemonDetails(poke.dexId)} title="Pokémon-Details öffnen">
+                        <img
+                          src={poke.imageUrl || dexIdToImageUrl(poke.dexId)}
+                          alt={poke.name || getPokemonName(poke.dexId)}
+                          width={86}
+                          height={86}
+                          style={{ imageRendering: "pixelated" }}
+                        />
+                      </button>
+
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                          <div>
+                            <div style={{ fontWeight: 950, fontSize: 18 }}>{poke.name || getPokemonName(poke.dexId)}</div>
+                            <div style={{ opacity: 0.75, fontSize: 12 }}>#{poke.dexId}</div>
+                          </div>
+
+                          {winnerName ? (
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ opacity: 0.75, fontSize: 12 }}>Gewinner</div>
+                              <div style={{ fontWeight: 950 }}>{winnerName}</div>
+                              <div style={{ fontWeight: 950 }}>{Number(r?.winningAmount || 0).toLocaleString("de-DE")}€</div>
+                            </div>
+                          ) : (
+                            <div style={{ textAlign: "right", opacity: 0.8, fontWeight: 900 }}>
+                              Keine Gebote - Pokémon verschwindet
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ marginTop: 12, display: "grid", gap: 6 }}>
+                          {bids.length === 0 ? (
+                            <div style={{ opacity: 0.75, fontSize: 13 }}>Niemand hat darauf geboten.</div>
+                          ) : (
+                            bids.map((b, bidIdx) => (
+                              <div
+                                key={`blind-bid-${r?.optionKey || idx}-${b.teamId}-${bidIdx}`}
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "1fr auto auto",
+                                  gap: 10,
+                                  alignItems: "center",
+                                  padding: "8px 10px",
+                                  borderRadius: 12,
+                                  background: b.won ? "rgba(34,197,94,0.16)" : "rgba(255,255,255,0.06)",
+                                  border: b.won ? "1px solid rgba(34,197,94,0.4)" : "1px solid rgba(255,255,255,0.08)",
+                                }}
+                              >
+                                <div style={{ fontWeight: 900 }}>{teamTitle(b.teamId)}</div>
+                                <div style={{ fontWeight: 950 }}>{Number(b.amount || 0).toLocaleString("de-DE")}€</div>
+                                <div style={{ opacity: b.valid ? 0.85 : 0.55, fontSize: 12 }}>
+                                  {b.won ? "gewonnen" : b.valid ? "gültig" : "ungültig"}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {compensations.length > 0 && (
+                  <div
+                    style={{
+                      padding: 12,
+                      borderRadius: 16,
+                      border: "1px solid rgba(250,204,21,0.35)",
+                      background: "rgba(250,204,21,0.10)",
+                      display: "grid",
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ fontWeight: 950, fontSize: 17 }}>Ausgleich für überbotene Teams</div>
+                    <div style={{ opacity: 0.82, fontSize: 13 }}>
+                      Diese Teams haben gültig geboten, wurden aber überboten. Sie bekommen ein noch freies anderes Pokémon aus derselben Auswahl und zahlen trotzdem ihr eigenes Gebot.
+                    </div>
+
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {compensations.map((c, idx) => {
+                        const poke = c?.poke || {};
+                        return (
+                          <div
+                            key={`blind-comp-${c?.teamId || idx}-${poke?.dexId || idx}`}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr auto",
+                              gap: 10,
+                              alignItems: "center",
+                              padding: "8px 10px",
+                              borderRadius: 12,
+                              background: "rgba(255,255,255,0.06)",
+                              border: "1px solid rgba(255,255,255,0.10)",
+                            }}
+                          >
+                            <div style={{ fontWeight: 900 }}>{teamTitle(c.teamId)}</div>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <img
+                                src={poke.imageUrl || dexIdToImageUrl(poke.dexId)}
+                                alt={poke.name || getPokemonName(poke.dexId)}
+                                width={36}
+                                height={36}
+                                style={{ imageRendering: "pixelated" }}
+                              />
+                              <div style={{ fontWeight: 950 }}>{poke.name || getPokemonName(poke.dexId)}</div>
+                              <div style={{ opacity: 0.75, fontSize: 12 }}>
+                                {Number(c?.price || 0).toLocaleString("de-DE")}€
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {skippedCompensations.length > 0 && (
+                  <div
+                    style={{
+                      padding: 12,
+                      borderRadius: 16,
+                      border: "1px solid rgba(239,68,68,0.28)",
+                      background: "rgba(239,68,68,0.08)",
+                      display: "grid",
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ fontWeight: 950, fontSize: 17 }}>Kein Ausgleich mehr frei</div>
+                    <div style={{ opacity: 0.82, fontSize: 13 }}>
+                      Es gab mehr überbotene Teams als freie andere Pokémon. Die niedrigsten überbotenen Gebote gehen leer aus.
+                    </div>
+
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {skippedCompensations.map((c, idx) => (
+                        <div
+                          key={`blind-comp-skip-${c?.teamId || idx}-${idx}`}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr auto",
+                            gap: 10,
+                            alignItems: "center",
+                            padding: "8px 10px",
+                            borderRadius: 12,
+                            background: "rgba(255,255,255,0.05)",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                          }}
+                        >
+                          <div style={{ fontWeight: 900 }}>{teamTitle(c.teamId)}</div>
+                          <div style={{ opacity: 0.78, fontSize: 12 }}>
+                            leer ausgegangen · Gebot: {Number(c?.price || 0).toLocaleString("de-DE")}€
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        );
+      })()}
 
       {phase === "results" && (
         <section style={panel}>
