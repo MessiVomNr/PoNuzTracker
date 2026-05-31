@@ -1257,6 +1257,32 @@ async function makeAdmin(targetPlayerId, targetName) {
     nav(`/versus/`);
   }
 
+    async function copyRoomCode() {
+    const code = String(roomId || "").trim().toUpperCase();
+    if (!code) return;
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(code);
+      } else {
+        const el = document.createElement("textarea");
+        el.value = code;
+        el.setAttribute("readonly", "");
+        el.style.position = "fixed";
+        el.style.opacity = "0";
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand("copy");
+        document.body.removeChild(el);
+      }
+
+      setCopiedRoom(true);
+      setTimeout(() => setCopiedRoom(false), 1400);
+    } catch {
+      alert("Room-Code konnte nicht kopiert werden.");
+    }
+  }
+
   function openPokemonDetails(dexId) {
   nav(`/pokemon/${dexId}`);
 }
@@ -1322,17 +1348,19 @@ useEffect(() => {
   const draftBgOverlay = phase === "lobby" ? "rgba(0,0,0,0.88)" : "rgba(0,0,0,0.78)";
   
   const outerStyle = {
-  ...outer,
-  backgroundImage: hasDraftBackground
-    ? `linear-gradient(${draftBgOverlay}, ${draftBgOverlay}), url('/backgrounds/background_draft.png')`
-    : "none",
-  backgroundSize: hasDraftBackground ? "cover" : "auto",
-  backgroundPosition: phase === "lobby" ? "center 24%" : "center 30%",
-  backgroundRepeat: "no-repeat",
-  backgroundColor: hasDraftBackground ? "#05070b" : "transparent",
-  backgroundAttachment: hasDraftBackground ? "fixed" : "scroll",
-  position: "relative",
-};
+    ...outer,
+    display: phase === "lobby" ? "block" : "grid",
+    alignContent: "start",
+    backgroundImage: hasDraftBackground
+      ? `linear-gradient(${draftBgOverlay}, ${draftBgOverlay}), url('/backgrounds/background_draft.png')`
+      : "none",
+    backgroundSize: hasDraftBackground ? "cover" : "auto",
+    backgroundPosition: phase === "lobby" ? "center 22%" : "center 30%",
+    backgroundRepeat: "no-repeat",
+    backgroundColor: hasDraftBackground ? "#05070b" : "transparent",
+    backgroundAttachment: hasDraftBackground ? "fixed" : "scroll",
+    position: "relative",
+  };
 
   const draft = auction?.draft || {
     auctionCountDone: 0,
@@ -1559,6 +1587,9 @@ const teamIds = useMemo(() => {
 
   const myBlindBid = myTeamId ? draft?.blindBids?.[myTeamId] || null : null;
   const [teamNameInput, setTeamNameInput] = useState("");
+  const [settingsModal, setSettingsModal] = useState(null); // "basic" | "auction" | "pool"
+  const [teamModal, setTeamModal] = useState(null); // { tid, slotIdx }
+  const [copiedRoom, setCopiedRoom] = useState(false);
 
   useEffect(() => {
     if (!myTeamId) {
@@ -4807,6 +4838,634 @@ function teamTitle(tid) {
     return teamOwners?.[tid] === myPlayerId;
   }
 
+  const lobbyPagePanel = {
+    ...panel,
+    width: "min(1240px, calc(100vw - 36px))",
+    margin: "22px auto 0",
+    padding: 18,
+    background:
+      "linear-gradient(180deg, rgba(9,13,21,0.86), rgba(5,8,13,0.78))",
+    border: "1px solid rgba(255,255,255,0.09)",
+    boxShadow: "0 20px 70px rgba(0,0,0,0.38)",
+    backdropFilter: "blur(13px)",
+  };
+
+  const lobbyLayout = {
+    display: "grid",
+    gridTemplateColumns: "310px minmax(0, 1fr)",
+    gap: 30,
+    alignItems: "start",
+  };
+
+  const lobbyTitle = {
+    fontSize: 21,
+    fontWeight: 950,
+    marginBottom: 3,
+    letterSpacing: 0.1,
+  };
+
+  const lobbyHint = {
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "rgba(255,255,255,0.58)",
+  };
+
+  const lobbySummaryCard = {
+    width: "100%",
+    boxSizing: "border-box",
+    textAlign: "left",
+    padding: "14px 15px",
+    borderRadius: 16,
+    border: "1px solid rgba(255,255,255,0.09)",
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025))",
+    color: "white",
+    cursor: "pointer",
+    display: "grid",
+    gap: 7,
+    boxShadow: "0 10px 24px rgba(0,0,0,0.18)",
+  };
+
+  const lobbyTeamList = {
+    display: "grid",
+    gap: 8,
+    minWidth: 0,
+  };
+
+  const lobbyTeamRow = {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "11px 13px",
+    borderRadius: 15,
+    border: "1px solid rgba(255,255,255,0.09)",
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.026))",
+    color: "white",
+    cursor: "pointer",
+    display: "grid",
+    gridTemplateColumns: "72px minmax(0, 1.15fr) minmax(92px, 150px) 70px",
+    gap: 10,
+    alignItems: "center",
+    textAlign: "left",
+    minWidth: 0,
+    boxShadow: "0 8px 20px rgba(0,0,0,0.16)",
+  };
+
+  const modalBackdrop = {
+    position: "fixed",
+    inset: 0,
+    zIndex: 9999,
+    background: "rgba(0,0,0,0.72)",
+    display: "grid",
+    placeItems: "center",
+    padding: 18,
+  };
+
+  const modalBox = {
+    width: "min(720px, 96vw)",
+    maxHeight: "86vh",
+    overflow: "auto",
+    padding: 18,
+    borderRadius: 22,
+    border: "1px solid rgba(255,255,255,0.13)",
+    background:
+      "linear-gradient(180deg, rgba(13,18,29,0.98), rgba(7,10,17,0.98))",
+    color: "white",
+    boxShadow: "0 26px 90px rgba(0,0,0,0.60)",
+  };
+
+  const modalSection = {
+    display: "grid",
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(255,255,255,0.04)",
+  };
+
+  function lobbyStatusPill(info) {
+    let bg = "rgba(255,255,255,0.08)";
+    let color = "rgba(255,255,255,0.78)";
+    let text = "frei";
+
+    if (info.ownerOffline) {
+      bg = "rgba(239,68,68,0.18)";
+      color = "#fecaca";
+      text = "offline";
+    } else if (info.ownerIsBot) {
+      bg = "rgba(59,130,246,0.18)";
+      color = "#bfdbfe";
+      text = "bot";
+    } else if (!info.free) {
+      bg = "rgba(34,197,94,0.16)";
+      color = "#bbf7d0";
+      text = "belegt";
+    }
+
+    return (
+      <span
+        style={{
+          justifySelf: "end",
+          padding: "5px 9px",
+          borderRadius: 999,
+          background: bg,
+          color,
+          fontSize: 11,
+          fontWeight: 950,
+          border: "1px solid rgba(255,255,255,0.10)",
+          textTransform: "uppercase",
+        }}
+      >
+        {text}
+      </span>
+    );
+  }
+
+  function getLobbyTeamInfo(tid, slotIdx) {
+    const free = teamIsFree(tid);
+    const mine = teamIsMine(tid);
+    const owner = teamOwners?.[tid] ?? null;
+    const ownerIsBot = owner && String(owner).startsWith("bot:");
+    const ownerOffline = !free && !ownerIsBot && isPlayerOffline(owner);
+
+    const playersCount = clampInt(settings.participants ?? 0, 0, 20);
+    const botCount = clampInt(settings.botCount ?? 0, 0, 9);
+    const isBotSlot = slotIdx >= playersCount && slotIdx < playersCount + botCount;
+    const botCfgIdx = isBotSlot ? slotIdx - playersCount : -1;
+    const botCfg = botCfgIdx >= 0 ? (settings.botsConfig || [])[botCfgIdx] : null;
+
+    return {
+      tid,
+      slotIdx,
+      free,
+      mine,
+      owner,
+      ownerIsBot,
+      ownerOffline,
+      isBotSlot,
+      botCfgIdx,
+      botCfg,
+      teamName: free ? `Team ${slotIdx + 1}` : teamTitle(tid),
+      playerName: free ? "Kein Spieler" : ownerIsBot ? "Bot-Team" : labelPlayer(owner, room),
+    };
+  }
+
+  function updateLobbyBotConfig(botCfgIdx, patch) {
+    if (!meIsHost) return;
+    if (botCfgIdx < 0) return;
+
+    const next = [...(settings.botsConfig || [])];
+    next[botCfgIdx] = {
+      ...(next[botCfgIdx] || {}),
+      ...(patch || {}),
+    };
+
+    updateSettings({ botsConfig: next });
+  }
+
+  function getAuctionSummary() {
+    const mode = getAuctionMode(settings);
+    if (mode === AUCTION_MODES.BLIND_MULTI) {
+      return `Blind-Multi · ${settings.blindMultiCount ?? 3} Auswahl`;
+    }
+    if (mode === AUCTION_MODES.BLIND_SINGLE) {
+      return "Blind-Einzel";
+    }
+    return "Live-Auction";
+  }
+
+  function getPoolSummary() {
+    const blocked = [];
+    if (!settings.allowLegendary) blocked.push("Legis");
+    if (!settings.allowSubLegendary) blocked.push("Sub-Legis");
+    if (!settings.allowMythical) blocked.push("Mythische");
+    if (!settings.allowPseudo) blocked.push("Pseudo");
+
+    return blocked.length ? `Blockiert: ${blocked.join(", ")}` : "Alle Kategorien erlaubt";
+  }
+
+  function renderSettingsModal() {
+    if (phase !== "lobby") return null;
+    if (!settingsModal || !meIsHost) return null;
+
+    const title =
+      settingsModal === "basic"
+        ? "Grundsetup"
+        : settingsModal === "auction"
+          ? "Auktionsregeln"
+          : "Pool-Filter";
+
+    return (
+      <div style={modalBackdrop} onClick={() => setSettingsModal(null)}>
+        <div style={modalBox} onClick={(e) => e.stopPropagation()}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 950 }}>{title}</div>
+              <div style={lobbyHint}>Änderungen werden direkt für den Raum gespeichert.</div>
+            </div>
+
+            <button type="button" style={btnGhostSmall} onClick={() => setSettingsModal(null)}>
+              Schließen
+            </button>
+          </div>
+
+          {settingsModal === "basic" && (
+            <div style={modalSection}>
+              <Row label="Generation">
+                <select
+                  value={settings.generation}
+                  onChange={(e) => updateSettings({ generation: Number(e.target.value) })}
+                  style={selectDark}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((g) => (
+                    <option key={g} value={g} style={selectOption}>
+                      Gen {g} (bis #{getDexCapForGen(g)})
+                    </option>
+                  ))}
+                </select>
+              </Row>
+
+              <Row label="Teilnehmer">
+                <select
+                  value={settings.participants ?? 0}
+                  onChange={(e) =>
+                    updateSettings({
+                      participants: Math.max(0, Math.min(9, Number(e.target.value))),
+                    })
+                  }
+                  style={selectDark}
+                >
+                  {Array.from({ length: 10 }, (_, i) => (
+                    <option key={i} value={i} style={selectOption}>
+                      {i}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+
+              <Row label="Bots">
+                <select
+                  value={settings.botCount ?? 0}
+                  onChange={(e) =>
+                    updateSettings({
+                      botCount: Math.max(0, Math.min(9, Number(e.target.value))),
+                    })
+                  }
+                  style={selectDark}
+                >
+                  {Array.from({ length: 10 }, (_, i) => (
+                    <option key={i} value={i} style={selectOption}>
+                      {i}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+
+              <Row label="Budget pro Team">
+                <input
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={settings.budgetPerTeam}
+                  onChange={(e) => updateSettings({ budgetPerTeam: Number(e.target.value) })}
+                  style={input}
+                />
+              </Row>
+
+              <Row label="Pokémon insgesamt">
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={settings.totalPokemon}
+                  onChange={(e) => updateSettings({ totalPokemon: Number(e.target.value) })}
+                  style={input}
+                />
+              </Row>
+
+              <Row label="Sekunden / Runde">
+                <input
+                  type="number"
+                  min={5}
+                  max={60}
+                  value={settings.secondsPerBid}
+                  onChange={(e) => updateSettings({ secondsPerBid: Number(e.target.value) })}
+                  style={input}
+                />
+              </Row>
+            </div>
+          )}
+
+          {settingsModal === "auction" && (
+            <div style={modalSection}>
+              <Row label="Auktionsart">
+                <select
+                  value={getAuctionMode(settings)}
+                  onChange={(e) => updateSettings({ auctionMode: e.target.value })}
+                  style={selectDark}
+                >
+                  <option value={AUCTION_MODES.CLASSIC} style={selectOption}>
+                    Normal: Live-Gebote sichtbar
+                  </option>
+                  <option value={AUCTION_MODES.BLIND_SINGLE} style={selectOption}>
+                    Blind: 1 Pokémon verdeckt
+                  </option>
+                  <option value={AUCTION_MODES.BLIND_MULTI} style={selectOption}>
+                    Blind: mehrere Pokémon gleichzeitig
+                  </option>
+                </select>
+              </Row>
+
+              {getAuctionMode(settings) === AUCTION_MODES.BLIND_MULTI && (
+                <>
+                  <Row label="Blind-Multi Auswahl">
+                    <select
+                      value={settings.blindMultiCount ?? 3}
+                      onChange={(e) => updateSettings({ blindMultiCount: Number(e.target.value) })}
+                      style={selectDark}
+                    >
+                      {[2, 3, 4, 5, 6].map((n) => (
+                        <option key={n} value={n} style={selectOption}>
+                          {n} Pokémon gleichzeitig
+                        </option>
+                      ))}
+                    </select>
+                  </Row>
+
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 10, lineHeight: 1.35 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!settings.blindMultiLoserCompensation}
+                      onChange={(e) => updateSettings({ blindMultiLoserCompensation: e.target.checked })}
+                      style={{ marginTop: 3 }}
+                    />
+                    <span>Überbotene Bieter bekommen ein anderes Auswahl-Pokémon und zahlen ihr Gebot.</span>
+                  </label>
+                </>
+              )}
+
+              <Row label="Draft-Modus">
+                <select
+                  value={settings.baseFormsOnly ? "baseOnly" : "allKeep"}
+                  onChange={(e) => {
+                    const v = e.target.value;
+
+                    if (v === "baseOnly") {
+                      updateSettings({
+                        baseFormsOnly: true,
+                        keepEvolvedForms: false,
+                      });
+                      return;
+                    }
+
+                    updateSettings({
+                      baseFormsOnly: false,
+                      keepEvolvedForms: true,
+                    });
+                  }}
+                  style={selectDark}
+                >
+                  <option value="baseOnly" style={selectOption}>Basisform only</option>
+                  <option value="allKeep" style={selectOption}>Alle erlauben</option>
+                </select>
+              </Row>
+            </div>
+          )}
+
+          {settingsModal === "pool" && (
+            <div style={modalSection}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={!settings.allowLegendary}
+                  onChange={(e) => updateSettings({ allowLegendary: !e.target.checked })}
+                />
+                <span>Legendäre deaktivieren</span>
+              </label>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={!settings.allowSubLegendary}
+                  onChange={(e) => updateSettings({ allowSubLegendary: !e.target.checked })}
+                />
+                <span>Sub-Legendäre deaktivieren</span>
+              </label>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={!settings.allowMythical}
+                  onChange={(e) => updateSettings({ allowMythical: !e.target.checked })}
+                />
+                <span>Mythische deaktivieren</span>
+              </label>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={!settings.allowPseudo}
+                  onChange={(e) => updateSettings({ allowPseudo: !e.target.checked })}
+                />
+                <span>Pseudo-Legendäre deaktivieren</span>
+              </label>
+
+              <div style={lobbyHint}>
+                Häkchen bedeutet: Diese Kategorie wird aus dem Draft-Pool entfernt.
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function renderTeamModal() {
+    if (phase !== "lobby") return null;
+    if (!teamModal?.tid) return null;
+
+    const slotIdx = teamIds.findIndex((x) => x === teamModal.tid);
+    if (slotIdx < 0) return null;
+
+    const info = getLobbyTeamInfo(teamModal.tid, slotIdx);
+    const botCfgSafe = info.botCfg || {
+      difficulty: "veryhard",
+      behavior1: "zufall",
+      behavior2: "zufall",
+    };
+
+    const canJoin =
+      info.free &&
+      !myTeamId &&
+      !!myPlayerId &&
+      clampInt(settings.participants ?? 0, 0, 20) > 0;
+
+    const ownerName = info.owner ? labelPlayer(info.owner, room) : "—";
+
+    return (
+      <div style={modalBackdrop} onClick={() => setTeamModal(null)}>
+        <div style={modalBox} onClick={(e) => e.stopPropagation()}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 12, opacity: 0.55, fontWeight: 950 }}>TEAM {slotIdx + 1}</div>
+              <div style={{ fontSize: 24, fontWeight: 950 }}>{info.teamName}</div>
+              <div style={{ opacity: 0.72, marginTop: 4 }}>{info.playerName}</div>
+            </div>
+
+            <button type="button" style={btnGhostSmall} onClick={() => setTeamModal(null)}>
+              Schließen
+            </button>
+          </div>
+
+          {info.free && (
+            <div style={modalSection}>
+              <div style={{ fontWeight: 950 }}>Freies Team</div>
+              <div style={lobbyHint}>
+                Dieses Team ist noch frei.
+              </div>
+
+              <button
+                type="button"
+                style={{ ...btnPrimary, opacity: canJoin ? 1 : 0.5 }}
+                disabled={!canJoin}
+                onClick={() => {
+                  claimTeam(info.tid);
+                  setTeamModal(null);
+                }}
+              >
+                Team beitreten
+              </button>
+
+              {myTeamId && (
+                <div style={lobbyHint}>
+                  Du bist bereits in einem Team.
+                </div>
+              )}
+            </div>
+          )}
+
+          {!info.free && info.mine && (
+            <div style={modalSection}>
+              <div style={{ fontWeight: 950 }}>Dein Team</div>
+              {renderTeamRenameBox(info.tid)}
+
+              <button
+                type="button"
+                style={btnGhost}
+                onClick={() => {
+                  leaveMyTeam();
+                  setTeamModal(null);
+                }}
+              >
+                Team verlassen
+              </button>
+            </div>
+          )}
+
+          {!info.free && info.ownerIsBot && (
+            <div style={modalSection}>
+              <div style={{ fontWeight: 950 }}>Bot-Einstellungen</div>
+
+              {!meIsHost ? (
+                <div style={lobbyHint}>Nur der Host kann Bot-Verhalten ändern.</div>
+              ) : (
+                <>
+                  <Row label="Schwierigkeit">
+                    <select
+                      value={botCfgSafe.difficulty || "normal"}
+                      onChange={(e) => {
+                        const d = e.target.value;
+                        updateLobbyBotConfig(info.botCfgIdx, {
+                          difficulty: d,
+                          behavior2: d === "veryhard" ? (botCfgSafe.behavior2 || "zufall") : "none",
+                        });
+                      }}
+                      style={selectDark}
+                    >
+                      <option value="easy" style={selectOption}>Easy</option>
+                      <option value="normal" style={selectOption}>Normal</option>
+                      <option value="hard" style={selectOption}>Hard</option>
+                      <option value="veryhard" style={selectOption}>Sehr hart</option>
+                      <option value="chaos" style={selectOption}>Chaos</option>
+                    </select>
+                  </Row>
+
+                  <Row label="Verhalten 1">
+                    <select
+                      value={botCfgSafe.behavior1 || "zufall"}
+                      onChange={(e) => updateLobbyBotConfig(info.botCfgIdx, { behavior1: e.target.value })}
+                      style={selectDark}
+                    >
+                      {(BOT_BEHAVIORS || []).map((opt) => (
+                        <option key={opt} value={opt} style={selectOption}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </Row>
+
+                  <Row label="Verhalten 2">
+                    <select
+                      value={botCfgSafe.behavior2 || ((botCfgSafe.difficulty || "normal") === "veryhard" ? "zufall" : "none")}
+                      disabled={(botCfgSafe.difficulty || "normal") !== "veryhard"}
+                      onChange={(e) => updateLobbyBotConfig(info.botCfgIdx, { behavior2: e.target.value })}
+                      style={{
+                        ...selectDark,
+                        opacity: (botCfgSafe.difficulty || "normal") === "veryhard" ? 1 : 0.55,
+                      }}
+                    >
+                      {(BOT_BEHAVIORS || []).map((opt) => (
+                        <option key={opt} value={opt} style={selectOption}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </Row>
+                </>
+              )}
+            </div>
+          )}
+
+          {!info.free && !info.ownerIsBot && !info.mine && (
+            <div style={modalSection}>
+              <div style={{ fontWeight: 950 }}>Spieler</div>
+              <div>{ownerName}</div>
+
+              {info.ownerOffline && (
+                <div style={{ color: "#fecaca", fontSize: 12, fontWeight: 950 }}>
+                  Offline
+                </div>
+              )}
+
+              {meIsHost && (
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+                  <button
+                    type="button"
+                    style={btnDanger}
+                    onClick={() => {
+                      hostKickFromTeam(info.tid);
+                      setTeamModal(null);
+                    }}
+                  >
+                    Spieler kicken
+                  </button>
+
+                  <button
+                    type="button"
+                    style={btnGhost}
+                    onClick={() => makeAdmin(info.owner, ownerName)}
+                  >
+                    Zum Admin machen
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ===== Render Guards
   if (!roomId) return <div style={{ padding: 12 }}>Keine Room-ID in der URL.</div>;
   if (!room && !err) return <div style={{ padding: 12 }}>Lade Versus-Room …</div>;
@@ -4914,417 +5573,182 @@ const draftBgStyle = {
       </div>
 
       {phase === "lobby" && (
-        <section style={panel}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" }}>
-            {/* Settings */}
+        <section style={lobbyPagePanel}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 14,
+              alignItems: "flex-start",
+              marginBottom: 18,
+            }}
+          >
             <div>
-              <div style={{ fontWeight: 900, marginBottom: 10 }}>Host Einstellungen</div>
-
-              {!meIsHost ? (
-                <div style={{ opacity: 0.8 }}>Warte auf Host…</div>
-              ) : (
-                <div style={{ display: "grid", gap: 8, maxWidth: 560 }}>
-                  <Row label="Generation">
-  <select
-    value={settings.generation}
-    onChange={(e) => updateSettings({ generation: Number(e.target.value) })}
-    style={selectDark}
-  >
-    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((g) => (
-  <option key={g} value={g} style={selectOption}>
-    Gen {g} (bis #{getDexCapForGen(g)})
-  </option>
-))}
-  </select>
-</Row>
-
-
-                  <Row label="Teilnehmer">
-  <select
-    value={settings.participants ?? 0}
-    onChange={(e) =>
-      updateSettings({
-        participants: Math.max(0, Math.min(9, Number(e.target.value))),
-      })
-    }
-    style={input}
-  >
-    {Array.from({ length: 10 }, (_, i) => (
-      <option key={i} value={i} style={selectOption}>
-        {i}
-      </option>
-    ))}
-  </select>
-</Row>
-
-<Row label="Bots">
-  <select
-    value={settings.botCount ?? 0}
-    onChange={(e) =>
-      updateSettings({
-        botCount: Math.max(0, Math.min(9, Number(e.target.value))),
-      })
-    }
-    style={input}
-  >
-    {Array.from({ length: 10 }, (_, i) => (
-      <option key={i} value={i} style={selectOption}>
-        {i}
-      </option>
-    ))}
-  </select>
-</Row>
-
-
-<div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-  Hinweis: Pro Bot-Team kannst du das Verhalten einstellen. Trotzdem bleibt immer etwas Zufall drin.
-</div>
-
-
-                  <Row label="Budget pro Team">
-                    <input
-                      type="number"
-                      min={0}
-                      step={100}
-                      value={settings.budgetPerTeam}
-                      onChange={(e) => updateSettings({ budgetPerTeam: Number(e.target.value) })}
-                    />
-                  </Row>
-
-                  <Row label="Pokémon insgesamt">
-                    <input
-                      type="number"
-                      min={1}
-                      max={200}
-                      value={settings.totalPokemon}
-                      onChange={(e) => updateSettings({ totalPokemon: Number(e.target.value) })}
-                    />
-                  </Row>
-
-                  <Row label="Sekunden / Runde">
-                    <input
-                      type="number"
-                      min={5}
-                      max={60}
-                      value={settings.secondsPerBid}
-                      onChange={(e) => updateSettings({ secondsPerBid: Number(e.target.value) })}
-                    />
-                  </Row>
-
-                  <Row label="Auktionsart">
-                    <select
-                      value={getAuctionMode(settings)}
-                      onChange={(e) => updateSettings({ auctionMode: e.target.value })}
-                      style={selectDark}
-                    >
-                      <option value={AUCTION_MODES.CLASSIC} style={selectOption}>
-                        Normal: Live-Gebote sichtbar
-                      </option>
-                      <option value={AUCTION_MODES.BLIND_SINGLE} style={selectOption}>
-                        Blind: 1 Pokémon verdeckt
-                      </option>
-                      <option value={AUCTION_MODES.BLIND_MULTI} style={selectOption}>
-                        Blind: mehrere Pokémon gleichzeitig
-                      </option>
-                    </select>
-                  </Row>
-
-                  {getAuctionMode(settings) === AUCTION_MODES.BLIND_MULTI && (
-                    <>
-                      <Row label="Blind-Multi Auswahl">
-                        <select
-                          value={settings.blindMultiCount ?? 3}
-                          onChange={(e) => updateSettings({ blindMultiCount: Number(e.target.value) })}
-                          style={selectDark}
-                        >
-                          {[2, 3, 4, 5, 6].map((n) => (
-                            <option key={n} value={n} style={selectOption}>
-                              {n} Pokémon gleichzeitig
-                            </option>
-                          ))}
-                        </select>
-                      </Row>
-
-                      <Row label="Blind-Multi Ausgleich">
-                        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <input
-                            type="checkbox"
-                            checked={!!settings.blindMultiLoserCompensation}
-                            onChange={(e) => updateSettings({ blindMultiLoserCompensation: e.target.checked })}
-                          />
-                          <span>Überbotene Bieter bekommen ein anderes Auswahl-Pokémon und zahlen ihr Gebot</span>
-                        </label>
-                      </Row>
-                    </>
-                  )}
-
-                  <Row label="Draft-Modus">
-  <select
-    value={settings.baseFormsOnly ? "baseOnly" : "allKeep"}
-    onChange={(e) => {
-      const v = e.target.value;
-
-      // Modus A: Nur Basisformen im Pool + Team bleibt Basis
-      if (v === "baseOnly") {
-        updateSettings({
-          baseFormsOnly: true,
-          keepEvolvedForms: false,
-        });
-        return;
-      }
-
-      // Modus B: Alles erlaubt + bleibt wie gedraftet
-      updateSettings({
-        baseFormsOnly: false,
-        keepEvolvedForms: true,
-      });
-    }}
-  >
-    <option value="baseOnly">Basisform only</option>
-    <option value="allKeep">Alle erlauben</option>
-  </select>
-</Row>
-<div
-  style={{
-    marginTop: 6,
-    padding: 10,
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.18)",
-  }}
->
-  <div style={{ fontWeight: 900, marginBottom: 8 }}>Pool-Filter</div>
-
-  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-    <input
-      type="checkbox"
-      checked={!settings.allowLegendary}
-      onChange={(e) => updateSettings({ allowLegendary: !e.target.checked })}
-    />
-    <span>Legendäre deaktivieren</span>
-  </label>
-
-  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-    <input
-      type="checkbox"
-      checked={!settings.allowSubLegendary}
-      onChange={(e) => updateSettings({ allowSubLegendary: !e.target.checked })}
-    />
-    <span>Sub-Legendäre deaktivieren</span>
-  </label>
-
-  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-    <input
-      type="checkbox"
-      checked={!settings.allowMythical}
-      onChange={(e) => updateSettings({ allowMythical: !e.target.checked })}
-    />
-    <span>Mythische deaktivieren</span>
-  </label>
-
-  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-    <input
-      type="checkbox"
-      checked={!settings.allowPseudo}
-      onChange={(e) => updateSettings({ allowPseudo: !e.target.checked })}
-    />
-    <span>Pseudo-Legendäre deaktivieren</span>
-  </label>
-
-  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>
-    Standardmäßig sind alle Kategorien erlaubt.  
-    Häkchen = diese Kategorie wird aus dem Draft-Pool entfernt.
-  </div>
-</div>
-
-
-
-                  <button onClick={startDraft} style={btnPrimary}>
-                    Draft starten
-                  </button>
-                </div>
-              )}
+              <div style={lobbyTitle}>Auction Draft Lobby</div>
+              
             </div>
 
-            {/* Team slots */}
-            <div>
-              <div style={{ fontWeight: 900, marginBottom: 10 }}>Teams auswählen</div>
-              <div style={{ opacity: 0.8, fontSize: 12, marginBottom: 10 }}>
-                {
-                  clampInt(settings.participants ?? 0, 0, 20) === 0 ? (
-                    <>Bot-only Raum: Du bist <b>Zuschauer</b>. Teams sind Bots.</>
-                  ) : (
-                    <>Freie Teams sind <b>rot</b>. Belegte Teams <b>grün</b>. Klicke auf ein Team zum Joinen.</>
-                  )
-                }
-</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-                {teamIds.map((tid, slotIdx) => {
-                  const free = teamIsFree(tid);
-const mine = teamIsMine(tid);
-const owner = teamOwners?.[tid] ?? null;
-const ownerIsBot = owner && String(owner).startsWith("bot:");
-const ownerOffline = !free && !ownerIsBot && isPlayerOffline(owner);
-// ✅ Slot-basiert statt ID-basiert (fix für Bot #3/#4 Einstellungen)
-const playersCount = clampInt(settings.participants ?? 0, 0, 20);
-const botCount = clampInt(settings.botCount ?? 0, 0, 9);
-const isBotSlot = slotIdx >= playersCount && slotIdx < (playersCount + botCount);
-const botCfgIdx = isBotSlot ? (slotIdx - playersCount) : -1;
-const botCfg = botCfgIdx >= 0 ? (settings.botsConfig || [])[botCfgIdx] : null;
-                  return (
-                    <div
-                      key={tid}
-                      style={{
-  ...teamSlotCard,
-  borderColor: free
-    ? "rgba(239,68,68,0.55)"
-    : ownerOffline
-      ? "rgba(239,68,68,0.85)"
-      : "rgba(34,197,94,0.55)",
-  background: free
-    ? "rgba(239,68,68,0.08)"
-    : ownerOffline
-      ? "rgba(239,68,68,0.14)"
-      : "rgba(34,197,94,0.08)",
-}}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                        <div style={{ fontWeight: 900 }}>
-                          {tid.toUpperCase()}
-                          {mine ? " (deins)" : ""}
-                        </div>
-                        <div style={{ opacity: 0.85, fontWeight: 800 }}>{owner ? "belegt" : "frei"}</div>
-                      </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <button
+                type="button"
+                onClick={copyRoomCode}
+                style={{
+                  ...btnGhostSmall,
+                  padding: "12px 14px",
+                  minWidth: 130,
+                }}
+              >
+                {copiedRoom ? "Kopiert" : `Code: ${roomId}`}
+              </button>
 
-                      <div style={{ marginTop: 6, fontWeight: 800 }}>{teamTitle(tid)}</div>
-                      {renderTeamRenameBox(tid)}
+              {meIsHost && (
+                <button onClick={startDraft} style={{ ...btnPrimary, padding: "12px 18px" }}>
+                  Draft starten
+                </button>
+              )}
+            </div>
+          </div>
 
-{isBotSlot && meIsHost && botCfg && (
-  <div style={{ marginTop: 10, padding: 10, borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.18)" }}>
-    <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 900, marginBottom: 8 }}>Bot-Einstellungen</div>
+          <div style={lobbyLayout}>
+            {/* Links: kompakte Host-Einstellungen */}
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ fontWeight: 950, opacity: 0.92 }}>Einstellungen</div>
 
-    <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8, alignItems: "center", marginBottom: 8 }}>
-      <div style={{ fontSize: 12, opacity: 0.8 }}>Schwierigkeit</div>
-      <select
-        value={botCfg.difficulty || "normal"}
-        onChange={(e) => {
-          const next = [...(settings.botsConfig || [])];
-          const d = e.target.value;
-          next[botCfgIdx] = { ...next[botCfgIdx], difficulty: d, behavior2: d === "veryhard" ? (next[botCfgIdx].behavior2 || "none") : "none" };
-          updateSettings({ botsConfig: next });
-        }}
-      >
-        <option value="easy">Easy</option>
-        <option value="normal">Normal</option>
-        <option value="hard">Hard</option>
-        <option value="veryhard">Sehr hart</option>
-        <option value="chaos">Chaos</option>
-      </select>
-    </div>
-
-    <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8, alignItems: "center", marginBottom: 8 }}>
-      <div style={{ fontSize: 12, opacity: 0.8 }}>Verhalten 1</div>
-      <select
-        value={botCfg.behavior1 || "zufall"}
-        onChange={(e) => {
-          const next = [...(settings.botsConfig || [])];
-          next[botCfgIdx] = { ...next[botCfgIdx], behavior1: e.target.value };
-          updateSettings({ botsConfig: next });
-        }}
-      >
-        {(BOT_BEHAVIORS || []).map((opt) => (
-          <option key={opt} value={opt}>
-            {opt}
-          </option>
-        ))}
-      </select>
-    </div>
-
-    <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8, alignItems: "center" }}>
-      <div style={{ fontSize: 12, opacity: 0.8 }}>Verhalten 2</div>
-      <select
-        value={botCfg.behavior2 || ((botCfg.difficulty || "normal") === "veryhard" ? "zufall" : "none")}
-        disabled={(botCfg.difficulty || "normal") !== "veryhard"}
-        onChange={(e) => {
-          const next = [...(settings.botsConfig || [])];
-          next[botCfgIdx] = { ...next[botCfgIdx], behavior2: e.target.value };
-          updateSettings({ botsConfig: next });
-        }}
-      >
-        {(BOT_BEHAVIORS || []).map((opt) => (
-          <option key={opt} value={opt}>
-            {opt}
-          </option>
-        ))}
-      </select>
-    </div>
-  </div>
-)}
-
-{ownerOffline && (
-  <div style={{ marginTop: 6, fontSize: 12, fontWeight: 900, color: "rgba(239,68,68,0.95)" }}>
-    OFFLINE
-  </div>
-)}
-
-                      <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {free ? (
-                          <button
-                            type="button"
-                            style={btnGhost}
-                            onClick={() => claimTeam(tid)}
-                            disabled={!myPlayerId || !!myTeamId}
-                            title={myTeamId ? "Du bist schon in einem Team" : "Team beitreten"}
-                          >
-                            Team beitreten
-                          </button>
-                        ) : mine ? (
-                          <button type="button" style={btnGhost} onClick={leaveMyTeam}>
-                            Team verlassen
-                          </button>
-                        ) : (
-                          <button type="button" style={{ ...btnGhost, opacity: 0.5 }} disabled>
-                            Belegt
-                          </button>
-                        )}        
-{/* ✅ Host kann belegtes Team leeren + Admin übertragen */}
-{!free && !mine && meIsHost && (() => {
-  const ownerId = teamOwners?.[tid] ?? null;
-  const ownerName = ownerId ? labelPlayer(ownerId, room) : "—";
-  const ownerIsBot = ownerId && String(ownerId).startsWith("bot:");
-
-  // 👉 Wenn Bot = gar nichts anzeigen
-if (ownerIsBot) return null;
-
-return (
-  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-    <button
-      type="button"
-      style={{ ...btnDanger, padding: "10px 12px" }}
-      onClick={() => hostKickFromTeam(tid)}
-      title="Entfernt den Spieler aus dem Team (Geld/Pokémon bleiben)"
-    >
-      Entfernen
-    </button>
-
-    <button
-      type="button"
-      style={{ ...btnGhost, padding: "10px 12px" }}
-      onClick={() => makeAdmin(ownerId, ownerName)}
-      title="Überträgt die Admin/Host-Rechte an den aktuellen Team-Besitzer"
-    >
-      Zum Admin machen
-    </button>
-  </div>
-);
-
-})()}
-                      </div>
-
-                      <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
-                        Dein Team: <b>{myTeamId ? myTeamId.toUpperCase() : "— (nicht gewählt)"}</b>
-                      </div>
+              {!meIsHost ? (
+                <div style={{ ...lobbySummaryCard, cursor: "default" }}>
+                  <div style={{ fontWeight: 950 }}>Warte auf Host</div>
+                  <div style={lobbyHint}>Der Host stellt den Draft ein und startet danach.</div>
+                </div>
+              ) : (
+                <>
+                  <button type="button" style={lobbySummaryCard} onClick={() => setSettingsModal("basic")}>
+                    <div style={{ fontWeight: 950 }}>Grundsetup</div>
+                    <div style={{ opacity: 0.78 }}>
+                      Gen {settings.generation} · {settings.participants ?? 0} Spieler · {settings.botCount ?? 0} Bots
                     </div>
+                    <div style={lobbyHint}>
+                      Budget, Pokémon-Anzahl und Rundenzeit bearbeiten.
+                    </div>
+                  </button>
+
+                  <button type="button" style={lobbySummaryCard} onClick={() => setSettingsModal("auction")}>
+                    <div style={{ fontWeight: 950 }}>Auktion</div>
+                    <div style={{ opacity: 0.78 }}>{getAuctionSummary()}</div>
+                    <div style={lobbyHint}>
+                      Auktionsart, Blind-Multi und Draft-Modus bearbeiten.
+                    </div>
+                  </button>
+
+                  <button type="button" style={lobbySummaryCard} onClick={() => setSettingsModal("pool")}>
+                    <div style={{ fontWeight: 950 }}>Pool-Filter</div>
+                    <div style={{ opacity: 0.78 }}>{getPoolSummary()}</div>
+                    <div style={lobbyHint}>
+                      Legendäre, Mythische, Sub-Legis und Pseudo-Legis ein- oder ausschließen.
+                    </div>
+                  </button>
+                </>
+              )}
+
+              <div style={{ ...lobbySummaryCard, cursor: "default" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontWeight: 950 }}>Raum</div>
+                    <div style={{ opacity: 0.78, marginTop: 3 }}>
+                      <b>{roomId}</b>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={copyRoomCode}
+                    style={{ ...btnGhostSmall, padding: "8px 10px" }}
+                  >
+                    {copiedRoom ? "Kopiert" : "Kopieren"}
+                  </button>
+                </div>
+
+                <div style={lobbyHint}>
+                  Host: <b>{labelPlayer(hostPlayerId, room)}</b>
+                  <br />
+                  Du: <b>{labelPlayer(myPlayerId, room)}</b>
+                </div>
+              </div>
+            </div>
+
+            {/* Rechts: Teams clean untereinander */}
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+                <div>
+                  <div style={{ fontWeight: 950, opacity: 0.92 }}>Teams</div>
+                  <div style={lobbyHint}>
+                    {clampInt(settings.participants ?? 0, 0, 20) === 0 ? (
+                      <>Bot-only Raum. Du bist Zuschauer.</>
+                    ) : (
+                      <>Klicke auf ein Team, um beizutreten oder Aktionen zu öffnen.</>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 12, opacity: 0.65, fontWeight: 900 }}>
+                  Dein Team: {myTeamId ? myTeamId.toUpperCase() : "—"}
+                </div>
+              </div>
+
+              <div style={lobbyTeamList}>
+                {teamIds.map((tid, slotIdx) => {
+                  const info = getLobbyTeamInfo(tid, slotIdx);
+
+                  return (
+                    <button
+                      key={tid}
+                      type="button"
+                      style={{
+                        ...lobbyTeamRow,
+                        borderColor: info.free
+                          ? "rgba(255,255,255,0.10)"
+                          : info.ownerOffline
+                            ? "rgba(239,68,68,0.48)"
+                            : info.ownerIsBot
+                              ? "rgba(59,130,246,0.35)"
+                              : "rgba(34,197,94,0.34)",
+                        background: info.mine
+                          ? "rgba(34,197,94,0.12)"
+                          : "rgba(255,255,255,0.045)",
+                      }}
+                      onClick={() => setTeamModal({ tid, slotIdx })}
+                    >
+                      <div style={{ fontSize: 12, opacity: 0.48, fontWeight: 950 }}>
+                        Team {slotIdx + 1}
+                      </div>
+
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontWeight: 950,
+                            letterSpacing: 0.1,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {info.teamName}
+                          {info.mine ? " (deins)" : ""}
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          opacity: 0.72,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {info.playerName}
+                      </div>
+
+                      {lobbyStatusPill(info)}
+                    </button>
                   );
                 })}
               </div>
@@ -5332,6 +5756,9 @@ return (
           </div>
         </section>
       )}
+
+      {renderSettingsModal()}
+      {renderTeamModal()}
 
       {phase === "auction" && (
         <div style={auctionGrid}>
