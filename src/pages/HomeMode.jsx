@@ -11,31 +11,32 @@ export default function HomeMode() {
       <div style={card}>
         <div style={{ fontSize: 26, fontWeight: 950, marginBottom: 6 }}>Start</div>
         <div style={{ opacity: 0.8, marginBottom: 16 }}>
-          Wähle, wie du spielen willst.
+          Wähle einen Modus oder starte ein Pokémon-Minispiel.
         </div>
 
         <div style={{ display: "grid", gap: 12 }}>
-          <button style={btnGreen} onClick={() => nav("/solo")}>
-            Solo
+          <button style={btnGreen} onClick={() => nav("/games")}>
+            Pokémon Games
           </button>
 
           <button
-  style={btnBlue}
-  onClick={() => setOnlineOpen((v) => !v)}
->
-  Online {onlineOpen ? "▲" : "▼"}
-</button>
-{onlineOpen && (
-  <div style={onlinePanel}>
-    <button style={btnGreen} onClick={() => nav("/soullink")}>
-      Soullink
-    </button>
+            style={btnBlue}
+            onClick={() => setOnlineOpen((v) => !v)}
+          >
+            Online {onlineOpen ? "▲" : "▼"}
+          </button>
 
-    <button style={btnPurple} onClick={() => nav("/versus")}>
-      Draft
-    </button>
-  </div>
-)}
+          {onlineOpen && (
+            <div style={onlinePanel}>
+              <button style={btnGreen} onClick={() => nav("/soullink")}>
+                Soullink
+              </button>
+
+              <button style={btnPurple} onClick={() => nav("/versus")}>
+                Draft
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -81,6 +82,7 @@ const btnBlue = {
   ...baseBtn,
   background: "linear-gradient(135deg, rgba(79,172,254,0.35), rgba(0,242,254,0.18))",
 };
+
 const btnPurple = {
   ...baseBtn,
   background: "linear-gradient(135deg, rgba(161,140,209,0.32), rgba(251,194,235,0.16))",

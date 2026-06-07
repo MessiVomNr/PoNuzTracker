@@ -25,6 +25,9 @@ import SoullinkStart from "./duo/SoullinkStart";
 import DuoLobby from "./duo/DuoLobby";
 import PokemonCompare from "./pages/PokemonCompare.jsx";
 import TeamCompare from "./pages/TeamCompare.jsx";
+import GamesHub from "./games/GamesHub";
+import PokemonGuessMenu from "./games/PokemonGuessMenu";
+import PokemonGuessSolo from "./games/PokemonGuessSolo";
 
 // Hook für Theme-Verwaltung
 function useInitTheme() {
@@ -63,6 +66,9 @@ function AppContent() {
       <GlobalEscapeMenu />
       <Routes>
         <Route path="/" element={<HomeMode />} />
+        <Route path="/games" element={<GamesHub />} />
+        <Route path="/games/pokemon-guess" element={<PokemonGuessMenu />} />
+        <Route path="/games/pokemon-guess/solo" element={<PokemonGuessSolo />} />
         <Route path="/solo" element={<SaveGameManager/>} />
         <Route path="/table" element={<EncounterTable />} />
         <Route path="/team" element={<TeamManager />} />
