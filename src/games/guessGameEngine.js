@@ -70,7 +70,7 @@ export const DEFAULT_TIP_ORDER = [
 
 export const DEFAULT_GUESS_SETTINGS = {
   playMode: GUESS_PLAY_MODES.PIXEL,
-  revealMode: GUESS_REVEAL_MODES.TIME,
+  revealMode: GUESS_REVEAL_MODES.WRONG_GUESS,
   totalRounds: 10,
   secondsPerClue: 8,
   selectedGens: [1, 2, 3],

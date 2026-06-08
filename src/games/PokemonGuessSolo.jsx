@@ -98,6 +98,7 @@ export default function PokemonGuessSolo() {
 
   const [settings, setSettings] = useState(DEFAULT_GUESS_SETTINGS);
   const [pokemonPool, setPokemonPool] = useState([]);
+  const [usedDexIds, setUsedDexIds] = useState([]);
   const [gameStarted, setGameStarted] = useState(false);
   const [roundNumber, setRoundNumber] = useState(1);
   const [score, setScore] = useState(0);
@@ -115,6 +116,7 @@ export default function PokemonGuessSolo() {
     if (saved) {
       setSettings(saved.settings);
       setPokemonPool(Array.isArray(saved.pokemonPool) ? saved.pokemonPool : []);
+      setUsedDexIds(Array.isArray(saved.usedDexIds) ? saved.usedDexIds : []);
       setGameStarted(true);
       setRoundNumber(Number(saved.roundNumber) || 1);
       setScore(Number(saved.score) || 0);
@@ -140,6 +142,7 @@ export default function PokemonGuessSolo() {
       const snapshot = {
         settings,
         pokemonPool,
+        usedDexIds,
         gameStarted,
         roundNumber,
         score,
@@ -157,6 +160,7 @@ export default function PokemonGuessSolo() {
     hydrated,
     settings,
     pokemonPool,
+    usedDexIds,
     gameStarted,
     roundNumber,
     score,
@@ -270,7 +274,7 @@ export default function PokemonGuessSolo() {
         playMode === GUESS_PLAY_MODES.PIXEL ||
         playMode === GUESS_PLAY_MODES.DISTORTED
       ) {
-        nextRevealMode = GUESS_REVEAL_MODES.TIME;
+        nextRevealMode = GUESS_REVEAL_MODES.WRONG_GUESS;
       }
 
       if (
@@ -368,9 +372,18 @@ export default function PokemonGuessSolo() {
     };
   }
 
-  async function buildRound(pool) {
+  async function buildRound(pool, blockedDexIds = []) {
+    const blockedSet = new Set(blockedDexIds);
+    const availablePool = (pool || []).filter(
+      (pokemon) => !blockedSet.has(pokemon.dexId)
+    );
+
+    if (availablePool.length === 0) {
+      throw new Error("No unused Pokemon left.");
+    }
+
     const effectiveSettings = buildEffectiveSettings();
-    const baseRound = createGuessRound(effectiveSettings, pool);
+    const baseRound = createGuessRound(effectiveSettings, availablePool);
     const detailedTarget = await loadPokemonGuessDetails(baseRound.target);
 
     return {
@@ -386,9 +399,10 @@ export default function PokemonGuessSolo() {
 
     try {
       const pool = await loadPokemonGuessPool(settings.selectedGens);
-      const firstRound = await buildRound(pool);
+      const firstRound = await buildRound(pool, []);
 
       setPokemonPool(pool);
+      setUsedDexIds([firstRound.target.dexId]);
       setRoundNumber(1);
       setScore(0);
       setFinished(false);
@@ -412,6 +426,7 @@ export default function PokemonGuessSolo() {
     setFinished(false);
     setPaused(false);
     setRound(null);
+    setUsedDexIds([]);
     setRoundNumber(1);
     setScore(0);
     setGuessInput("");
@@ -499,9 +514,10 @@ export default function PokemonGuessSolo() {
     setLoadingText("Nächste Runde wird vorbereitet...");
 
     try {
-      const nextRound = await buildRound(pokemonPool);
+      const nextRound = await buildRound(pokemonPool, usedDexIds);
 
       setRoundNumber((current) => current + 1);
+      setUsedDexIds((current) => [...current, nextRound.target.dexId]);
       setGuessInput("");
       setRound(nextRound);
       setPaused(false);
@@ -1386,14 +1402,36 @@ function StatsClue({ stats }) {
     <div className="guess-text-clue">
       <span className="guess-clue-title">Basiswerte</span>
 
-      <div className="guess-stats-grid">
-        {rows.map(([label, value]) => (
-          <div key={label} className="guess-stat-pill">
-            <span>{label}</span>
-            <strong>{value}</strong>
-          </div>
-        ))}
+      <div className="guess-stats-bars">
+        {rows.map(([label, value]) => {
+          const safeValue = Number(value) || 0;
+          const widthPercent = Math.max(5, Math.min(100, (safeValue / 180) * 100));
+          const toneClass = getStatToneClass(safeValue);
+
+          return (
+            <div key={label} className="guess-stat-bar-row">
+              <div className="guess-stat-bar-top">
+                <span>{label}</span>
+                <strong>{safeValue}</strong>
+              </div>
+
+              <div className="guess-stat-bar-track">
+                <div
+                  className={`guess-stat-bar-fill ${toneClass}`}
+                  style={{ width: `${widthPercent}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
+}
+
+function getStatToneClass(value) {
+  if (value >= 140) return "guess-stat-blue";
+  if (value >= 100) return "guess-stat-green";
+  if (value >= 70) return "guess-stat-yellow";
+  return "guess-stat-red";
 }

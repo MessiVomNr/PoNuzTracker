@@ -1,7 +1,7 @@
 // src/games/pokemonGuessApi.js
 
 const API_BASE = "https://pokeapi.co/api/v2";
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 
 const TYPE_DE = {
   normal: "Normal",
@@ -31,6 +31,18 @@ const STAT_KEY_MAP = {
   "special-attack": "spAtk",
   "special-defense": "spDef",
   speed: "init",
+};
+
+const GENERATION_ROMAN_TO_NUMBER = {
+  "generation-i": 1,
+  "generation-ii": 2,
+  "generation-iii": 3,
+  "generation-iv": 4,
+  "generation-v": 5,
+  "generation-vi": 6,
+  "generation-vii": 7,
+  "generation-viii": 8,
+  "generation-ix": 9,
 };
 
 function getCacheKey(name) {
@@ -88,8 +100,14 @@ function getIdFromUrl(url) {
 }
 
 function getGenNumberFromApiName(apiName) {
-  const match = String(apiName || "").match(/generation-(\d+)/);
-  return match ? Number(match[1]) : 0;
+  const cleanName = String(apiName || "").toLowerCase();
+
+  if (GENERATION_ROMAN_TO_NUMBER[cleanName]) {
+    return GENERATION_ROMAN_TO_NUMBER[cleanName];
+  }
+
+  const digitMatch = cleanName.match(/generation-(\d+)/);
+  return digitMatch ? Number(digitMatch[1]) : 0;
 }
 
 function getLocalizedName(names, language, fallback) {
@@ -268,6 +286,7 @@ export async function loadPokemonGuessDetails(basePokemon) {
     return {
       ...basePokemon,
       ...cached,
+      gen: basePokemon.gen || cached.gen || 0,
     };
   }
 
@@ -294,6 +313,7 @@ export async function loadPokemonGuessDetails(basePokemon) {
 
   const details = {
     imageUrl,
+    gen: basePokemon.gen,
     types: (pokemon.types || [])
       .sort((a, b) => a.slot - b.slot)
       .map((entry) => TYPE_DE[entry.type?.name] || makePrettyApiName(entry.type?.name)),

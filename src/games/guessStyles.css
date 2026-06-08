@@ -870,3 +870,76 @@ button.game-card-disabled:hover {
 .guess-preview-card .guess-stats-grid {
   width: 100%;
 }
+
+
+/* Stat bars for Pokemon Guess stats mode */
+.guess-stats-bars {
+  width: min(620px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 12px;
+}
+
+.guess-stat-bar-row {
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.guess-stat-bar-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.95rem;
+}
+
+.guess-stat-bar-top span {
+  color: #e2e8f0;
+  font-weight: 950;
+}
+
+.guess-stat-bar-top strong {
+  color: #f8fafc;
+  font-weight: 950;
+  min-width: 34px;
+  text-align: right;
+}
+
+.guess-stat-bar-track {
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(2, 6, 23, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.13);
+}
+
+.guess-stat-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 180ms ease;
+}
+
+.guess-stat-red {
+  background: linear-gradient(90deg, #ef4444, #f97316);
+}
+
+.guess-stat-yellow {
+  background: linear-gradient(90deg, #f59e0b, #eab308);
+}
+
+.guess-stat-green {
+  background: linear-gradient(90deg, #22c55e, #34d399);
+}
+
+.guess-stat-blue {
+  background: linear-gradient(90deg, #38bdf8, #2563eb);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.28);
+}
+
+.guess-preview-card .guess-stats-bars {
+  width: 100%;
+}
