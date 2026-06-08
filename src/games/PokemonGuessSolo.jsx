@@ -37,6 +37,62 @@ const PREVIEW_PIKACHU_STATS = {
   init: 90,
 };
 
+const SOLO_GAME_STATE_KEY = "pokemon_guess_solo_state_v1";
+
+function mergeGuessSettings(savedSettings) {
+  const safeSettings = savedSettings || {};
+
+  return {
+    ...DEFAULT_GUESS_SETTINGS,
+    ...safeSettings,
+    selectedGens:
+      Array.isArray(safeSettings.selectedGens) && safeSettings.selectedGens.length > 0
+        ? safeSettings.selectedGens
+        : DEFAULT_GUESS_SETTINGS.selectedGens,
+    tipOrder:
+      Array.isArray(safeSettings.tipOrder) && safeSettings.tipOrder.length > 0
+        ? safeSettings.tipOrder
+        : DEFAULT_GUESS_SETTINGS.tipOrder,
+    pixel: {
+      ...DEFAULT_GUESS_SETTINGS.pixel,
+      ...(safeSettings.pixel || {}),
+    },
+    distorted: {
+      ...DEFAULT_GUESS_SETTINGS.distorted,
+      ...(safeSettings.distorted || {}),
+    },
+  };
+}
+
+function readSavedSoloGame() {
+  try {
+    const raw = sessionStorage.getItem(SOLO_GAME_STATE_KEY);
+    if (!raw) return null;
+
+    const saved = JSON.parse(raw);
+
+    if (!saved?.gameStarted || !saved?.round) {
+      return null;
+    }
+
+    return {
+      ...saved,
+      settings: mergeGuessSettings(saved.settings),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearSavedSoloGame() {
+  try {
+    sessionStorage.removeItem(SOLO_GAME_STATE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+
 export default function PokemonGuessSolo() {
   const navigate = useNavigate();
 
@@ -51,6 +107,63 @@ export default function PokemonGuessSolo() {
   const [loadingText, setLoadingText] = useState("");
   const [loadError, setLoadError] = useState("");
   const [paused, setPaused] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    const saved = readSavedSoloGame();
+
+    if (saved) {
+      setSettings(saved.settings);
+      setPokemonPool(Array.isArray(saved.pokemonPool) ? saved.pokemonPool : []);
+      setGameStarted(true);
+      setRoundNumber(Number(saved.roundNumber) || 1);
+      setScore(Number(saved.score) || 0);
+      setRound(saved.round);
+      setFinished(Boolean(saved.finished));
+      setGuessInput("");
+      setLoadingText("");
+      setLoadError("");
+      setPaused(Boolean(saved.paused));
+    }
+
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    if (!gameStarted || !round) {
+      return;
+    }
+
+    try {
+      const snapshot = {
+        settings,
+        pokemonPool,
+        gameStarted,
+        roundNumber,
+        score,
+        round,
+        finished,
+        paused,
+        savedAt: Date.now(),
+      };
+
+      sessionStorage.setItem(SOLO_GAME_STATE_KEY, JSON.stringify(snapshot));
+    } catch {
+      // ignore
+    }
+  }, [
+    hydrated,
+    settings,
+    pokemonPool,
+    gameStarted,
+    roundNumber,
+    score,
+    round,
+    finished,
+    paused,
+  ]);
 
   const effectiveRevealMode = getEffectiveRevealMode(settings);
 
@@ -267,6 +380,7 @@ export default function PokemonGuessSolo() {
   }
 
   async function startGame() {
+    clearSavedSoloGame();
     setLoadError("");
     setLoadingText("Pokémon-Daten werden geladen...");
 
@@ -293,6 +407,7 @@ export default function PokemonGuessSolo() {
   }
 
   function backToSettings() {
+    clearSavedSoloGame();
     setGameStarted(false);
     setFinished(false);
     setPaused(false);
@@ -304,6 +419,7 @@ export default function PokemonGuessSolo() {
   }
 
   function backToLobby() {
+    clearSavedSoloGame();
     navigate("/games/pokemon-guess");
   }
 
