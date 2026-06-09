@@ -28,6 +28,9 @@ import TeamCompare from "./pages/TeamCompare.jsx";
 import GamesHub from "./games/GamesHub";
 import PokemonGuessMenu from "./games/PokemonGuessMenu";
 import PokemonGuessSolo from "./games/PokemonGuessSolo";
+import OnlineGuessMenu from "./online/OnlineGuessMenu";
+import OnlineGuessLobby from "./online/OnlineGuessLobby";
+import OnlineGuessGame from "./online/OnlineGuessGame";
 
 // Hook für Theme-Verwaltung
 function useInitTheme() {
@@ -61,7 +64,7 @@ function AppContent() {
   useInitTheme();
   useBackgroundControl();
 
-    return (
+  return (
     <>
       <GlobalEscapeMenu />
       <Routes>
@@ -69,7 +72,10 @@ function AppContent() {
         <Route path="/games" element={<GamesHub />} />
         <Route path="/games/pokemon-guess" element={<PokemonGuessMenu />} />
         <Route path="/games/pokemon-guess/solo" element={<PokemonGuessSolo />} />
-        <Route path="/solo" element={<SaveGameManager/>} />
+        <Route path="/games/pokemon-guess/online" element={<OnlineGuessMenu />} />
+        <Route path="/games/pokemon-guess/online/:roomCode" element={<OnlineGuessLobby />} />
+        <Route path="/games/pokemon-guess/online/:roomCode/game" element={<OnlineGuessGame />} />
+        <Route path="/solo" element={<SaveGameManager />} />
         <Route path="/table" element={<EncounterTable />} />
         <Route path="/team" element={<TeamManager />} />
         <Route path="/guide" element={<GuidePage />} />
@@ -92,7 +98,6 @@ function AppContent() {
         <Route path="/soullink" element={<SoullinkStart />} />
         <Route path="/compare/:leftId" element={<PokemonCompare />} />
         <Route path="/team-compare" element={<TeamCompare />} />
-
       </Routes>
     </>
   );

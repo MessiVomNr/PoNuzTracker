@@ -15,24 +15,29 @@ export default function PokemonGuessMenu() {
 
         <h1>Wer ist dieses Pokémon?</h1>
         <p className="games-subtitle">
-          Errate Pokémon anhand von Hinweisen. Später auch online mit Buzzer.
+          Errate Pokémon anhand von Silhouette, Pixelbild, Typen, Stats,
+          Verzerrung und weiteren Hinweisen.
         </p>
 
         <div className="guess-mode-list">
           <button
-  className="game-card"
-  onClick={() => navigate("/games/pokemon-guess/solo")}
->
-  <span className="game-card-title">Solo spielen</span>
-  <span className="game-card-text">
-    Einzelspieler-Modus mit Stufen, Tipps und Score.
-  </span>
-</button>
-
-          <button className="game-card">
-            <span className="game-card-title">Online mit Buzzer</span>
+            className="game-card"
+            onClick={() => navigate("/games/pokemon-guess/solo")}
+          >
+            <span className="game-card-title">Solo spielen</span>
             <span className="game-card-text">
-              Raum erstellen, Freunde einladen und mit Leertaste buzzern.
+              Einzelspieler-Modus mit Stufen, Tipps und Score.
+            </span>
+          </button>
+
+          <button
+            className="game-card"
+            onClick={() => navigate("/games/pokemon-guess/online")}
+          >
+            <span className="game-card-title">Online spielen</span>
+            <span className="game-card-text">
+              Lobby erstellen, Freunde einladen und mit Timer oder Buzzer
+              gegeneinander spielen.
             </span>
           </button>
 
