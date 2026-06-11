@@ -26,6 +26,21 @@ function getSavedRoomCode() {
 export default function OnlineGuessMenu() {
   const navigate = useNavigate();
 
+  function navigateToOnlineRoom(result) {
+    const code = String(result?.code || "").trim().toUpperCase();
+
+    if (!code) {
+      return;
+    }
+
+    if (result?.status === "playing" || result?.status === "finished") {
+      navigate(`/games/pokemon-guess/online/${code}/game`);
+      return;
+    }
+
+    navigate(`/games/pokemon-guess/online/${code}`);
+  }
+
   const [playerName, setPlayerName] = useState(getSavedName);
   const [roomCode, setRoomCode] = useState(getSavedRoomCode);
   const [loadingText, setLoadingText] = useState("");
@@ -50,7 +65,7 @@ export default function OnlineGuessMenu() {
 
     try {
       const result = await createOnlineGuessRoom(cleanName);
-      navigate(`/games/pokemon-guess/online/${result.code}`);
+      navigateToOnlineRoom(result);
     } catch (error) {
       console.error(error);
       setErrorText(error?.message || "Die Lobby konnte nicht erstellt werden.");
@@ -77,7 +92,7 @@ export default function OnlineGuessMenu() {
 
     try {
       const result = await joinOnlineGuessRoom(cleanRoomCode, cleanName);
-      navigate(`/games/pokemon-guess/online/${result.code}`);
+      navigateToOnlineRoom(result);
     } catch (error) {
       console.error(error);
       setErrorText(error?.message || "Der Lobbybeitritt ist fehlgeschlagen.");

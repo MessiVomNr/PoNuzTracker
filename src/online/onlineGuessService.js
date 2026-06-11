@@ -354,25 +354,47 @@ export async function joinOnlineGuessRoom(roomCode, displayName) {
 
   const room = snap.data();
 
-  if (room.status !== "lobby") {
-    throw new Error("Diese Lobby läuft bereits.");
+  if (room.status === "closed") {
+    throw new Error("Diese Lobby wurde geschlossen.");
   }
 
-  await setDoc(
-    playerRef(code, user.uid),
-    {
-      uid: user.uid,
-      displayName: playerName,
-      isHost: room.hostId === user.uid,
-      ready: false,
-      score: 0,
-      online: true,
-      kicked: false,
-      joinedAt: serverTimestamp(),
-      lastActiveAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
+  const playerDocRef = playerRef(code, user.uid);
+  const existingPlayerSnap = await getDoc(playerDocRef);
+  const existingPlayer = existingPlayerSnap.exists()
+    ? existingPlayerSnap.data()
+    : null;
+
+  if (existingPlayer?.kicked) {
+    throw new Error("Du wurdest aus dieser Lobby entfernt.");
+  }
+
+  const isRejoin = Boolean(existingPlayer);
+  const isLobbyOpen = room.status === "lobby";
+
+  if (!isLobbyOpen && !isRejoin) {
+    throw new Error(
+      "Diese Lobby läuft bereits. Du kannst nur wieder beitreten, wenn du vorher in dieser Lobby warst."
+    );
+  }
+
+  const playerPatch = {
+    uid: user.uid,
+    displayName: playerName,
+    isHost: room.hostId === user.uid,
+    online: true,
+    kicked: false,
+    lastActiveAt: serverTimestamp(),
+  };
+
+  if (isLobbyOpen) {
+    playerPatch.ready = false;
+    playerPatch.score = 0;
+    playerPatch.joinedAt = existingPlayer?.joinedAt || serverTimestamp();
+  } else {
+    playerPatch.rejoinedAt = serverTimestamp();
+  }
+
+  await setDoc(playerDocRef, playerPatch, { merge: true });
 
   localStorage.setItem("onlineGuessPlayerName", playerName);
   localStorage.setItem("onlineGuessLastRoom", code);
@@ -380,6 +402,8 @@ export async function joinOnlineGuessRoom(roomCode, displayName) {
   return {
     code,
     uid: user.uid,
+    status: room.status,
+    phase: room.phase || "lobby",
   };
 }
 
