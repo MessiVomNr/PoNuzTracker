@@ -18,6 +18,8 @@ export const GUESS_CLUE_TYPES = {
   STATS: "stats",
   CATEGORY: "category",
   SILHOUETTE: "silhouette",
+  DISTORTED_SILHOUETTE: "distorted_silhouette",
+  DISTORTED_IMAGE: "distorted_image",
   PIXEL_CUSTOM: "pixel_custom",
   DISTORTED_CUSTOM: "distorted_custom",
   IMAGE: "image",
@@ -46,6 +48,8 @@ export const GUESS_CLUE_LABELS = {
   [GUESS_CLUE_TYPES.STATS]: "Stats",
   [GUESS_CLUE_TYPES.CATEGORY]: "Kategorie",
   [GUESS_CLUE_TYPES.SILHOUETTE]: "Silhouette",
+  [GUESS_CLUE_TYPES.DISTORTED_SILHOUETTE]: "Verzerrte Silhouette",
+  [GUESS_CLUE_TYPES.DISTORTED_IMAGE]: "Nur verzerrt",
   [GUESS_CLUE_TYPES.PIXEL_CUSTOM]: "Verpixelt",
   [GUESS_CLUE_TYPES.DISTORTED_CUSTOM]: "Verzerrt",
   [GUESS_CLUE_TYPES.IMAGE]: "Normales Bild",
@@ -65,6 +69,8 @@ export const DEFAULT_TIP_ORDER = [
   GUESS_CLUE_TYPES.MOVES,
   GUESS_CLUE_TYPES.STATS,
   GUESS_CLUE_TYPES.SILHOUETTE,
+  GUESS_CLUE_TYPES.DISTORTED_SILHOUETTE,
+  GUESS_CLUE_TYPES.DISTORTED_IMAGE,
   GUESS_CLUE_TYPES.IMAGE,
 ];
 
@@ -157,7 +163,36 @@ export function buildClueOrderFromSettings(settings) {
   const revealMode = getEffectiveRevealMode(settings);
 
   if (settings.playMode === GUESS_PLAY_MODES.TIPS) {
-    return settings.tipOrder.map((type) => ({ type }));
+    const horizontal = Math.max(
+      1,
+      Math.min(6, Number(settings.distorted?.horizontal ?? settings.distorted?.strength) || 6)
+    );
+    const vertical = Math.max(
+      1,
+      Math.min(6, Number(settings.distorted?.vertical ?? settings.distorted?.strength) || 6)
+    );
+
+    return settings.tipOrder.map((type) => {
+      if (type === GUESS_CLUE_TYPES.DISTORTED_SILHOUETTE) {
+        return {
+          type: GUESS_CLUE_TYPES.DISTORTED_CUSTOM,
+          horizontal,
+          vertical,
+          black: true,
+        };
+      }
+
+      if (type === GUESS_CLUE_TYPES.DISTORTED_IMAGE) {
+        return {
+          type: GUESS_CLUE_TYPES.DISTORTED_CUSTOM,
+          horizontal,
+          vertical,
+          black: false,
+        };
+      }
+
+      return { type };
+    });
   }
 
   if (settings.playMode === GUESS_PLAY_MODES.SILHOUETTE) {
@@ -310,6 +345,8 @@ export function getAvailableTipTypes() {
     GUESS_CLUE_TYPES.STATS,
     GUESS_CLUE_TYPES.CATEGORY,
     GUESS_CLUE_TYPES.SILHOUETTE,
+    GUESS_CLUE_TYPES.DISTORTED_SILHOUETTE,
+    GUESS_CLUE_TYPES.DISTORTED_IMAGE,
     GUESS_CLUE_TYPES.IMAGE,
   ];
 }

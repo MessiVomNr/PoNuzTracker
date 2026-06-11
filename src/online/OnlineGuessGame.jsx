@@ -5,6 +5,11 @@ import {
   ONLINE_GUESS_GAME_MODES,
   getOnlineGuessPlayerId,
   goToNextOnlineGuessRound,
+  startOnlineGuessTiebreaker,
+  returnOnlineGuessToLobby,
+  skipOnlineGuessBuzzer,
+  expireOnlineGuessBuzzerResponder,
+  finishOnlineGuessCountdown,
   heartbeatOnlineGuessPlayer,
   revealOnlineGuessRound,
   submitOnlineGuessAnswer,
@@ -73,26 +78,174 @@ export default function OnlineGuessGame() {
   const settings = useMemo(() => getSafeSettings(room), [room]);
   const currentQuestion = room?.currentQuestion || null;
   const target = currentQuestion?.target || null;
+  const currentGameId = room?.gameId || "";
   const roundNumber = Number(room?.currentRound) || 1;
+  const isTiebreakerRound = Boolean(room?.isTiebreaker);
+  const tiebreakerPlayerIds = Array.isArray(room?.tiebreakerPlayerIds)
+    ? room.tiebreakerPlayerIds
+    : [];
   const isHost = Boolean(room && myUid && room.hostId === myUid);
-  const isTimerMode = settings.gameMode === ONLINE_GUESS_GAME_MODES.TIMER;
-  const isBuzzerMode = settings.gameMode === ONLINE_GUESS_GAME_MODES.BUZZER;
+  const isTimerMode =
+    !isTiebreakerRound &&
+    settings.gameMode === ONLINE_GUESS_GAME_MODES.TIMER;
+
+  const isBuzzerMode =
+    isTiebreakerRound ||
+    settings.gameMode === ONLINE_GUESS_GAME_MODES.BUZZER;
   const phase = room?.phase || "question";
 
+  const countdownLeft = useMemo(() => {
+    if (phase !== "countdown") {
+      return 0;
+    }
+
+    const endAt = Number(room?.countdownEndsAtMs) || 0;
+
+    if (!endAt) {
+      return 0;
+    }
+
+    const secondsLeft = Math.ceil((endAt - nowMs) / 1000);
+    return Math.min(3, Math.max(0, secondsLeft));
+  }, [phase, room?.countdownEndsAtMs, nowMs]);
+
+  useEffect(() => {
+    setNowMs(Date.now());
+
+    if (phase !== "question" && phase !== "countdown") return undefined;
+
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 100);
+
+    return () => clearInterval(timer);
+  }, [
+    phase,
+    room?.countdownEndsAtMs,
+    room?.roundStartedAt,
+    room?.buzzerAnswerDeadlineAtMs,
+  ]);
+
   const onlinePlayers = useMemo(() => {
-    return players.filter((player) => player.online !== false);
+    return players.filter((player) => player.online !== false && !player.kicked);
   }, [players]);
 
+    const activeRoundPlayers = useMemo(() => {
+    if (!isTiebreakerRound) {
+      return onlinePlayers;
+    }
+
+    return onlinePlayers.filter((player) => {
+      return tiebreakerPlayerIds.includes(player.uid || player.id);
+    });
+  }, [isTiebreakerRound, onlinePlayers, tiebreakerPlayerIds]);
+
+  const canParticipateInRound = useMemo(() => {
+    if (!isTiebreakerRound) {
+      return true;
+    }
+
+    return tiebreakerPlayerIds.includes(myUid);
+  }, [isTiebreakerRound, tiebreakerPlayerIds, myUid]);
+
+  const tiebreakerPlayerNames = useMemo(() => {
+    return activeRoundPlayers
+      .map((player) => player.displayName || "Spieler")
+      .join(", ");
+  }, [activeRoundPlayers]);
+
+  const currentPlayer = useMemo(() => {
+    return players.find((player) => player.uid === myUid || player.id === myUid) || null;
+  }, [players, myUid]);
+
   const scoreboard = useMemo(() => sortScoreboard(players), [players]);
+
+  const topTiePlayers = useMemo(() => {
+    if (!scoreboard.length) {
+      return [];
+    }
+
+    const topScore = Number(scoreboard[0]?.score) || 0;
+
+    return scoreboard.filter((player) => {
+      return (Number(player.score) || 0) === topScore;
+    });
+  }, [scoreboard]);
+
+  const hasTopTie = topTiePlayers.length >= 2;
 
   const myAnswer = useMemo(() => {
     return answers.find((answer) => answer.uid === myUid) || null;
   }, [answers, myUid]);
 
+  const wrongBuzzerAnswers = useMemo(() => {
+    if (!isBuzzerMode) return [];
+
+    return answers
+      .filter((answer) => {
+        return (
+          answer.uid !== myUid &&
+          answer.correct === false &&
+          Boolean(String(answer.answer || "").trim())
+        );
+      })
+      .sort((a, b) => timestampToMillis(a.submittedAt) - timestampToMillis(b.submittedAt));
+  }, [answers, isBuzzerMode, myUid]);
+
   const buzzedPlayerName = useMemo(() => {
     if (!room?.buzzedBy) return "";
     return getPlayerLabel(players, room.buzzedBy);
   }, [players, room?.buzzedBy]);
+
+  const currentResponderName = useMemo(() => {
+    if (!room?.currentResponder) return "";
+    return getPlayerLabel(players, room.currentResponder);
+  }, [players, room?.currentResponder]);
+
+  const buzzQueue = useMemo(() => {
+    const queue = Array.isArray(room?.buzzQueue) ? room.buzzQueue : [];
+    const firstTime = Number(queue[0]?.buzzedAtMs) || 0;
+
+    return queue.map((entry, index) => {
+      const buzzedAtMs = Number(entry.buzzedAtMs) || 0;
+      const diffMs = firstTime ? Math.max(0, buzzedAtMs - firstTime) : 0;
+
+      return {
+        ...entry,
+        rank: index + 1,
+        displayName: getPlayerLabel(players, entry.uid),
+        diffSeconds: diffMs / 1000,
+      };
+    });
+  }, [players, room?.buzzQueue]);
+
+  const hasBuzzedThisRound = useMemo(() => {
+    return buzzQueue.some((entry) => entry.uid === myUid);
+  }, [buzzQueue, myUid]);
+
+  const skippedPlayers = useMemo(() => {
+    return Array.isArray(room?.skippedPlayers)
+      ? room.skippedPlayers
+      : [];
+  }, [room?.skippedPlayers]);
+
+  const hasSkippedThisRound = useMemo(() => {
+    return skippedPlayers.includes(myUid);
+  }, [skippedPlayers, myUid]);
+
+  const currentResponderHasAnswered = useMemo(() => {
+    if (!room?.currentResponder) return false;
+
+    return answers.some(
+      (answer) => answer.uid === room.currentResponder && Boolean(answer.answer)
+    );
+  }, [answers, room?.currentResponder]);
+
+  const currentResponderAnswer = useMemo(() => {
+    if (!room?.currentResponder) return null;
+
+    return answers.find((answer) => answer.uid === room.currentResponder) || null;
+  }, [answers, room?.currentResponder]);
 
   const effectiveRevealMode = getEffectiveRevealMode(settings);
 
@@ -139,7 +292,7 @@ export default function OnlineGuessGame() {
   ]);
 
   const buzzerTimeLeft = useMemo(() => {
-    if (!isBuzzerMode || phase !== "question" || !room?.buzzedBy) return null;
+    if (!isBuzzerMode || phase !== "question" || !room?.currentResponder) return null;
 
     const deadlineAtMs = Number(room?.buzzerAnswerDeadlineAtMs) || 0;
 
@@ -151,40 +304,76 @@ export default function OnlineGuessGame() {
   }, [
     isBuzzerMode,
     phase,
-    room?.buzzedBy,
+    room?.currentResponder,
     room?.buzzerAnswerDeadlineAtMs,
     settings.buzzerAnswerSeconds,
     nowMs,
   ]);
 
-  const answeredCount = answers.filter((answer) => Boolean(answer.answer)).length;
-  const allAnswered =
-    onlinePlayers.length > 0 &&
-    onlinePlayers.every((player) =>
-      answers.some((answer) => answer.uid === player.uid && Boolean(answer.answer))
+  const answeredCount = answers.filter((answer) => {
+    return (
+      Boolean(answer.answer) &&
+      activeRoundPlayers.some((player) => {
+        const uid = player.uid || player.id;
+        return uid === answer.uid;
+      })
     );
+  }).length;
+
+  const completedCount = activeRoundPlayers.filter((player) => {
+    const uid = player.uid || player.id;
+
+    return (
+      skippedPlayers.includes(uid) ||
+      answers.some((answer) => answer.uid === uid && Boolean(answer.answer))
+    );
+  }).length;
+
+  const allAnswered =
+    activeRoundPlayers.length > 0 &&
+    activeRoundPlayers.every((player) => {
+      const uid = player.uid || player.id;
+
+      return (
+        skippedPlayers.includes(uid) ||
+        answers.some((answer) => answer.uid === uid && Boolean(answer.answer))
+      );
+    });
 
   const canAnswerTimer =
     room?.status === "playing" &&
     phase === "question" &&
     isTimerMode &&
-    !myAnswer;
+    canParticipateInRound &&
+    !myAnswer &&
+    !hasSkippedThisRound;
 
   const canBuzz =
     room?.status === "playing" &&
     phase === "question" &&
     isBuzzerMode &&
-    !room?.buzzedBy;
+    canParticipateInRound &&
+    !hasBuzzedThisRound &&
+    !hasSkippedThisRound;
 
   const canAnswerBuzzer =
     room?.status === "playing" &&
     phase === "question" &&
     isBuzzerMode &&
-    room?.buzzedBy === myUid &&
+    canParticipateInRound &&
+    room?.currentResponder === myUid &&
     !myAnswer &&
+    !hasSkippedThisRound &&
     (buzzerTimeLeft === null || buzzerTimeLeft > 0);
 
   const canAnswer = canAnswerTimer || canAnswerBuzzer;
+
+  const canSkip =
+    room?.status === "playing" &&
+    phase === "question" &&
+    canParticipateInRound &&
+    !myAnswer &&
+    !hasSkippedThisRound;
 
   useEffect(() => {
     let mounted = true;
@@ -240,21 +429,37 @@ export default function OnlineGuessGame() {
   }, [cleanRoomCode, navigate]);
 
   useEffect(() => {
-    if (!cleanRoomCode || !roundNumber) return undefined;
+    setAnswers([]);
+    setGuessInput("");
+    revealAttemptRef.current = "";
+
+    if (!cleanRoomCode || !currentGameId || !roundNumber || room?.status !== "playing") {
+      return undefined;
+    }
 
     const unsubAnswers = subscribeOnlineGuessAnswers(
       cleanRoomCode,
+      currentGameId,
       roundNumber,
       (nextAnswers) => {
         setAnswers(nextAnswers);
       }
     );
 
-    return () => unsubAnswers();
-  }, [cleanRoomCode, roundNumber]);
+    return () => {
+      setAnswers([]);
+      unsubAnswers();
+    };
+  }, [cleanRoomCode, currentGameId, roundNumber, room?.status, roundStartedAtMs]);
 
   useEffect(() => {
-    if (!cleanRoomCode || !myUid) return undefined;
+    if (!myUid || !currentPlayer?.kicked) return;
+
+    navigate("/games/pokemon-guess/online");
+  }, [currentPlayer?.kicked, myUid, navigate]);
+
+  useEffect(() => {
+    if (!cleanRoomCode || !myUid || currentPlayer?.kicked) return undefined;
 
     heartbeatOnlineGuessPlayer(cleanRoomCode).catch(() => {});
 
@@ -263,7 +468,7 @@ export default function OnlineGuessGame() {
     }, 20000);
 
     return () => clearInterval(timer);
-  }, [cleanRoomCode, myUid]);
+  }, [cleanRoomCode, myUid, currentPlayer?.kicked]);
 
   useEffect(() => {
     if (!settings?.selectedGens?.length) return undefined;
@@ -284,23 +489,20 @@ export default function OnlineGuessGame() {
   }, [settings?.selectedGens]);
 
   useEffect(() => {
-    if (phase !== "question") return undefined;
-
-    const timer = setInterval(() => {
-      setNowMs(Date.now());
-    }, 250);
-
-    return () => clearInterval(timer);
-  }, [phase]);
-
-  useEffect(() => {
-    revealAttemptRef.current = "";
-    setGuessInput("");
-  }, [roundNumber]);
-
-  useEffect(() => {
     if (!isHost) return;
-    if (!room || room.status !== "playing" || phase !== "question") return;
+    if (!room || room.status !== "playing") return;
+
+    if (phase === "countdown") {
+      if (countdownLeft === 0) {
+        finishOnlineGuessCountdown(cleanRoomCode).catch((error) => {
+          console.error(error);
+        });
+      }
+
+      return;
+    }
+
+    if (phase !== "question") return;
 
     async function autoReveal(reason) {
       const key = `${roundNumber}:${reason}`;
@@ -325,18 +527,45 @@ export default function OnlineGuessGame() {
       return;
     }
 
-    if (isBuzzerMode && room.buzzedBy) {
-      const buzzerAnswered = answers.some(
-        (answer) => answer.uid === room.buzzedBy && Boolean(answer.answer)
+    if (isBuzzerMode) {
+      const hasCorrectAnswer = answers.some((answer) => answer.correct === true);
+      const skippedSet = new Set(skippedPlayers);
+      const outByWrongAnswer = new Set(
+        answers
+          .filter((answer) => answer.correct === false)
+          .map((answer) => answer.uid)
       );
 
-      if (buzzerAnswered) {
-        autoReveal("buzzerAnswered");
+      const unansweredBuzzers = buzzQueue.filter((entry) => {
+        return (
+          !skippedSet.has(entry.uid) &&
+          !outByWrongAnswer.has(entry.uid)
+        );
+      });
+
+      const everyoneOut =
+        activeRoundPlayers.length > 0 &&
+        activeRoundPlayers.every((player) => {
+          return skippedSet.has(player.uid) || outByWrongAnswer.has(player.uid);
+        });
+
+      if (
+        everyoneOut &&
+        unansweredBuzzers.length === 0 &&
+        !room.currentResponder
+      ) {
+        autoReveal("everyoneOut");
+        return;
+      }
+      if (hasCorrectAnswer) {
+        autoReveal("buzzerCorrect");
         return;
       }
 
-      if (buzzerTimeLeft === 0) {
-        autoReveal("buzzerTimeout");
+      if (room.currentResponder && buzzerTimeLeft === 0) {
+        expireOnlineGuessBuzzerResponder(cleanRoomCode).catch((error) => {
+          console.error(error);
+        });
       }
     }
   }, [
@@ -351,6 +580,10 @@ export default function OnlineGuessGame() {
     buzzerTimeLeft,
     allAnswered,
     answers,
+    buzzQueue,
+    skippedPlayers,
+    countdownLeft,
+    activeRoundPlayers,
   ]);
 
   useEffect(() => {
@@ -379,6 +612,19 @@ export default function OnlineGuessGame() {
     } catch (error) {
       console.error(error);
       setErrorText(error?.message || "Buzzer konnte nicht ausgelöst werden.");
+    }
+  }
+
+  async function handleSkip() {
+    if (!canSkip) return;
+
+    setErrorText("");
+
+    try {
+      await skipOnlineGuessBuzzer(cleanRoomCode);
+    } catch (error) {
+      console.error(error);
+      setErrorText(error?.message || "Skip fehlgeschlagen.");
     }
   }
 
@@ -425,17 +671,56 @@ export default function OnlineGuessGame() {
     if (!isHost) return;
 
     setErrorText("");
-    setLoadingText("Nächste Runde wird vorbereitet...");
+    setLoadingText(isTiebreakerRound ? "Ergebnis wird vorbereitet..." : "Nächste Runde wird vorbereitet...");
 
     try {
       await goToNextOnlineGuessRound(cleanRoomCode);
     } catch (error) {
       console.error(error);
-      setErrorText(error?.message || "Nächste Runde konnte nicht gestartet werden.");
+      setErrorText(
+        error?.message ||
+          (isTiebreakerRound
+            ? "Ergebnis konnte nicht geöffnet werden."
+            : "Nächste Runde konnte nicht gestartet werden.")
+      );
     } finally {
       setLoadingText("");
     }
   }
+
+  async function handleStartTiebreaker() {
+    if (!isHost) return;
+
+    setErrorText("");
+    setLoadingText("Stichfrage wird vorbereitet...");
+
+    try {
+      await startOnlineGuessTiebreaker(cleanRoomCode);
+    } catch (error) {
+      console.error(error);
+      setErrorText(error?.message || "Stichfrage konnte nicht gestartet werden.");
+    } finally {
+      setLoadingText("");
+    }
+  }
+
+async function handleReturnToLobby() {
+  if (!isHost) return;
+
+  console.log("HOST DRÜCKT ZUR LOBBY");
+
+  try {
+    await returnOnlineGuessToLobby(cleanRoomCode);
+
+    console.log("RETURN TO LOBBY ERFOLGREICH");
+  } catch (error) {
+    console.error(error);
+
+    setErrorText(
+      error?.message || "Lobby konnte nicht geöffnet werden."
+    );
+  }
+}
 
   if (loadingText && !room) {
     return (
@@ -478,8 +763,8 @@ export default function OnlineGuessGame() {
   if (room.status === "finished" || phase === "finished") {
     return (
       <div className="games-page">
-        <div className="games-panel guess-panel">
-          <div className="guess-page-actions">
+        <div className="games-panel guess-panel online-final-panel">
+          <div className="guess-page-actions online-final-actions">
             <button
               className="games-back-button"
               type="button"
@@ -497,23 +782,48 @@ export default function OnlineGuessGame() {
             </button>
           </div>
 
-          <div className="guess-header">
+          <div className="online-final-hero">
             <p className="guess-kicker">Online-Ergebnis</p>
             <h1>Spiel beendet!</h1>
             <p className="games-subtitle">Endstand der Lobby {cleanRoomCode}</p>
           </div>
 
-          <Scoreboard players={scoreboard} myUid={myUid} />
+          {errorText && <div className="guess-error-box">{errorText}</div>}
+          {loadingText && room && <div className="guess-loading-box">{loadingText}</div>}
 
-          {isHost && (
-            <button
-              className="guess-start-button"
-              type="button"
-              onClick={() => navigate(`/games/pokemon-guess/online/${cleanRoomCode}`)}
-            >
-              Zur Lobby
-            </button>
-          )}
+          <FinalPodium players={scoreboard} />
+
+          <div className="online-final-footer">
+            {isHost ? (
+              <>
+                {hasTopTie && (
+                  <button
+                    className="guess-start-button online-final-main-button"
+                    type="button"
+                    onClick={handleStartTiebreaker}
+                    disabled={Boolean(loadingText)}
+                  >
+                    Stichfrage starten
+                  </button>
+                )}
+
+                <button
+                  className="guess-secondary-button online-final-main-button"
+                  type="button"
+                  onClick={handleReturnToLobby}
+                  disabled={Boolean(loadingText)}
+                >
+                  Lobby wieder öffnen
+                </button>
+              </>
+            ) : (
+              <p className="guess-small-info online-final-wait-text">
+                {hasTopTie
+                  ? "Gleichstand auf Platz 1. Warte, ob der Host eine Stichfrage startet."
+                  : "Warte, bis der Host die Lobby wieder öffnet."}
+              </p>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -523,13 +833,24 @@ export default function OnlineGuessGame() {
     <div className="games-page">
       <div className="games-panel guess-panel">
         <div className="guess-page-actions">
-          <button
-            className="games-back-button"
-            type="button"
-            onClick={() => navigate(`/games/pokemon-guess/online/${cleanRoomCode}`)}
-          >
-            Lobby
-          </button>
+          {isHost ? (
+            <button
+              className="games-back-button"
+              type="button"
+              onClick={handleReturnToLobby}
+              disabled={Boolean(loadingText)}
+            >
+              Runde schließen
+            </button>
+          ) : (
+            <button
+              className="games-back-button"
+              type="button"
+              onClick={() => navigate(`/games/pokemon-guess/online/${cleanRoomCode}`)}
+            >
+              Lobby
+            </button>
+          )}
 
           <button
             className="games-back-button"
@@ -545,8 +866,11 @@ export default function OnlineGuessGame() {
             <p className="guess-kicker">Pokémon Guess Online</p>
             <h1>Wer ist dieses Pokémon?</h1>
             <p className="games-subtitle">
-              Runde {roundNumber}/{settings.totalRounds || 10} ·{" "}
-              {isBuzzerMode ? "Buzzer-Modus" : "Timer-Modus"}
+              {isTiebreakerRound
+                ? `Stichfrage · nur für: ${tiebreakerPlayerNames || "Gleichstand"}`
+                : `Runde ${roundNumber}/${settings.totalRounds || 10} · ${
+                    isBuzzerMode ? "Buzzer-Modus" : "Timer-Modus"
+                  }`}
             </p>
           </div>
 
@@ -557,7 +881,9 @@ export default function OnlineGuessGame() {
                 ? `${timeLeft}s`
                 : isBuzzerMode && phase === "question" && room.buzzedBy
                   ? `${buzzerTimeLeft}s`
-                  : `${onlinePlayers.length} Spieler`}
+                  : isTiebreakerRound
+                    ? `${activeRoundPlayers.length} im Gleichstand`
+                    : `${onlinePlayers.length} Spieler`}
             </strong>
           </div>
         </div>
@@ -565,9 +891,34 @@ export default function OnlineGuessGame() {
         {errorText && <div className="guess-error-box">{errorText}</div>}
         {loadingText && room && <div className="guess-loading-box">{loadingText}</div>}
 
-        <div className="online-game-layout">
-          <main>
-            <div className="guess-clue-card">
+        {phase === "reveal" && isHost && (
+          <div className="guess-action-row online-reveal-top-actions">
+            <button
+              className="guess-next-button"
+              type="button"
+              onClick={handleNextRound}
+              disabled={Boolean(loadingText)}
+            >
+              {isTiebreakerRound ? "Zum Ergebnis" : "Nächstes Pokémon"}
+            </button>
+
+            <button
+              className="guess-secondary-button"
+              type="button"
+              onClick={handleReturnToLobby}
+              disabled={Boolean(loadingText)}
+            >
+              Zur Lobby
+            </button>
+          </div>
+        )}
+
+        {phase === "countdown" ? (
+          <CountdownScreen countdownLeft={countdownLeft} />
+        ) : (
+          <div className="online-game-layout">
+            <main>
+              <div className="guess-clue-card">
               <div className="guess-clue-label">
                 <span>
                   {phase === "reveal" ? "Aufgedeckt" : "Rätsel läuft"}
@@ -575,22 +926,22 @@ export default function OnlineGuessGame() {
 
                 {isTimerMode && phase === "question" && (
                   <strong>
-                    {answeredCount}/{onlinePlayers.length} Antworten
+                    {completedCount}/{activeRoundPlayers.length} fertig
                   </strong>
                 )}
 
                 {isBuzzerMode && phase === "question" && (
                   <strong>
-                    {room.buzzedBy
-                      ? `${buzzedPlayerName}: ${buzzerTimeLeft}s`
-                      : "Leertaste = Buzzer"}
+                    {room.currentResponder
+                    ? `${currentResponderName}: ${buzzerTimeLeft}s`
+                    : "Buzzer offen"}
                   </strong>
                 )}
               </div>
 
               {target ? (
                 <ClueStack
-                  clues={phase === "reveal" ? currentQuestion.clues : visibleClues}
+                  clues={visibleClues}
                   target={target}
                   revealed={phase === "reveal"}
                 />
@@ -605,21 +956,34 @@ export default function OnlineGuessGame() {
               <RoundInputArea
                 isTimerMode={isTimerMode}
                 isBuzzerMode={isBuzzerMode}
+                isTiebreakerRound={isTiebreakerRound}
+                canParticipateInRound={canParticipateInRound}
+                tiebreakerPlayerNames={tiebreakerPlayerNames}
                 canBuzz={canBuzz}
                 canAnswer={canAnswer}
+                canSkip={canSkip}
+                hasSkippedThisRound={hasSkippedThisRound}
                 myAnswer={myAnswer}
                 buzzedBy={room.buzzedBy}
                 buzzedPlayerName={buzzedPlayerName}
+                currentResponder={room.currentResponder}
+                currentResponderName={currentResponderName}
+                currentResponderHasAnswered={currentResponderHasAnswered}
+                currentResponderAnswer={currentResponderAnswer}
+                wrongBuzzerAnswers={wrongBuzzerAnswers}
+                buzzQueue={buzzQueue}
+                hasBuzzedThisRound={hasBuzzedThisRound}
                 buzzerTimeLeft={buzzerTimeLeft}
                 guessInput={guessInput}
                 setGuessInput={setGuessInput}
                 suggestions={suggestions}
                 handleBuzz={handleBuzz}
+                handleSkip={handleSkip}
                 handleSubmitAnswer={handleSubmitAnswer}
                 isHost={isHost}
                 handleManualReveal={handleManualReveal}
                 answeredCount={answeredCount}
-                onlineCount={onlinePlayers.length}
+                onlineCount={activeRoundPlayers.length}
               />
             )}
 
@@ -628,41 +992,106 @@ export default function OnlineGuessGame() {
                 room={room}
                 answers={answers}
                 target={target}
-                isHost={isHost}
+                isHost={false}
+                isTiebreakerRound={isTiebreakerRound}
                 handleNextRound={handleNextRound}
+                handleReturnToLobby={handleReturnToLobby}
                 loadingText={loadingText}
               />
             )}
           </main>
 
-          <aside className="online-score-side">
-            <Scoreboard players={scoreboard} myUid={myUid} compact />
-          </aside>
-        </div>
+              <aside className="online-score-side">
+                <Scoreboard players={scoreboard} myUid={myUid} compact />
+              </aside>
+            </div>
+        )}
       </div>
     </div>
   );
 }
 
+function CountdownScreen({ countdownLeft }) {
+  const label = countdownLeft > 0 ? countdownLeft : "LOS!";
+
+  return (
+    <div className="online-countdown-screen">
+      <p className="guess-kicker">Gleich geht es los</p>
+      <strong>{label}</strong>
+      <span>Bereit machen...</span>
+    </div>
+  );
+}
+
+
 function RoundInputArea({
   isTimerMode,
   isBuzzerMode,
+  isTiebreakerRound,
+  canParticipateInRound,
+  tiebreakerPlayerNames,
   canBuzz,
   canAnswer,
+  canSkip,
+  hasSkippedThisRound,
   myAnswer,
   buzzedBy,
   buzzedPlayerName,
+  currentResponder,
+  currentResponderName,
+  currentResponderHasAnswered,
+  currentResponderAnswer,
+  wrongBuzzerAnswers,
+  buzzQueue,
+  hasBuzzedThisRound,
   buzzerTimeLeft,
   guessInput,
   setGuessInput,
   suggestions,
   handleBuzz,
+  handleSkip,
   handleSubmitAnswer,
   isHost,
   handleManualReveal,
   answeredCount,
   onlineCount,
 }) {
+  if (isTiebreakerRound && !canParticipateInRound) {
+    return (
+      <div className="guess-result-box">
+        <h2>Stichfrage läuft</h2>
+        <p>
+          Nur die Spieler mit gleicher Höchstpunktzahl dürfen buzzern.
+        </p>
+        <p>
+          Im Gleichstand: <strong>{tiebreakerPlayerNames || "Spieler"}</strong>
+        </p>
+      </div>
+    );
+  }
+
+    if (hasSkippedThisRound) {
+    return (
+      <div className="guess-result-box">
+        <h2>Übersprungen</h2>
+        <p>
+          Du bekommst für dieses Pokémon keine Minuspunkte.
+        </p>
+        <p>Warte, bis die Runde aufgedeckt wird.</p>
+
+        {isHost && (
+          <button
+            className="guess-secondary-button"
+            type="button"
+            onClick={handleManualReveal}
+          >
+            Jetzt aufdecken
+          </button>
+        )}
+      </div>
+    );
+  }
+
   if (myAnswer) {
     return (
       <div className="guess-result-box">
@@ -670,6 +1099,9 @@ function RoundInputArea({
         <p>
           Deine Antwort: <strong>{myAnswer.answer}</strong>
         </p>
+
+        <WrongGuessList wrongAnswers={wrongBuzzerAnswers} />
+
         <p>Warte, bis alle fertig sind oder der Timer abläuft.</p>
 
         {isHost && (
@@ -685,51 +1117,111 @@ function RoundInputArea({
     );
   }
 
-  if (isBuzzerMode && !buzzedBy) {
+  if (isBuzzerMode && !canAnswer) {
     return (
-      <div className="online-buzzer-box">
-        <button
-          className="online-buzzer-button"
-          type="button"
-          onClick={handleBuzz}
-          disabled={!canBuzz}
-        >
-          BUZZER
-        </button>
+      <>
+        <BuzzerQueuePanel
+          buzzQueue={buzzQueue}
+          currentResponder={currentResponder}
+          currentResponderName={currentResponderName}
+          buzzerTimeLeft={buzzerTimeLeft}
+        />
 
-        <p>Drücke den Button oder die Leertaste. Wer zuerst buzzert, darf antworten.</p>
-      </div>
-    );
-  }
+        <WrongGuessList wrongAnswers={wrongBuzzerAnswers} />
 
-  if (isBuzzerMode && buzzedBy && !canAnswer) {
-    return (
-      <div className="guess-result-box">
-        <h2>{buzzedPlayerName} war zuerst!</h2>
-        <p>
-          {buzzerTimeLeft === 0
-            ? "Die Antwortzeit ist abgelaufen. Die Runde wird aufgedeckt."
-            : "Warte, bis die Antwort abgegeben oder die Zeit abgelaufen ist."}
-        </p>
+        {!hasBuzzedThisRound && (
+          <div className="online-buzzer-box">
+            <button
+              className="online-buzzer-button"
+              type="button"
+              onClick={handleBuzz}
+              disabled={!canBuzz}
+            >
+              BUZZER
+            </button>
+
+            <div className="guess-action-row">
+              <button
+                className="guess-secondary-button"
+                type="button"
+                onClick={handleSkip}
+                disabled={!canSkip}
+              >
+                Skip
+              </button>
+            </div>
+
+            <p>
+              Du kannst auch noch buzzern, wenn jemand anderes schon dran ist.
+              Jeder darf pro Pokémon nur einmal buzzern.
+            </p>
+          </div>
+        )}
+
+        {hasBuzzedThisRound && (
+          <div className="guess-result-box">
+            <h2>Du bist in der Buzzer-Liste</h2>
+            <p>
+              {currentResponderName
+                ? `${currentResponderName} ist aktuell dran.`
+                : "Warte, bis die Runde aufgedeckt wird."}
+            </p>
+
+            <button
+              className="guess-secondary-button"
+              type="button"
+              onClick={handleSkip}
+              disabled={!canSkip}
+            >
+              Skip
+            </button>
+          </div>
+        )}
 
         {isHost && (
-          <button
-            className="guess-secondary-button"
-            type="button"
-            onClick={handleManualReveal}
-          >
-            Jetzt aufdecken
-          </button>
+          <div className="guess-action-row">
+            <button
+              className="guess-secondary-button"
+              type="button"
+              onClick={handleManualReveal}
+            >
+              Jetzt aufdecken
+            </button>
+          </div>
         )}
-      </div>
+      </>
     );
   }
 
   return (
     <>
+      {isBuzzerMode && (
+        <>
+          <BuzzerQueuePanel
+            buzzQueue={buzzQueue}
+            currentResponder={currentResponder}
+            currentResponderName={currentResponderName}
+            buzzerTimeLeft={buzzerTimeLeft}
+          />
+
+          <WrongGuessList wrongAnswers={wrongBuzzerAnswers} />
+        </>
+      )}
       {isTimerMode && (
         <div className="guess-small-info">
           Antworten: {answeredCount}/{onlineCount}
+        </div>
+      )}
+
+      {canSkip && (
+        <div className="guess-action-row">
+          <button
+            className="guess-secondary-button"
+            type="button"
+            onClick={handleSkip}
+          >
+            Skip
+          </button>
         </div>
       )}
 
@@ -781,7 +1273,104 @@ function RoundInputArea({
   );
 }
 
-function RevealBox({ room, answers, target, isHost, handleNextRound, loadingText }) {
+function BuzzerQueuePanel({
+  buzzQueue,
+  currentResponder,
+  currentResponderName,
+  buzzerTimeLeft,
+}) {
+  if (!buzzQueue?.length) {
+    return (
+      <div className="online-buzz-queue-panel">
+        <h2>Noch niemand hat gebuzzert</h2>
+        <p>Der erste Buzzer bekommt die erste Antwortchance.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="online-buzz-queue-panel">
+      <div className="online-buzz-queue-head">
+        <div>
+          <h2>Buzzer-Reihenfolge</h2>
+          <p>
+            {currentResponderName
+              ? `${currentResponderName} ist aktuell dran.`
+              : "Alle Buzzer wurden verwendet."}
+          </p>
+        </div>
+
+        {currentResponderName && (
+          <strong>{buzzerTimeLeft ?? "-"}s</strong>
+        )}
+      </div>
+
+      <div className="online-buzz-queue-list">
+        {buzzQueue.map((entry) => (
+          <div
+            key={entry.uid}
+            className={
+              entry.uid === currentResponder
+                ? "online-buzz-queue-row online-buzz-queue-row-active"
+                : "online-buzz-queue-row"
+            }
+          >
+            <div>
+              <strong>
+                #{entry.rank} {entry.displayName}
+              </strong>
+              <span>
+                {entry.rank === 1
+                  ? "zuerst gebuzzert"
+                  : `+${entry.diffSeconds.toFixed(2)}s langsamer`}
+              </span>
+            </div>
+
+            {entry.uid === currentResponder && <em>dran</em>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WrongGuessList({ wrongAnswers }) {
+  if (!wrongAnswers?.length) {
+    return null;
+  }
+
+  return (
+    <div className="online-wrong-guess-panel">
+      <div className="online-wrong-guess-head">
+        <strong>Schon falsch geraten</strong>
+        <span>Nicht nochmal nehmen</span>
+      </div>
+
+      <div className="online-wrong-guess-list">
+        {wrongAnswers.map((answer) => (
+          <div
+            key={answer.uid || answer.id}
+            className="online-wrong-guess-row"
+          >
+            <span>{answer.displayName || "Spieler"}</span>
+            <strong>{answer.answer}</strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RevealBox({
+  room,
+  answers,
+  target,
+  isHost,
+  isTiebreakerRound = false,
+  handleNextRound,
+  handleReturnToLobby,
+  loadingText,
+}) {
   const summaries = Array.isArray(room?.lastRevealSummary)
     ? room.lastRevealSummary
     : [];
@@ -796,11 +1385,7 @@ function RevealBox({ room, answers, target, isHost, handleNextRound, loadingText
             <div key={summary.uid} className="online-answer-row">
               <div>
                 <strong>{summary.displayName}</strong>
-                <span>
-                  {summary.hadAnswer
-                    ? summary.answer
-                    : "Keine Antwort"}
-                </span>
+                <span>{summary.hadAnswer ? summary.answer : "Keine Antwort"}</span>
               </div>
 
               <em
@@ -831,16 +1416,121 @@ function RevealBox({ room, answers, target, isHost, handleNextRound, loadingText
       </div>
 
       {isHost ? (
-        <button
-          className="guess-next-button"
-          type="button"
-          onClick={handleNextRound}
-          disabled={Boolean(loadingText)}
-        >
-          Nächste Runde
-        </button>
+        <div className="guess-action-row">
+          <button
+            className="guess-next-button"
+            type="button"
+            onClick={handleNextRound}
+            disabled={Boolean(loadingText)}
+          >
+            {isTiebreakerRound ? "Zum Ergebnis" : "Nächste Runde"}
+          </button>
+
+          <button
+            className="guess-secondary-button"
+            type="button"
+            onClick={handleReturnToLobby}
+            disabled={Boolean(loadingText)}
+          >
+            Zur Lobby
+          </button>
+        </div>
       ) : (
         <p>Warte, bis der Host die nächste Runde startet.</p>
+      )}
+    </div>
+  );
+}
+
+function FinalPodium({ players }) {
+  const sorted = [...players].sort((a, b) => {
+    const scoreDiff = (Number(b.score) || 0) - (Number(a.score) || 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    return String(a.displayName || "").localeCompare(String(b.displayName || ""));
+  });
+
+  const rankedPlayers = sorted.map((player, index) => ({
+    ...player,
+    finalRank: index + 1,
+    finalKey: player.uid || player.id || `${player.displayName}-${index}`,
+  }));
+
+  const topThree = rankedPlayers.slice(0, 3);
+  const visualOrder =
+    topThree.length >= 3
+      ? [topThree[1], topThree[0], topThree[2]]
+      : topThree.length === 2
+        ? [topThree[1], topThree[0]]
+        : topThree;
+
+  const rest = rankedPlayers.slice(3);
+
+  if (rankedPlayers.length === 0) {
+    return (
+      <div className="online-final-podium">
+        <div className="online-final-section-title">
+          <span>Endergebnis</span>
+          <h2>Keine Spieler gefunden</h2>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`online-final-podium online-final-count-${topThree.length}`}>
+      <div className="online-final-section-title">
+        <span>Endergebnis</span>
+        <h2>Podium</h2>
+      </div>
+
+      <div className="online-podium-layout">
+        {visualOrder.map((player) => {
+          const score = Number(player.score) || 0;
+          const displayName = player.displayName || "Spieler";
+          const initial = displayName.trim().charAt(0).toUpperCase() || "?";
+
+          return (
+            <div
+              key={player.finalKey}
+              className={`online-final-card online-final-card-rank-${player.finalRank}`}
+            >
+              <div className="online-final-rank-badge">
+                {player.finalRank}
+              </div>
+
+              <div className="online-final-avatar">
+                {initial}
+              </div>
+
+              <strong className="online-final-card-name">
+                {displayName}
+              </strong>
+
+              <span className="online-final-card-score">
+                {score} Punkte
+              </span>
+
+              <div className="online-final-step">
+                <span>Platz {player.finalRank}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {rest.length > 0 && (
+        <div className="online-podium-rest">
+          {rest.map((player) => (
+            <div
+              key={player.finalKey}
+              className="online-podium-rest-row"
+            >
+              <span>{player.finalRank}.</span>
+              <strong>{player.displayName || "Spieler"}</strong>
+              <span>{Number(player.score) || 0} Punkte</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

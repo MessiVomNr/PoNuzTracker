@@ -12,6 +12,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  arrayUnion,
 } from "firebase/firestore";
 import { db, ensureAnonAuth, assertFirebaseReady } from "../firebase";
 import {
@@ -72,6 +73,11 @@ function makeRoomCode() {
   return code;
 }
 
+function makeGameId() {
+  const randomPart = Math.random().toString(36).slice(2, 10).toUpperCase();
+  return `${Date.now()}_${randomPart}`;
+}
+
 function roomRef(roomCode) {
   return doc(db, ONLINE_GUESS_COLLECTION, normalizeRoomCode(roomCode));
 }
@@ -94,13 +100,20 @@ function answersRef(roomCode) {
   return collection(db, ONLINE_GUESS_COLLECTION, normalizeRoomCode(roomCode), "answers");
 }
 
-function answerRef(roomCode, roundNumber, playerId) {
+function makeRoundKey(gameId, roundNumber) {
+  const safeGameId = String(gameId || "legacy").trim() || "legacy";
+  return `${safeGameId}_${Number(roundNumber) || 1}`;
+}
+
+function answerRef(roomCode, gameId, roundNumber, playerId) {
+  const roundKey = makeRoundKey(gameId, roundNumber);
+
   return doc(
     db,
     ONLINE_GUESS_COLLECTION,
     normalizeRoomCode(roomCode),
     "answers",
-    `${Number(roundNumber) || 1}_${playerId}`
+    `${roundKey}_${playerId}`
   );
 }
 
@@ -203,6 +216,41 @@ function getAnswerPoints({ isCorrect, hasAnswer, settings }) {
   return -getPenalty(pointsCorrect);
 }
 
+function getNextResponderFromQueue(buzzQueue, answeredBuzzers, skippedPlayers = []) {
+  const answeredSet = new Set(answeredBuzzers || []);
+  const skippedSet = new Set(skippedPlayers || []);
+
+  const nextEntry = (buzzQueue || []).find((entry) => {
+    return (
+      entry?.uid &&
+      !answeredSet.has(entry.uid) &&
+      !skippedSet.has(entry.uid)
+    );
+  });
+
+  return nextEntry?.uid || null;
+}
+
+function getActiveGameMode(room, settings) {
+  if (room?.isTiebreaker) {
+    return ONLINE_GUESS_GAME_MODES.BUZZER;
+  }
+
+  return settings.gameMode;
+}
+
+function canPlayerPlayCurrentRound(room, uid) {
+  if (!room?.isTiebreaker) {
+    return true;
+  }
+
+  const ids = Array.isArray(room.tiebreakerPlayerIds)
+    ? room.tiebreakerPlayerIds
+    : [];
+
+  return ids.includes(uid);
+}
+
 async function getCurrentUser() {
   assertFirebaseReady();
   return ensureAnonAuth();
@@ -239,6 +287,7 @@ export async function createOnlineGuessRoom(displayName) {
 
           settings: DEFAULT_ONLINE_GUESS_SETTINGS,
 
+          gameId: null,
           currentRound: 0,
           currentQuestion: null,
           usedDexIds: [],
@@ -246,6 +295,12 @@ export async function createOnlineGuessRoom(displayName) {
           buzzedBy: null,
           buzzedAt: null,
           buzzedAtMs: 0,
+
+          buzzQueue: [],
+          answeredBuzzers: [],
+          skippedPlayers: [],
+          currentResponder: null,
+
           buzzerAnswerDeadlineAtMs: 0,
           buzzLocked: false,
         });
@@ -258,6 +313,7 @@ export async function createOnlineGuessRoom(displayName) {
         ready: false,
         score: 0,
         online: true,
+        kicked: false,
         joinedAt: serverTimestamp(),
         lastActiveAt: serverTimestamp(),
       });
@@ -311,6 +367,7 @@ export async function joinOnlineGuessRoom(roomCode, displayName) {
       ready: false,
       score: 0,
       online: true,
+      kicked: false,
       joinedAt: serverTimestamp(),
       lastActiveAt: serverTimestamp(),
     },
@@ -366,11 +423,12 @@ export function subscribeOnlineGuessPlayers(roomCode, callback) {
   });
 }
 
-export function subscribeOnlineGuessAnswers(roomCode, roundNumber, callback) {
+export function subscribeOnlineGuessAnswers(roomCode, gameId, roundNumber, callback) {
   assertFirebaseReady();
 
   const code = normalizeRoomCode(roomCode);
-  const q = query(answersRef(code), where("roundNumber", "==", Number(roundNumber) || 1));
+  const roundKey = makeRoundKey(gameId, roundNumber);
+  const q = query(answersRef(code), where("roundKey", "==", roundKey));
 
   return onSnapshot(q, (snapshot) => {
     const answers = snapshot.docs.map((answerDoc) => ({
@@ -461,6 +519,7 @@ export async function startOnlineGuessGame(roomCode) {
 
   const settings = mergeOnlineGuessSettings(room.settings);
   const firstRound = await buildOnlineRound(settings, []);
+  const gameId = makeGameId();
 
   await runTransaction(db, async (transaction) => {
     const ref = roomRef(code);
@@ -482,16 +541,145 @@ export async function startOnlineGuessGame(roomCode) {
 
     transaction.update(ref, {
       status: "playing",
-      phase: "question",
+      phase: "countdown",
+      countdownEndsAtMs: Date.now() + 3000,
+      gameId,
+      isTiebreaker: false,
+      tiebreakerPlayerIds: [],
       currentRound: 1,
       currentQuestion: firstRound,
       usedDexIds: [firstRound.target.dexId],
+      lastRevealSummary: [],
       buzzedBy: null,
       buzzedAt: null,
       buzzedAtMs: 0,
+
+      buzzQueue: [],
+      answeredBuzzers: [],
+      skippedPlayers: [],
+      currentResponder: null,
+
       buzzerAnswerDeadlineAtMs: 0,
       buzzLocked: false,
       startedAt: serverTimestamp(),
+      roundStartedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    onlinePlayers.forEach((player) => {
+      transaction.set(
+        playerRef(code, player.uid),
+        {
+          uid: player.uid,
+          score: 0,
+          online: true,
+          lastActiveAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    });
+  });
+}
+
+export async function startOnlineGuessTiebreaker(roomCode) {
+  const user = await getCurrentUser();
+  const code = normalizeRoomCode(roomCode);
+
+  const roomSnap = await getDoc(roomRef(code));
+
+  if (!roomSnap.exists()) {
+    throw new Error("Lobby wurde nicht gefunden.");
+  }
+
+  const room = roomSnap.data();
+
+  if (room.hostId !== user.uid) {
+    throw new Error("Nur der Host kann eine Stichfrage starten.");
+  }
+
+  if (room.status !== "finished" || room.phase !== "finished") {
+    throw new Error("Eine Stichfrage kann nur nach Spielende gestartet werden.");
+  }
+
+  const playerSnap = await getDocs(playersRef(code));
+  const players = playerSnap.docs.map((playerDoc) => ({
+    id: playerDoc.id,
+    ...playerDoc.data(),
+  }));
+
+  const activePlayers = players.filter((player) => {
+    return player.online !== false && !player.kicked;
+  });
+
+  if (activePlayers.length < 2) {
+    throw new Error("Für eine Stichfrage werden mindestens zwei Spieler benötigt.");
+  }
+
+  const sortedPlayers = [...activePlayers].sort((a, b) => {
+    const scoreDiff = (Number(b.score) || 0) - (Number(a.score) || 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    return String(a.displayName || "").localeCompare(String(b.displayName || ""));
+  });
+
+  const topScore = Number(sortedPlayers[0]?.score) || 0;
+  const tiedPlayers = sortedPlayers.filter((player) => {
+    return (Number(player.score) || 0) === topScore;
+  });
+
+  if (tiedPlayers.length < 2) {
+    throw new Error("Es gibt keinen Gleichstand auf Platz 1.");
+  }
+
+  const settings = mergeOnlineGuessSettings(room.settings);
+  const usedDexIds = Array.isArray(room.usedDexIds) ? room.usedDexIds : [];
+  const tiebreakerRound = await buildOnlineRound(settings, usedDexIds);
+  const currentRound = Number(room.currentRound) || 0;
+  const gameId = room.gameId || makeGameId();
+
+  await runTransaction(db, async (transaction) => {
+    const ref = roomRef(code);
+    const freshSnap = await transaction.get(ref);
+
+    if (!freshSnap.exists()) {
+      throw new Error("Lobby wurde nicht gefunden.");
+    }
+
+    const freshRoom = freshSnap.data();
+
+    if (freshRoom.hostId !== user.uid) {
+      throw new Error("Nur der Host kann eine Stichfrage starten.");
+    }
+
+    if (freshRoom.status !== "finished" || freshRoom.phase !== "finished") {
+      throw new Error("Eine Stichfrage kann nur nach Spielende gestartet werden.");
+    }
+
+    transaction.update(ref, {
+      status: "playing",
+      phase: "countdown",
+      countdownEndsAtMs: Date.now() + 3000,
+
+      gameId,
+      isTiebreaker: true,
+      tiebreakerPlayerIds: tiedPlayers.map((player) => player.uid || player.id),
+
+      currentRound: currentRound + 1,
+      currentQuestion: tiebreakerRound,
+      usedDexIds: [...usedDexIds, tiebreakerRound.target.dexId],
+      lastRevealSummary: [],
+
+      buzzedBy: null,
+      buzzedAt: null,
+      buzzedAtMs: 0,
+
+      buzzQueue: [],
+      answeredBuzzers: [],
+      skippedPlayers: [],
+      currentResponder: null,
+
+      buzzerAnswerDeadlineAtMs: 0,
+      buzzLocked: false,
+
       roundStartedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -507,63 +695,117 @@ export async function submitOnlineGuessAnswer(roomCode, answerText) {
     throw new Error("Bitte gib eine Antwort ein.");
   }
 
-  const roomSnap = await getDoc(roomRef(code));
-
-  if (!roomSnap.exists()) {
-    throw new Error("Lobby wurde nicht gefunden.");
-  }
-
-  const room = roomSnap.data();
-
-  if (room.status !== "playing" || room.phase !== "question") {
-    throw new Error("Aktuell können keine Antworten abgegeben werden.");
-  }
-
-  const settings = mergeOnlineGuessSettings(room.settings);
-
-  if (settings.gameMode === ONLINE_GUESS_GAME_MODES.BUZZER) {
-    if (!room.buzzedBy) {
-      throw new Error("Du musst erst buzzern.");
-    }
-
-    if (room.buzzedBy !== user.uid) {
-      throw new Error("Ein anderer Spieler hat zuerst gebuzzert.");
-    }
-
-    const deadlineAtMs = Number(room.buzzerAnswerDeadlineAtMs) || 0;
-
-    if (deadlineAtMs > 0 && Date.now() > deadlineAtMs) {
-      throw new Error("Deine Antwortzeit ist abgelaufen.");
-    }
-  }
-
   const playerSnap = await getDoc(playerRef(code, user.uid));
   const player = playerSnap.exists() ? playerSnap.data() : null;
 
-  await setDoc(
-    answerRef(code, room.currentRound, user.uid),
-    {
-      uid: user.uid,
-      displayName: player?.displayName || "Spieler",
-      roundNumber: room.currentRound,
-      answer: cleanAnswer,
-      submittedAt: serverTimestamp(),
-      revealed: false,
-      correct: null,
-      pointsDelta: 0,
-    },
-    { merge: true }
-  );
+  await runTransaction(db, async (transaction) => {
+    const ref = roomRef(code);
+    const snap = await transaction.get(ref);
 
-  await setDoc(
-    playerRef(code, user.uid),
-    {
-      uid: user.uid,
-      lastActiveAt: serverTimestamp(),
-      online: true,
-    },
-    { merge: true }
-  );
+    if (!snap.exists()) {
+      throw new Error("Lobby wurde nicht gefunden.");
+    }
+
+    const room = snap.data();
+
+    if (room.status !== "playing" || room.phase !== "question") {
+      throw new Error("Aktuell können keine Antworten abgegeben werden.");
+    }
+
+    const settings = mergeOnlineGuessSettings(room.settings);
+    const activeGameMode = getActiveGameMode(room, settings);
+    const gameId = room.gameId || "legacy";
+    const roundNumber = Number(room.currentRound) || 1;
+    const roundKey = makeRoundKey(gameId, roundNumber);
+    const target = room.currentQuestion?.target;
+
+    if (!canPlayerPlayCurrentRound(room, user.uid)) {
+      throw new Error("Diese Stichfrage ist nur für die Spieler im Gleichstand.");
+    }
+
+    if (!target) {
+      throw new Error("Für diese Runde wurde kein Pokémon gefunden.");
+    }
+
+    const isBuzzerMode = activeGameMode === ONLINE_GUESS_GAME_MODES.BUZZER;
+
+    if (isBuzzerMode) {
+      if (!room.currentResponder) {
+        throw new Error("Du musst erst buzzern.");
+      }
+
+      if (room.currentResponder !== user.uid) {
+        throw new Error("Ein anderer Spieler ist aktuell dran.");
+      }
+
+      const deadlineAtMs = Number(room.buzzerAnswerDeadlineAtMs) || 0;
+
+      if (deadlineAtMs > 0 && Date.now() > deadlineAtMs) {
+        throw new Error("Deine Antwortzeit ist abgelaufen.");
+      }
+    }
+
+    const isCorrect = doesGuessMatch(target, cleanAnswer);
+    const answerSeconds = Math.max(
+      3,
+      Math.min(30, Number(settings.buzzerAnswerSeconds) || 7)
+    );
+
+    transaction.set(
+      answerRef(code, gameId, roundNumber, user.uid),
+      {
+        uid: user.uid,
+        displayName: player?.displayName || "Spieler",
+        gameId,
+        roundKey,
+        roundNumber,
+        answer: cleanAnswer,
+        submittedAt: serverTimestamp(),
+        revealed: false,
+        correct: isBuzzerMode ? isCorrect : null,
+        pointsDelta: 0,
+      },
+      { merge: true }
+    );
+
+    transaction.set(
+      playerRef(code, user.uid),
+      {
+        uid: user.uid,
+        lastActiveAt: serverTimestamp(),
+        online: true,
+      },
+      { merge: true }
+    );
+
+    if (!isBuzzerMode) {
+      return;
+    }
+
+    const previousAnsweredBuzzers = Array.isArray(room.answeredBuzzers)
+      ? room.answeredBuzzers
+      : [];
+
+    const answeredBuzzers = [...new Set([...previousAnsweredBuzzers, user.uid])];
+    const nextResponder = isCorrect
+      ? null
+      : getNextResponderFromQueue(
+          room.buzzQueue,
+          answeredBuzzers,
+          room.skippedPlayers
+        );
+
+    const nextDeadlineAtMs = nextResponder
+      ? Date.now() + answerSeconds * 1000
+      : 0;
+
+    transaction.update(ref, {
+      answeredBuzzers,
+      currentResponder: nextResponder,
+      buzzerAnswerDeadlineAtMs: nextDeadlineAtMs,
+      updatedAt: serverTimestamp(),
+    });
+  });
 }
 
 export async function buzzOnlineGuess(roomCode) {
@@ -580,31 +822,64 @@ export async function buzzOnlineGuess(roomCode) {
 
     const room = snap.data();
     const settings = mergeOnlineGuessSettings(room.settings);
+    const activeGameMode = getActiveGameMode(room, settings);
+
+    if (!canPlayerPlayCurrentRound(room, user.uid)) {
+      throw new Error("Diese Stichfrage ist nur für die Spieler im Gleichstand.");
+    }
 
     if (room.status !== "playing" || room.phase !== "question") {
       throw new Error("Aktuell kann nicht gebuzzert werden.");
     }
 
-    if (settings.gameMode !== ONLINE_GUESS_GAME_MODES.BUZZER) {
+    if (activeGameMode !== ONLINE_GUESS_GAME_MODES.BUZZER) {
       throw new Error("Diese Lobby spielt nicht im Buzzer-Modus.");
     }
 
-    if (room.buzzLocked || room.buzzedBy) {
-      throw new Error("Es hat bereits jemand gebuzzert.");
+    const buzzedAtMs = Date.now();
+
+    const existingQueue = Array.isArray(room.buzzQueue)
+      ? room.buzzQueue
+      : [];
+
+    const alreadyBuzzed = existingQueue.some(
+      (entry) => entry.uid === user.uid
+    );
+
+    if (alreadyBuzzed) {
+      throw new Error("Du hast für dieses Pokémon bereits gebuzzert.");
     }
 
-    const buzzedAtMs = Date.now();
     const answerSeconds = Math.max(
       3,
       Math.min(30, Number(settings.buzzerAnswerSeconds) || 7)
     );
 
-    transaction.update(ref, {
-      buzzedBy: user.uid,
-      buzzedAt: serverTimestamp(),
+    const newEntry = {
+      uid: user.uid,
       buzzedAtMs,
-      buzzerAnswerDeadlineAtMs: buzzedAtMs + answerSeconds * 1000,
-      buzzLocked: true,
+    };
+
+    const newQueue = [...existingQueue, newEntry];
+
+    const firstBuzz =
+      existingQueue.length === 0;
+
+    transaction.update(ref, {
+      buzzedBy: firstBuzz ? user.uid : room.buzzedBy,
+      buzzedAt: firstBuzz ? serverTimestamp() : room.buzzedAt,
+      buzzedAtMs: firstBuzz ? buzzedAtMs : room.buzzedAtMs,
+
+      buzzQueue: newQueue,
+
+      currentResponder:
+        room.currentResponder || user.uid,
+
+      buzzerAnswerDeadlineAtMs:
+        room.currentResponder
+          ? room.buzzerAnswerDeadlineAtMs
+          : buzzedAtMs + answerSeconds * 1000,
+
       updatedAt: serverTimestamp(),
     });
   });
@@ -631,7 +906,9 @@ export async function revealOnlineGuessRound(roomCode) {
   }
 
   const settings = mergeOnlineGuessSettings(room.settings);
+  const gameId = room.gameId || "legacy";
   const roundNumber = Number(room.currentRound) || 1;
+  const roundKey = makeRoundKey(gameId, roundNumber);
 
   const playerSnap = await getDocs(playersRef(code));
   const players = playerSnap.docs.map((playerDoc) => ({
@@ -639,7 +916,7 @@ export async function revealOnlineGuessRound(roomCode) {
     ...playerDoc.data(),
   }));
 
-  const answerQuery = query(answersRef(code), where("roundNumber", "==", roundNumber));
+  const answerQuery = query(answersRef(code), where("roundKey", "==", roundKey));
   const answerSnap = await getDocs(answerQuery);
   const answers = answerSnap.docs.map((answerDoc) => ({
     id: answerDoc.id,
@@ -671,6 +948,12 @@ export async function revealOnlineGuessRound(roomCode) {
       throw new Error("Für diese Runde wurde kein Pokémon gefunden.");
     }
 
+    const tiebreakerSet = new Set(
+      Array.isArray(freshRoom.tiebreakerPlayerIds)
+        ? freshRoom.tiebreakerPlayerIds
+        : []
+    );
+
     const answerByUid = new Map();
     for (const answer of answers) {
       answerByUid.set(answer.uid, answer);
@@ -681,6 +964,10 @@ export async function revealOnlineGuessRound(roomCode) {
     for (const player of players) {
       if (player.online === false) continue;
 
+      if (freshRoom.isTiebreaker && !tiebreakerSet.has(player.uid)) {
+        continue;
+      }
+
       const answer = answerByUid.get(player.uid);
       const hasAnswer = Boolean(answer?.answer);
 
@@ -688,14 +975,6 @@ export async function revealOnlineGuessRound(roomCode) {
 
       if (hasAnswer) {
         isCorrect = doesGuessMatch(target, answer.answer);
-      }
-
-      if (
-        settings.gameMode === ONLINE_GUESS_GAME_MODES.BUZZER &&
-        freshRoom.buzzedBy &&
-        player.uid !== freshRoom.buzzedBy
-      ) {
-        isCorrect = false;
       }
 
       const pointsDelta = getAnswerPoints({
@@ -713,7 +992,7 @@ export async function revealOnlineGuessRound(roomCode) {
 
       if (hasAnswer) {
         transaction.set(
-          answerRef(code, roundNumber, player.uid),
+          answerRef(code, gameId, roundNumber, player.uid),
           {
             correct: isCorrect,
             pointsDelta,
@@ -762,10 +1041,25 @@ export async function goToNextOnlineGuessRound(roomCode) {
   const settings = mergeOnlineGuessSettings(room.settings);
   const currentRound = Number(room.currentRound) || 1;
 
+  if (room.isTiebreaker) {
+    await updateDoc(roomRef(code), {
+      status: "finished",
+      phase: "finished",
+      isTiebreaker: false,
+      tiebreakerPlayerIds: [],
+      finishedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return;
+  }
+
   if (currentRound >= Number(settings.totalRounds || 10)) {
     await updateDoc(roomRef(code), {
       status: "finished",
       phase: "finished",
+      isTiebreaker: false,
+      tiebreakerPlayerIds: [],
       finishedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -799,13 +1093,20 @@ export async function goToNextOnlineGuessRound(roomCode) {
       : [];
 
     transaction.update(ref, {
-      phase: "question",
+      phase: "countdown",
+      countdownEndsAtMs: Date.now() + 3000,
       currentRound: currentRound + 1,
       currentQuestion: nextRound,
       usedDexIds: [...freshUsedDexIds, nextRound.target.dexId],
       buzzedBy: null,
       buzzedAt: null,
       buzzedAtMs: 0,
+
+      buzzQueue: [],
+      answeredBuzzers: [],
+      skippedPlayers: [],
+      currentResponder: null,
+
       buzzerAnswerDeadlineAtMs: 0,
       buzzLocked: false,
       lastRevealSummary: [],
@@ -817,9 +1118,15 @@ export async function goToNextOnlineGuessRound(roomCode) {
 
 export async function heartbeatOnlineGuessPlayer(roomCode) {
   const user = await getCurrentUser();
+  const ref = playerRef(roomCode, user.uid);
+  const snap = await getDoc(ref);
+
+  if (snap.exists() && snap.data()?.kicked) {
+    return;
+  }
 
   await setDoc(
-    playerRef(roomCode, user.uid),
+    ref,
     {
       uid: user.uid,
       online: true,
@@ -842,4 +1149,335 @@ export async function leaveOnlineGuessRoom(roomCode) {
     },
     { merge: true }
   );
+}
+
+export async function returnOnlineGuessToLobby(roomCode) {
+  const user = await getCurrentUser();
+  const code = normalizeRoomCode(roomCode);
+
+  const playerSnap = await getDocs(playersRef(code));
+  const players = playerSnap.docs.map((playerDoc) => ({
+    id: playerDoc.id,
+    ...playerDoc.data(),
+  }));
+
+  await runTransaction(db, async (transaction) => {
+    const ref = roomRef(code);
+    const snap = await transaction.get(ref);
+
+    if (!snap.exists()) {
+      throw new Error("Lobby wurde nicht gefunden.");
+    }
+
+    const room = snap.data();
+
+    if (room.hostId !== user.uid) {
+      throw new Error("Nur der Host kann zur Lobby zurückkehren.");
+    }
+
+    transaction.update(ref, {
+      status: "lobby",
+      phase: "lobby",
+
+      gameId: null,
+      isTiebreaker: false,
+      tiebreakerPlayerIds: [],
+      currentRound: 0,
+      currentQuestion: null,
+
+      usedDexIds: [],
+      lastRevealSummary: [],
+
+      buzzedBy: null,
+      buzzedAt: null,
+      buzzedAtMs: 0,
+
+      buzzQueue: [],
+      answeredBuzzers: [],
+      skippedPlayers: [],
+      currentResponder: null,
+
+      buzzerAnswerDeadlineAtMs: 0,
+      buzzLocked: false,
+
+      updatedAt: serverTimestamp(),
+    });
+
+    players.forEach((player) => {
+      transaction.set(
+        playerRef(code, player.uid || player.id),
+        {
+          ready: false,
+          lastActiveAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    });
+  });
+}
+
+export async function kickOnlineGuessPlayer(roomCode, playerUid) {
+  const user = await getCurrentUser();
+  const code = normalizeRoomCode(roomCode);
+
+  const roomSnap = await getDoc(roomRef(code));
+
+  if (!roomSnap.exists()) {
+    throw new Error("Lobby wurde nicht gefunden.");
+  }
+
+  const room = roomSnap.data();
+
+  if (room.hostId !== user.uid) {
+    throw new Error("Nur der Host kann Spieler kicken.");
+  }
+
+  if (playerUid === room.hostId) {
+    throw new Error("Der Host kann sich nicht selbst kicken.");
+  }
+
+  await updateDoc(playerRef(code, playerUid), {
+    online: false,
+    ready: false,
+    kicked: true,
+    kickedAt: serverTimestamp(),
+  });
+}
+
+export async function transferOnlineGuessHost(
+  roomCode,
+  newHostUid
+) {
+  const user = await getCurrentUser();
+  const code = normalizeRoomCode(roomCode);
+
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef(code));
+
+    if (!roomSnap.exists()) {
+      throw new Error("Lobby wurde nicht gefunden.");
+    }
+
+    const room = roomSnap.data();
+
+    if (room.hostId !== user.uid) {
+      throw new Error("Nur der Host kann den Host übertragen.");
+    }
+
+    transaction.update(roomRef(code), {
+      hostId: newHostUid,
+      updatedAt: serverTimestamp(),
+    });
+
+    transaction.update(playerRef(code, user.uid), {
+      isHost: false,
+    });
+
+    transaction.update(playerRef(code, newHostUid), {
+      isHost: true,
+    });
+  });
+}
+
+export async function closeOnlineGuessRoom(roomCode) {
+  const user = await getCurrentUser();
+  const code = normalizeRoomCode(roomCode);
+
+  const snap = await getDoc(roomRef(code));
+
+  if (!snap.exists()) {
+    throw new Error("Lobby wurde nicht gefunden.");
+  }
+
+  const room = snap.data();
+
+  if (room.hostId !== user.uid) {
+    throw new Error("Nur der Host kann die Lobby schließen.");
+  }
+
+  await updateDoc(roomRef(code), {
+    status: "closed",
+    phase: "closed",
+    closedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function skipOnlineGuessBuzzer(roomCode) {
+  const user = await getCurrentUser();
+  const code = normalizeRoomCode(roomCode);
+
+  await runTransaction(db, async (transaction) => {
+    const ref = roomRef(code);
+    const snap = await transaction.get(ref);
+
+    if (!snap.exists()) {
+      throw new Error("Lobby wurde nicht gefunden.");
+    }
+
+    const room = snap.data();
+    const settings = mergeOnlineGuessSettings(room.settings);
+    const activeGameMode = getActiveGameMode(room, settings);
+
+    if (!canPlayerPlayCurrentRound(room, user.uid)) {
+      throw new Error("Diese Stichfrage ist nur für die Spieler im Gleichstand.");
+    }
+
+    if (room.status !== "playing" || room.phase !== "question") {
+      throw new Error("Aktuell kann nicht geskippt werden.");
+    }
+
+    const skippedPlayers = Array.isArray(room.skippedPlayers)
+      ? room.skippedPlayers
+      : [];
+
+    if (skippedPlayers.includes(user.uid)) {
+      throw new Error("Du hast diese Runde bereits geskippt.");
+    }
+
+    const updatePayload = {
+      skippedPlayers: arrayUnion(user.uid),
+      updatedAt: serverTimestamp(),
+    };
+
+    if (
+      activeGameMode === ONLINE_GUESS_GAME_MODES.BUZZER &&
+      room.currentResponder === user.uid
+    ) {
+      const previousAnsweredBuzzers = Array.isArray(room.answeredBuzzers)
+        ? room.answeredBuzzers
+        : [];
+
+      const answeredBuzzers = [
+        ...new Set([...previousAnsweredBuzzers, user.uid]),
+      ];
+
+      const answerSeconds = Math.max(
+        3,
+        Math.min(30, Number(settings.buzzerAnswerSeconds) || 7)
+      );
+
+      const nextResponder = getNextResponderFromQueue(
+        room.buzzQueue,
+        answeredBuzzers,
+        [...skippedPlayers, user.uid]
+      );
+
+      updatePayload.answeredBuzzers = answeredBuzzers;
+      updatePayload.currentResponder = nextResponder;
+      updatePayload.buzzerAnswerDeadlineAtMs = nextResponder
+        ? Date.now() + answerSeconds * 1000
+        : 0;
+    }
+
+    transaction.update(ref, updatePayload);
+  });
+}
+
+export async function expireOnlineGuessBuzzerResponder(roomCode) {
+  const user = await getCurrentUser();
+  const code = normalizeRoomCode(roomCode);
+
+  await runTransaction(db, async (transaction) => {
+    const ref = roomRef(code);
+    const snap = await transaction.get(ref);
+
+    if (!snap.exists()) {
+      throw new Error("Lobby wurde nicht gefunden.");
+    }
+
+    const room = snap.data();
+
+    if (room.hostId !== user.uid) {
+      throw new Error("Nur der Host kann die Antwortzeit verwalten.");
+    }
+
+    if (room.status !== "playing" || room.phase !== "question") {
+      return;
+    }
+
+    const settings = mergeOnlineGuessSettings(room.settings);
+    const activeGameMode = getActiveGameMode(room, settings);
+
+    if (activeGameMode !== ONLINE_GUESS_GAME_MODES.BUZZER) {
+      return;
+    }
+
+    const currentResponder = room.currentResponder;
+
+    if (!currentResponder) {
+      return;
+    }
+
+    const deadlineAtMs = Number(room.buzzerAnswerDeadlineAtMs) || 0;
+
+    if (!deadlineAtMs || Date.now() < deadlineAtMs) {
+      return;
+    }
+
+    const previousAnsweredBuzzers = Array.isArray(room.answeredBuzzers)
+      ? room.answeredBuzzers
+      : [];
+
+    const answeredBuzzers = [
+      ...new Set([...previousAnsweredBuzzers, currentResponder]),
+    ];
+
+    const answerSeconds = Math.max(
+      3,
+      Math.min(30, Number(settings.buzzerAnswerSeconds) || 7)
+    );
+
+    const nextResponder = getNextResponderFromQueue(
+      room.buzzQueue,
+      answeredBuzzers,
+      room.skippedPlayers
+    );
+
+    transaction.update(ref, {
+      answeredBuzzers,
+      currentResponder: nextResponder,
+      buzzerAnswerDeadlineAtMs: nextResponder
+        ? Date.now() + answerSeconds * 1000
+        : 0,
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function finishOnlineGuessCountdown(roomCode) {
+  const user = await getCurrentUser();
+  const code = normalizeRoomCode(roomCode);
+
+  await runTransaction(db, async (transaction) => {
+    const ref = roomRef(code);
+    const snap = await transaction.get(ref);
+
+    if (!snap.exists()) {
+      throw new Error("Lobby wurde nicht gefunden.");
+    }
+
+    const room = snap.data();
+
+    if (room.hostId !== user.uid) {
+      throw new Error("Nur der Host kann den Countdown beenden.");
+    }
+
+    if (room.status !== "playing" || room.phase !== "countdown") {
+      return;
+    }
+
+    const countdownEndsAtMs = Number(room.countdownEndsAtMs) || 0;
+
+    if (countdownEndsAtMs > 0 && Date.now() < countdownEndsAtMs) {
+      return;
+    }
+
+    transaction.update(ref, {
+      phase: "question",
+      countdownEndsAtMs: 0,
+      roundStartedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  });
 }

@@ -4,6 +4,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   DEFAULT_ONLINE_GUESS_SETTINGS,
   ONLINE_GUESS_GAME_MODES,
+  closeOnlineGuessRoom,
+  kickOnlineGuessPlayer,
+  transferOnlineGuessHost,
   getOnlineGuessPlayerId,
   heartbeatOnlineGuessPlayer,
   leaveOnlineGuessRoom,
@@ -150,6 +153,7 @@ export default function OnlineGuessLobby() {
   const [players, setPlayers] = useState([]);
   const [myUid, setMyUid] = useState("");
   const [copied, setCopied] = useState(false);
+  const [openPlayerMenuUid, setOpenPlayerMenuUid] = useState("");
   const [loadingText, setLoadingText] = useState("Lobby wird geladen...");
   const [errorText, setErrorText] = useState("");
 
@@ -166,6 +170,12 @@ export default function OnlineGuessLobby() {
   const isHost = Boolean(room && myUid && room.hostId === myUid);
   const allReady =
     onlinePlayers.length > 0 && onlinePlayers.every((player) => Boolean(player.ready));
+
+  useEffect(() => {
+    if (!myUid || !currentPlayer?.kicked) return;
+
+    navigate("/games/pokemon-guess/online");
+  }, [currentPlayer?.kicked, myUid, navigate]);
 
   useEffect(() => {
     let mounted = true;
@@ -214,6 +224,11 @@ export default function OnlineGuessLobby() {
       if (nextRoom.status === "finished") {
         navigate(`/games/pokemon-guess/online/${cleanRoomCode}/game`);
       }
+      
+      if (nextRoom.status === "closed") {
+        navigate("/games/pokemon-guess/online");
+      }
+
     });
 
     const unsubPlayers = subscribeOnlineGuessPlayers(cleanRoomCode, (nextPlayers) => {
@@ -263,6 +278,38 @@ export default function OnlineGuessLobby() {
     } catch (error) {
       console.error(error);
       setErrorText(error?.message || "Bereit-Status konnte nicht geändert werden.");
+    }
+  }
+
+    async function kickPlayer(playerUid) {
+    try {
+      await kickOnlineGuessPlayer(cleanRoomCode, playerUid);
+    } catch (error) {
+      console.error(error);
+      setErrorText(error?.message || "Spieler konnte nicht gekickt werden.");
+    }
+  }
+
+  async function makeHost(playerUid) {
+    try {
+      await transferOnlineGuessHost(cleanRoomCode, playerUid);
+    } catch (error) {
+      console.error(error);
+      setErrorText(error?.message || "Host konnte nicht übertragen werden.");
+    }
+  }
+
+  async function closeLobby() {
+    if (!window.confirm("Lobby wirklich schließen?")) {
+      return;
+    }
+
+    try {
+      await closeOnlineGuessRoom(cleanRoomCode);
+      navigate("/games/pokemon-guess/online");
+    } catch (error) {
+      console.error(error);
+      setErrorText(error?.message || "Lobby konnte nicht geschlossen werden.");
     }
   }
 
@@ -439,21 +486,81 @@ export default function OnlineGuessLobby() {
             </div>
 
             <div className="online-player-list">
-              {onlinePlayers.map((player) => (
-                <div key={player.uid || player.id} className="online-player-row">
-                  <div>
-                    <strong>{getPlayerName(player)}</strong>
-                    <span>
-                      {player.uid === room?.hostId ? "Host" : "Spieler"}
-                      {player.uid === myUid ? " · Du" : ""}
-                    </span>
-                  </div>
+                            {onlinePlayers.map((player) => {
+                const canOpenPlayerMenu = isHost && player.uid !== myUid;
 
-                  <em className={player.ready ? "online-ready-pill" : "online-wait-pill"}>
-                    {player.ready ? "Bereit" : "Wartet"}
-                  </em>
-                </div>
-              ))}
+                return (
+                  <div
+                    key={player.uid || player.id}
+                    className={
+                      canOpenPlayerMenu
+                        ? "online-player-row online-player-row-clickable"
+                        : "online-player-row"
+                    }
+                    role={canOpenPlayerMenu ? "button" : undefined}
+                    tabIndex={canOpenPlayerMenu ? 0 : undefined}
+                    onClick={() => {
+                      if (!canOpenPlayerMenu) return;
+
+                      setOpenPlayerMenuUid((current) =>
+                        current === player.uid ? "" : player.uid
+                      );
+                    }}
+                    onKeyDown={(event) => {
+                      if (!canOpenPlayerMenu) return;
+
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+
+                        setOpenPlayerMenuUid((current) =>
+                          current === player.uid ? "" : player.uid
+                        );
+                      }
+                    }}
+                  >
+                    <div>
+                      <strong>{getPlayerName(player)}</strong>
+                      <span>
+                        {player.uid === room?.hostId ? "Host" : "Spieler"}
+                        {player.uid === myUid ? " · Du" : ""}
+                      </span>
+                    </div>
+
+                    <div className="online-player-actions">
+                      <em className={player.ready ? "online-ready-pill" : "online-wait-pill"}>
+                        {player.ready ? "Bereit" : "Wartet"}
+                      </em>
+
+                      {canOpenPlayerMenu && openPlayerMenuUid === player.uid && (
+                        <div
+                          className="online-player-popover"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenPlayerMenuUid("");
+                              makeHost(player.uid);
+                            }}
+                          >
+                            Zum Host machen
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenPlayerMenuUid("");
+                              kickPlayer(player.uid);
+                            }}
+                          >
+                            Spieler kicken
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
 
               {onlinePlayers.length === 0 && (
                 <div className="guess-small-info">Noch keine Spieler online.</div>
@@ -483,6 +590,18 @@ export default function OnlineGuessLobby() {
                 </strong>
               </div>
             </div>
+
+            {isHost && (
+              <div className="guess-action-row">
+                <button
+                  className="guess-secondary-button"
+                  type="button"
+                  onClick={closeLobby}
+                >
+                  Lobby schließen
+                </button>
+              </div>
+            )}
 
             {isHost ? (
               <button
@@ -577,15 +696,12 @@ export default function OnlineGuessLobby() {
                   </label>
 
                   <label className="online-form-label">
-                    <span>Zeit pro Runde</span>
+                    <span>Runden-Timer</span>
                     <NumberInput
                       value={settings.answerTimeSeconds}
                       min={3}
                       max={300}
-                      disabled={
-                        !isHost ||
-                        settings.gameMode !== ONLINE_GUESS_GAME_MODES.TIMER
-                      }
+                      disabled={!isHost}
                       onCommit={(value) =>
                         updateSetting({
                           answerTimeSeconds: value,

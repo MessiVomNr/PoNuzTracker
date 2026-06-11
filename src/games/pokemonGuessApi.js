@@ -181,23 +181,109 @@ async function getNamedResourceGermanName(resource, fallback) {
   return germanName;
 }
 
-function pickMoveResources(pokemonMoves) {
+function getMoveVersionGroupGeneration(versionGroupName) {
+  const name = String(versionGroupName || "").toLowerCase();
+
+  if (
+    name.includes("red-blue") ||
+    name.includes("yellow")
+  ) {
+    return 1;
+  }
+
+  if (
+    name.includes("gold-silver") ||
+    name.includes("crystal")
+  ) {
+    return 2;
+  }
+
+  if (
+    name.includes("ruby-sapphire") ||
+    name.includes("emerald") ||
+    name.includes("firered-leafgreen")
+  ) {
+    return 3;
+  }
+
+  if (
+    name.includes("diamond-pearl") ||
+    name.includes("platinum") ||
+    name.includes("heartgold-soulsilver")
+  ) {
+    return 4;
+  }
+
+  if (
+    name.includes("black-white") ||
+    name.includes("black-2-white-2")
+  ) {
+    return 5;
+  }
+
+  if (
+    name.includes("x-y") ||
+    name.includes("omega-ruby-alpha-sapphire")
+  ) {
+    return 6;
+  }
+
+  if (
+    name.includes("sun-moon") ||
+    name.includes("ultra-sun-ultra-moon") ||
+    name.includes("lets-go")
+  ) {
+    return 7;
+  }
+
+  if (
+    name.includes("sword-shield") ||
+    name.includes("brilliant-diamond-and-shining-pearl") ||
+    name.includes("legends-arceus")
+  ) {
+    return 8;
+  }
+
+  if (
+    name.includes("scarlet-violet")
+  ) {
+    return 9;
+  }
+
+  return 0;
+}
+
+function pickMoveResources(pokemonMoves, pokemonGen) {
   const levelUpMoves = [];
+  const targetGen = Math.max(1, Math.min(9, Number(pokemonGen) || 1));
 
   for (const moveEntry of pokemonMoves || []) {
-    const levelDetails = (moveEntry.version_group_details || []).filter(
-      (detail) => detail.move_learn_method?.name === "level-up"
-    );
+    const levelDetails = (moveEntry.version_group_details || []).filter((detail) => {
+      if (detail.move_learn_method?.name !== "level-up") return false;
+
+      const versionGroupUrl = detail.version_group?.url || "";
+      const versionGroupId = getIdFromUrl(versionGroupUrl);
+
+      return versionGroupId > 0;
+    });
 
     if (levelDetails.length === 0) continue;
 
-    const highestLevel = Math.max(
-      ...levelDetails.map((detail) => Number(detail.level_learned_at || 0))
+    const matchingGenDetails = levelDetails.filter((detail) => {
+      const versionGroupName = detail.version_group?.name || "";
+      const gen = getMoveVersionGroupGeneration(versionGroupName);
+      return gen === targetGen;
+    });
+
+    const usableDetails = matchingGenDetails.length > 0 ? matchingGenDetails : levelDetails;
+
+    const lowestLevel = Math.min(
+      ...usableDetails.map((detail) => Number(detail.level_learned_at || 0))
     );
 
     levelUpMoves.push({
       move: moveEntry.move,
-      level: highestLevel,
+      level: lowestLevel,
     });
   }
 
@@ -207,18 +293,13 @@ function pickMoveResources(pokemonMoves) {
       return array.findIndex((other) => other.move.name === entry.move.name) === index;
     });
 
-  if (sorted.length <= 4) {
-    return sorted.map((entry) => entry.move);
+  const levelFiveMoves = sorted.filter((entry) => entry.level <= 5).slice(0, 4);
+
+  if (levelFiveMoves.length > 0) {
+    return levelFiveMoves.map((entry) => entry.move);
   }
 
-  const pickedIndexes = [
-    Math.floor(sorted.length * 0.2),
-    Math.floor(sorted.length * 0.45),
-    Math.floor(sorted.length * 0.7),
-    sorted.length - 1,
-  ];
-
-  return [...new Set(pickedIndexes)].map((index) => sorted[index].move).slice(0, 4);
+  return sorted.slice(0, 4).map((entry) => entry.move);
 }
 
 export async function loadPokemonGuessPool(selectedGens) {
@@ -300,7 +381,7 @@ export async function loadPokemonGuessDetails(basePokemon) {
     ? await getNamedResourceGermanName(firstAbility, makePrettyApiName(firstAbility.name))
     : "";
 
-  const moveResources = pickMoveResources(pokemon.moves);
+  const moveResources = pickMoveResources(pokemon.moves, basePokemon.gen);
 
   const moves = await mapWithLimit(moveResources, 4, async (move) => {
     return getNamedResourceGermanName(move, makePrettyApiName(move.name));
