@@ -1,23 +1,22 @@
-// src/versus/RecentVersusRoomsPanel.jsx
+// src/versus/recentVersusRoomsPanel.jsx
 import React, { useEffect, useState } from "react";
 import { loadRecentVersusRooms, removeRecentVersusRoom } from "./recentVersusRooms";
 import { db } from "../firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 
-export default function RecentVersusRoomsPanel({ onReconnect, onDeleteRoom, canDeleteRoom }) {
-  // ✅ NICHT useMemo([]) – wir brauchen State, damit UI sofort aktualisiert
+export default function RecentVersusRoomsPanel({
+  onReconnect,
+  onDeleteRoom,
+  canDeleteRoom,
+}) {
   const [rooms, setRooms] = useState(() => loadRecentVersusRooms());
 
-  // ✅ Wenn localStorage-Liste irgendwo geändert wird (auch anderer Tab), neu laden
   useEffect(() => {
     function refresh() {
       setRooms(loadRecentVersusRooms());
     }
 
-    // unser eigener Custom-Event (siehe recentVersusRooms.js unten)
     window.addEventListener("recentVersusRoomsChanged", refresh);
-
-    // Browser-"storage" Event (für andere Tabs)
     window.addEventListener("storage", refresh);
 
     return () => {
@@ -26,9 +25,8 @@ export default function RecentVersusRoomsPanel({ onReconnect, onDeleteRoom, canD
     };
   }, []);
 
-  // ✅ Firestore live: wenn eine Lobby gelöscht wird, fliegt sie automatisch aus der Liste
   useEffect(() => {
-    if (!rooms.length) return;
+    if (!rooms.length) return undefined;
 
     const unsubs = rooms.map((r) => {
       const id = String(r.roomId || "").toUpperCase();
@@ -36,7 +34,6 @@ export default function RecentVersusRoomsPanel({ onReconnect, onDeleteRoom, canD
 
       return onSnapshot(doc(db, "versusRooms", id), (snap) => {
         if (!snap.exists()) {
-          // Lobby wurde gelöscht -> auch lokal entfernen
           removeRecentVersusRoom(id);
           setRooms(loadRecentVersusRooms());
         }
@@ -48,50 +45,74 @@ export default function RecentVersusRoomsPanel({ onReconnect, onDeleteRoom, canD
     };
   }, [rooms]);
 
+  function handleRemoveFromList(id) {
+    removeRecentVersusRoom(id);
+    setRooms(loadRecentVersusRooms());
+  }
+
+  function formatDate(value) {
+    const when = Number(value || 0);
+
+    if (!when) {
+      return "";
+    }
+
+    return new Date(when).toLocaleString("de-DE");
+  }
+
   if (!rooms.length) {
     return (
-      <div style={box}>
-        <div style={title}>Letzte Lobbys</div>
-        <div style={{ opacity: 0.7, fontSize: 12 }}>Noch keine gespeicherten Lobbys.</div>
+      <div className="versus-recent-panel versus-recent-empty">
+        <div className="versus-recent-panel-title">Letzte Lobbys</div>
+        <p>Noch keine gespeicherten Lobbys.</p>
       </div>
     );
   }
 
   return (
-    <div style={box}>
-      <div style={title}>Letzte Lobbys</div>
+    <div className="versus-recent-panel">
+      <div className="versus-recent-panel-title">Letzte Lobbys</div>
 
-      <div style={{ display: "grid", gap: 8 }}>
+      <div className="versus-recent-list">
         {rooms.map((r) => {
           const id = String(r.roomId || "").toUpperCase();
-          const t = String(r.title || "").trim();
-          const when = Number(r.lastSeenAt || 0);
+          const title = String(r.title || "").trim();
+          const lastSeen = formatDate(r.lastSeenAt);
 
           return (
-            <div key={id} style={card}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
-                <div style={{ fontWeight: 900 }}>
-                  {id}
-                  {t ? <span style={{ fontWeight: 700, opacity: 0.8 }}> — {t}</span> : null}
+            <article key={id} className="versus-recent-room-card">
+              <div className="versus-recent-room-head">
+                <div className="versus-recent-room-main">
+                  <strong>{id}</strong>
+
+                  {title ? (
+                    <span>{title}</span>
+                  ) : (
+                    <span>Versus Lobby</span>
+                  )}
                 </div>
-                <div style={{ fontSize: 12, opacity: 0.7 }}>
-                  {when ? new Date(when).toLocaleString("de-DE") : ""}
-                </div>
+
+                {lastSeen && (
+                  <time className="versus-recent-room-time">
+                    {lastSeen}
+                  </time>
+                )}
               </div>
 
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                <button type="button" style={btn} onClick={() => onReconnect?.(id)}>
+              <div className="versus-recent-actions">
+                <button
+                  type="button"
+                  className="pnt-button"
+                  onClick={() => onReconnect?.(id)}
+                >
                   Reconnect
                 </button>
 
                 <button
                   type="button"
-                  style={btnGhost}
-                  onClick={() => {
-                    removeRecentVersusRoom(id);
-                    setRooms(loadRecentVersusRooms()); // ✅ sofort UI updaten
-                  }}
-                  title="Nur aus der Liste entfernen (nicht aus Firestore)"
+                  className="pnt-button pnt-button-ghost"
+                  onClick={() => handleRemoveFromList(id)}
+                  title="Nur aus der Liste entfernen, nicht aus Firestore"
                 >
                   Aus Liste entfernen
                 </button>
@@ -99,7 +120,7 @@ export default function RecentVersusRoomsPanel({ onReconnect, onDeleteRoom, canD
                 {canDeleteRoom?.(id) ? (
                   <button
                     type="button"
-                    style={btnDanger}
+                    className="pnt-button pnt-button-danger"
                     onClick={() => onDeleteRoom?.(id)}
                     title="Löscht die Lobby aus Firestore"
                   >
@@ -107,56 +128,10 @@ export default function RecentVersusRoomsPanel({ onReconnect, onDeleteRoom, canD
                   </button>
                 ) : null}
               </div>
-            </div>
+            </article>
           );
         })}
       </div>
     </div>
   );
 }
-
-const box = {
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(0,0,0,0.15)",
-};
-
-const title = { fontWeight: 900, marginBottom: 10 };
-
-const card = {
-  padding: 10,
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.04)",
-};
-
-const btn = {
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.28)",
-  background: "rgba(255,255,255,0.16)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 900,
-};
-
-const btnGhost = {
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 800,
-};
-
-const btnDanger = {
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid rgba(239,68,68,0.35)",
-  background: "rgba(239,68,68,0.12)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 900,
-};

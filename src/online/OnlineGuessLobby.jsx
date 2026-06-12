@@ -68,7 +68,7 @@ function FancySelect({ value, onChange, options, disabled }) {
   return (
     <div className="online-fancy-select-wrap">
       <select
-        className="guess-name-input online-fancy-select"
+        className="online-lobby-input online-fancy-select"
         value={value}
         onChange={onChange}
         disabled={disabled}
@@ -124,7 +124,7 @@ function NumberInput({
 
   return (
     <input
-      className="guess-number-input online-manual-number-input"
+      className="online-lobby-input online-manual-number-input"
       type="number"
       inputMode="numeric"
       min={min}
@@ -153,7 +153,6 @@ export default function OnlineGuessLobby() {
   const [players, setPlayers] = useState([]);
   const [myUid, setMyUid] = useState("");
   const [copied, setCopied] = useState(false);
-  const [openPlayerMenuUid, setOpenPlayerMenuUid] = useState("");
   const [loadingText, setLoadingText] = useState("Lobby wird geladen...");
   const [errorText, setErrorText] = useState("");
 
@@ -406,66 +405,89 @@ export default function OnlineGuessLobby() {
 
   if (loadingText && !room) {
     return (
-      <div className="games-page">
-        <div className="games-panel guess-panel">
+      <main className="games-page games-hub-page online-lobby-page">
+        <section className="games-hub-panel online-lobby-panel">
           <button
-            className="games-back-button"
             type="button"
+            className="games-hub-back-button"
             onClick={() => navigate("/games/pokemon-guess/online")}
           >
+            <span className="games-hub-back-arrow">‹</span>
             Zurück
           </button>
 
-          <div className="guess-loading-box">{loadingText}</div>
-        </div>
-      </div>
+          <header className="games-hub-header online-lobby-header">
+            <h1>Online-Lobby</h1>
+            <p>Die Lobby wird geladen.</p>
+          </header>
+
+          <div className="online-lobby-alert online-lobby-alert-loading">
+            {loadingText}
+          </div>
+        </section>
+      </main>
     );
   }
 
   return (
-    <div className="games-page">
-      <div className="games-panel guess-panel">
-        <div className="guess-page-actions">
-          <button className="games-back-button" type="button" onClick={leaveLobbyAction}>
+    <main className="games-page games-hub-page online-lobby-page">
+      <section className="games-hub-panel online-lobby-panel">
+        <div className="online-lobby-top-actions">
+          <button
+            type="button"
+            className="games-hub-back-button online-lobby-leave-button"
+            onClick={leaveLobbyAction}
+          >
+            <span className="games-hub-back-arrow">‹</span>
             Lobby verlassen
           </button>
 
           <button
-            className="games-back-button"
             type="button"
+            className="online-lobby-ghost-button"
             onClick={() => navigate("/games/pokemon-guess")}
           >
             Zum Guess-Menü
           </button>
         </div>
 
-        <div className="online-lobby-hero">
-          <div>
-            <p className="guess-kicker">Online-Lobby</p>
-            <h1>Lobby {cleanRoomCode}</h1>
-            <p className="games-subtitle">
-              Teile den Code mit deinen Freunden. Der Host stellt alles ein,
-              danach müssen alle bereit sein.
-            </p>
-          </div>
+        <header className="games-hub-header online-lobby-header">
+          <h1>Lobby {cleanRoomCode}</h1>
+          <p>
+            Teile den Code mit deinen Freunden. Der Host stellt alles ein,
+            danach müssen alle bereit sein.
+          </p>
+        </header>
 
-          <div className="online-code-card">
+        <div className="online-lobby-code-strip">
+          <div>
             <span>Lobbycode</span>
             <strong>{cleanRoomCode}</strong>
-            <button type="button" onClick={copyLobbyCode}>
-              {copied ? "Kopiert" : "Code kopieren"}
-            </button>
           </div>
+
+          <button type="button" onClick={copyLobbyCode}>
+            {copied ? "Kopiert" : "Code kopieren"}
+          </button>
         </div>
 
-        {errorText && <div className="guess-error-box">{errorText}</div>}
-        {loadingText && room && <div className="guess-loading-box">{loadingText}</div>}
+        {errorText && (
+          <div className="online-lobby-alert online-lobby-alert-error">
+            {errorText}
+          </div>
+        )}
 
-        <div className="online-lobby-grid">
-          <section className="guess-settings-card">
-            <div className="guess-section-title-row">
+        {loadingText && room && (
+          <div className="online-lobby-alert online-lobby-alert-loading">
+            {loadingText}
+          </div>
+        )}
+
+        <div className="online-lobby-main-grid">
+          <section className="online-lobby-card online-lobby-players-card">
+            <div className="online-lobby-card-head online-lobby-card-head-with-action">
               <div>
-                <h2>Spieler</h2>
+                <span className="online-lobby-card-kicker">Spieler</span>
+                <h2>Teilnehmer</h2>
                 <p>
                   Alle Spieler müssen bereit sein, damit der Host starten kann.
                 </p>
@@ -485,91 +507,74 @@ export default function OnlineGuessLobby() {
               </button>
             </div>
 
-            <div className="online-player-list">
-                            {onlinePlayers.map((player) => {
-                const canOpenPlayerMenu = isHost && player.uid !== myUid;
+            <div className="online-player-list online-lobby-player-list">
+              {onlinePlayers.map((player) => {
+                const playerUid = player.uid || player.id;
+                const canManagePlayer = isHost && playerUid !== myUid;
 
                 return (
                   <div
-                    key={player.uid || player.id}
+                    key={playerUid}
                     className={
-                      canOpenPlayerMenu
-                        ? "online-player-row online-player-row-clickable"
+                      canManagePlayer
+                        ? "online-player-row online-player-row-manageable"
                         : "online-player-row"
                     }
-                    role={canOpenPlayerMenu ? "button" : undefined}
-                    tabIndex={canOpenPlayerMenu ? 0 : undefined}
-                    onClick={() => {
-                      if (!canOpenPlayerMenu) return;
-
-                      setOpenPlayerMenuUid((current) =>
-                        current === player.uid ? "" : player.uid
-                      );
-                    }}
-                    onKeyDown={(event) => {
-                      if (!canOpenPlayerMenu) return;
-
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-
-                        setOpenPlayerMenuUid((current) =>
-                          current === player.uid ? "" : player.uid
-                        );
-                      }
-                    }}
                   >
-                    <div>
-                      <strong>{getPlayerName(player)}</strong>
-                      <span>
-                        {player.uid === room?.hostId ? "Host" : "Spieler"}
-                        {player.uid === myUid ? " · Du" : ""}
-                      </span>
-                    </div>
+                    <div className="online-lobby-player-main">
+                      <div>
+                        <strong>{getPlayerName(player)}</strong>
+                        <span>
+                          {playerUid === room?.hostId ? "Host" : "Spieler"}
+                          {playerUid === myUid ? " · Du" : ""}
+                        </span>
+                      </div>
 
-                    <div className="online-player-actions">
                       <em className={player.ready ? "online-ready-pill" : "online-wait-pill"}>
                         {player.ready ? "Bereit" : "Wartet"}
                       </em>
-
-                      {canOpenPlayerMenu && openPlayerMenuUid === player.uid && (
-                        <div
-                          className="online-player-popover"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOpenPlayerMenuUid("");
-                              makeHost(player.uid);
-                            }}
-                          >
-                            Zum Host machen
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOpenPlayerMenuUid("");
-                              kickPlayer(player.uid);
-                            }}
-                          >
-                            Spieler kicken
-                          </button>
-                        </div>
-                      )}
                     </div>
+
+                    {canManagePlayer && (
+                      <div className="online-lobby-player-controls">
+                        <button
+                          type="button"
+                          onClick={() => makeHost(playerUid)}
+                        >
+                          Host machen
+                        </button>
+
+                        <button
+                          type="button"
+                          className="online-lobby-danger-button"
+                          onClick={() => kickPlayer(playerUid)}
+                        >
+                          Kicken
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
 
               {onlinePlayers.length === 0 && (
-                <div className="guess-small-info">Noch keine Spieler online.</div>
+                <div className="online-lobby-empty-note">
+                  Noch keine Spieler online.
+                </div>
               )}
             </div>
           </section>
 
-          <section className="guess-settings-card">
-            <h2>Status</h2>
+          <section className="online-lobby-card online-lobby-status-card">
+            <div className="online-lobby-card-head">
+              <div>
+                <span className="online-lobby-card-kicker">Status</span>
+                <h2>Lobby-Status</h2>
+                <p>
+                  Hier siehst du, ob die Runde bereit zum Starten ist.
+                </p>
+              </div>
+            </div>
 
             <div className="online-status-list">
               <div>
@@ -592,20 +597,18 @@ export default function OnlineGuessLobby() {
             </div>
 
             {isHost && (
-              <div className="guess-action-row">
-                <button
-                  className="guess-secondary-button"
-                  type="button"
-                  onClick={closeLobby}
-                >
-                  Lobby schließen
-                </button>
-              </div>
+              <button
+                className="online-lobby-close-button"
+                type="button"
+                onClick={closeLobby}
+              >
+                Lobby schließen
+              </button>
             )}
 
             {isHost ? (
               <button
-                className="guess-start-button"
+                className="online-lobby-start-button"
                 type="button"
                 onClick={startGame}
                 disabled={!allReady || Boolean(loadingText)}
@@ -613,22 +616,23 @@ export default function OnlineGuessLobby() {
                 Spiel starten
               </button>
             ) : (
-              <div className="guess-points-note">
+              <div className="online-lobby-info-note">
                 Nur der Host kann das Spiel starten. Mach dich bereit und warte
                 auf den Start.
               </div>
             )}
 
             {isHost && !allReady && (
-              <div className="guess-small-info">
+              <div className="online-lobby-small-note">
                 Start ist erst möglich, wenn alle Spieler bereit sind.
               </div>
             )}
           </section>
 
-          <section className="guess-settings-card guess-wide-card">
-            <div className="guess-section-title-row">
+          <section className="online-lobby-card online-lobby-settings-card">
+            <div className="online-lobby-card-head online-lobby-card-head-with-action">
               <div>
+                <span className="online-lobby-card-kicker">Regeln</span>
                 <h2>Host-Einstellungen</h2>
                 <p>
                   Nur der Host kann diese Einstellungen ändern. Alle anderen
@@ -636,7 +640,9 @@ export default function OnlineGuessLobby() {
                 </p>
               </div>
 
-              {!isHost && <strong className="online-readonly-badge">Nur Anzeige</strong>}
+              {!isHost && (
+                <strong className="online-readonly-badge">Nur Anzeige</strong>
+              )}
             </div>
 
             <div className="online-settings-shell">
@@ -856,14 +862,16 @@ export default function OnlineGuessLobby() {
                 </div>
 
                 <div className="online-gen-settings">
-                  <div className="guess-section-title-row">
+                  <div className="online-lobby-generation-head">
                     <div>
                       <h3>Generationen</h3>
-                      <p>Diese Generationen werden für die Pokémon-Auswahl genutzt.</p>
+                      <p>
+                        Diese Generationen werden für die Pokémon-Auswahl genutzt.
+                      </p>
                     </div>
 
                     <button
-                      className="guess-secondary-button"
+                      className="online-lobby-ghost-button"
                       type="button"
                       onClick={selectAllGenerations}
                       disabled={!isHost}
@@ -873,64 +881,64 @@ export default function OnlineGuessLobby() {
                   </div>
 
                   <div className="guess-gen-grid online-gen-grid-clean">
-  {GENERATION_OPTIONS.map((gen) => {
-    const active = settings.selectedGens?.includes(gen);
+                    {GENERATION_OPTIONS.map((gen) => {
+                      const active = settings.selectedGens?.includes(gen);
 
-    function handleCardClick() {
-      if (!isHost) return;
-      toggleGeneration(gen);
-    }
+                      function handleCardClick() {
+                        if (!isHost) return;
+                        toggleGeneration(gen);
+                      }
 
-    function handleCardKeyDown(event) {
-      if (!isHost) return;
+                      function handleCardKeyDown(event) {
+                        if (!isHost) return;
 
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        toggleGeneration(gen);
-      }
-    }
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          toggleGeneration(gen);
+                        }
+                      }
 
-    return (
-      <div
-        key={gen}
-        className={
-          active
-            ? "guess-gen-card guess-gen-card-active"
-            : "guess-gen-card"
-        }
-        role="button"
-        tabIndex={isHost ? 0 : -1}
-        onClick={handleCardClick}
-        onKeyDown={handleCardKeyDown}
-      >
-        <div className="online-gen-card-top">
-          <span className="online-gen-mini-switch" aria-hidden="true">
-            <input
-              type="checkbox"
-              checked={Boolean(active)}
-              readOnly
-              tabIndex={-1}
-              disabled={!isHost}
-            />
-          </span>
+                      return (
+                        <div
+                          key={gen}
+                          className={
+                            active
+                              ? "guess-gen-card guess-gen-card-active"
+                              : "guess-gen-card"
+                          }
+                          role="button"
+                          tabIndex={isHost ? 0 : -1}
+                          onClick={handleCardClick}
+                          onKeyDown={handleCardKeyDown}
+                        >
+                          <div className="online-gen-card-top">
+                            <span className="online-gen-mini-switch" aria-hidden="true">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(active)}
+                                readOnly
+                                tabIndex={-1}
+                                disabled={!isHost}
+                              />
+                            </span>
 
-          <span className="online-gen-title">Gen {gen}</span>
-        </div>
+                            <span className="online-gen-title">Gen {gen}</span>
+                          </div>
 
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            selectOnlyGeneration(gen);
-          }}
-          disabled={!isHost}
-        >
-          Nur
-        </button>
-      </div>
-    );
-  })}
-</div>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              selectOnlyGeneration(gen);
+                            }}
+                            disabled={!isHost}
+                          >
+                            Nur
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -940,8 +948,8 @@ export default function OnlineGuessLobby() {
             </div>
           </section>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
 

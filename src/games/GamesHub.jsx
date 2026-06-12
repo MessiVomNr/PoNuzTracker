@@ -1,42 +1,91 @@
-// src/games/GamesHub.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import controllerIcon from "../assets/Controller.png";
 import "./guessStyles.css";
+
+function CharizardSilhouetteIcon() {
+  return (
+    <span className="games-hub-card-icon games-hub-card-icon-muted" aria-hidden="true">
+      <img
+        className="games-hub-charizard-sprite"
+        src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/6.png"
+        alt=""
+      />
+    </span>
+  );
+}
+
+function ControllerIcon() {
+  return (
+    <span className="games-hub-card-icon games-hub-card-icon-muted" aria-hidden="true">
+      <img
+        className="games-hub-controller-img"
+        src={controllerIcon}
+        alt=""
+      />
+    </span>
+  );
+}
 
 export default function GamesHub() {
   const navigate = useNavigate();
 
   return (
-    <div className="games-page">
-      <div className="games-panel">
-        <button className="games-back-button" onClick={() => navigate("/")}>
+    <main className="games-page games-hub-page">
+      <section className="games-hub-panel">
+        <button
+          type="button"
+          className="games-hub-back-button"
+          onClick={() => navigate("/")}
+        >
+          <span className="games-hub-back-arrow">‹</span>
           Zurück
         </button>
 
-        <h1>Pokémon Games</h1>
-        <p className="games-subtitle">
-          Kleine Pokémon-Minispiele für Solo und später Online mit Freunden.
-        </p>
+        <header className="games-hub-header">
+          <h1>Pokémon Games</h1>
+        </header>
 
-        <div className="games-grid">
+        <div className="games-hub-card-grid">
           <button
-            className="game-card"
+            type="button"
+            className="games-hub-card games-hub-card-primary"
             onClick={() => navigate("/games/pokemon-guess")}
           >
-            <span className="game-card-title">Wer ist dieses Pokémon?</span>
-            <span className="game-card-text">
-              Errate Pokémon mit Silhouette, Pixelbild, Typen, Stats und mehr.
+            <CharizardSilhouetteIcon />
+
+            <span className="games-hub-card-content">
+              <span className="games-hub-card-title">
+                Wer ist dieses Pokémon?
+              </span>
+              <span className="games-hub-card-text">
+                Errate Pokémon mit Silhouette, Pixelbild, Typen, Stats und mehr.
+              </span>
             </span>
+
+            <span className="games-hub-card-arrow">›</span>
           </button>
 
-          <button className="game-card game-card-disabled" disabled>
-            <span className="game-card-title">Weitere Games</span>
-            <span className="game-card-text">
-              Später kommen mehr Modi dazu.
+          <button
+            type="button"
+            className="games-hub-card games-hub-card-disabled"
+            disabled
+          >
+            <ControllerIcon />
+
+            <span className="games-hub-card-content">
+              <span className="games-hub-card-title">
+                Weitere Games
+              </span>
+              <span className="games-hub-card-text">
+                Später kommen mehr Modi dazu.
+              </span>
             </span>
+
+            <span className="games-hub-card-arrow">›</span>
           </button>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

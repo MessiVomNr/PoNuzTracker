@@ -37,24 +37,39 @@ export const timerBig = {
 };
 
 export const input = {
+  minHeight: 42,
   padding: "10px 12px",
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
+  border: "1px solid rgba(137,155,184,0.34)",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.96), rgba(8,15,28,0.96))",
+  color: "#f8fafc",
   outline: "none",
+  fontWeight: 800,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.045), 0 8px 18px rgba(0,0,0,0.18)",
 };
 
 export const selectDark = {
   ...input,
+  width: "100%",
+  padding: "10px 42px 10px 12px",
+  backgroundColor: "#101827",
+  color: "#f8fafc",
   colorScheme: "dark",
+  cursor: "pointer",
+  appearance: "auto",
 };
 
 export const selectOption = {
-  color: "white",
-  backgroundColor: "rgb(35,35,35)",
+  color: "#f8fafc",
+  backgroundColor: "#101827",
+  fontWeight: 800,
 };
 
+export const checkboxStyle = {
+  accentColor: "#34d399",
+};
 
 export const btnPrimary = {
   padding: "10px 12px",

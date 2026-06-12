@@ -531,41 +531,75 @@ export default function PokemonGuessSolo() {
 
   if (!gameStarted) {
     return (
-      <div className="games-page">
-        <div className="games-panel guess-panel">
-          <div className="guess-page-actions">
-            <button className="games-back-button" type="button" onClick={backToLobby}>
-              Zurück zur Lobby
-            </button>
-          </div>
+      <main className="games-page games-hub-page pokemon-guess-solo-page">
+        <section className="games-hub-panel pokemon-guess-solo-panel">
+          <button
+            type="button"
+            className="games-hub-back-button"
+            onClick={backToLobby}
+          >
+            <span className="games-hub-back-arrow">‹</span>
+            Zurück
+          </button>
 
-          <div className="guess-header">
-            <p className="guess-kicker">Pokémon Guess</p>
-            <h1>Wer ist dieses Pokémon?</h1>
-            <p className="games-subtitle">
-              Wähle einen Modus, passe ihn an und sieh rechts direkt eine Vorschau.
+          <header className="games-hub-header pokemon-guess-solo-header">
+            <h1>Solo-Modus</h1>
+            <p>
+              Wähle deinen Modus, passe die Regeln an und starte deine eigene
+              Pokémon-Guess-Runde.
             </p>
-          </div>
+          </header>
 
-          {loadError && <div className="guess-error-box">{loadError}</div>}
+          {loadError && (
+            <div className="solo-clean-alert solo-clean-alert-error">
+              {loadError}
+            </div>
+          )}
 
-          <div className="guess-clean-setup">
-            <section className="guess-settings-card">
-              <h2>Modus</h2>
+          <div className="solo-clean-layout">
+            <section className="solo-clean-card solo-clean-card-main">
+              <div className="solo-clean-section-head">
+                <span>01</span>
+                <div>
+                  <h2>Modus wählen</h2>
+                  <p>
+                    Jeder Modus verändert, welche Hinweise du bekommst und wie
+                    schwer die Runde wird.
+                  </p>
+                </div>
+              </div>
 
-              <div className="guess-mode-chip-grid">
+              <div className="solo-mode-card-grid">
                 {Object.entries(GUESS_PLAY_MODE_LABELS).map(([value, label]) => (
                   <button
                     key={value}
                     type="button"
                     className={
                       settings.playMode === value
-                        ? "guess-mode-chip guess-mode-chip-active"
-                        : "guess-mode-chip"
+                        ? "solo-mode-card solo-mode-card-active"
+                        : "solo-mode-card"
                     }
                     onClick={() => setPlayMode(value)}
                   >
-                    {label}
+                    <span className="solo-mode-card-badge">
+                      {label.slice(0, 2).toUpperCase()}
+                    </span>
+
+                    <span className="solo-mode-card-content">
+                      <strong>{label}</strong>
+                      <small>
+                        {value === GUESS_PLAY_MODES.SILHOUETTE &&
+                          "Nur die schwarze Form erkennen."}
+                        {value === GUESS_PLAY_MODES.PIXEL &&
+                          "Das Bild ist verpixelt und wird leichter."}
+                        {value === GUESS_PLAY_MODES.DISTORTED &&
+                          "Das Pokémon wird verzerrt dargestellt."}
+                        {value === GUESS_PLAY_MODES.STATS &&
+                          "Du siehst nur die Basiswerte."}
+                        {value === GUESS_PLAY_MODES.TIPS &&
+                          "Du spielst mit mehreren Hinweisen."}
+                      </small>
+                    </span>
                   </button>
                 ))}
               </div>
@@ -577,11 +611,11 @@ export default function PokemonGuessSolo() {
                 effectiveRevealMode={effectiveRevealMode}
               />
 
-              <div className="guess-settings-row">
+              <div className="solo-settings-row">
                 <label>
                   <span>Runden</span>
                   <input
-                    className="guess-number-input"
+                    className="solo-number-input"
                     type="number"
                     min="1"
                     max="50"
@@ -599,7 +633,7 @@ export default function PokemonGuessSolo() {
                   <label>
                     <span>Sekunden pro Stufe</span>
                     <input
-                      className="guess-number-input"
+                      className="solo-number-input"
                       type="number"
                       min="2"
                       max="60"
@@ -615,75 +649,116 @@ export default function PokemonGuessSolo() {
                 )}
               </div>
 
-              <div className="guess-points-note">
-                Punkte: Früh lösen gibt bis zu <strong>300 Punkte</strong>. Je mehr
-                Hinweise du brauchst, desto weniger Punkte gibt es.
+              <div className="solo-points-note">
+                Früh lösen gibt bis zu <strong>300 Punkte</strong>. Je mehr
+                Hinweise du brauchst, desto weniger Punkte bekommst du.
               </div>
             </section>
 
-            <aside className="guess-preview-card">
-              <div>
-                <h2>Vorschau</h2>
-                <p>Beispiel mit Pikachu. Die Einstellungen wirken später genauso im Spiel.</p>
+            <aside className="solo-clean-card solo-preview-card">
+              <div className="solo-clean-section-head">
+                <span>02</span>
+                <div>
+                  <h2>Vorschau</h2>
+                  <p>
+                    Beispiel mit Pikachu. So sieht der aktuell gewählte Modus
+                    später im Spiel aus.
+                  </p>
+                </div>
               </div>
 
-              <PreviewImage settings={settings} />
+              <div className="solo-preview-stage">
+                <PreviewImage settings={settings} />
+              </div>
             </aside>
 
-            <section className="guess-settings-card guess-wide-card">
-              <div className="guess-section-title-row">
+            <section className="solo-clean-card solo-wide-card">
+              <div className="solo-clean-section-head solo-clean-section-head-row">
+                <span>03</span>
+
                 <div>
                   <h2>Generationen</h2>
                   <p>
-                    Wähle einzelne Generationen oder direkt alle. Die Pokémon werden aus
-                    der API geladen und danach zwischengespeichert.
+                    Wähle einzelne Generationen oder direkt alle. Pro Spiel
+                    kommt jedes Pokémon maximal einmal.
                   </p>
                 </div>
 
                 <button
                   type="button"
-                  className="guess-secondary-button"
+                  className="solo-secondary-button"
                   onClick={selectAllGenerations}
                 >
                   Alle auswählen
                 </button>
               </div>
 
-              <div className="guess-gen-grid">
-                {GENERATION_OPTIONS.map((gen) => (
-                  <div
-                    key={gen}
-                    className={
-                      settings.selectedGens.includes(gen)
-                        ? "guess-gen-card guess-gen-card-active"
-                        : "guess-gen-card"
-                    }
-                  >
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={settings.selectedGens.includes(gen)}
-                        onChange={() => toggleGeneration(gen)}
-                      />
-                      <span>Gen {gen}</span>
-                    </label>
+              <div className="solo-gen-grid">
+                {GENERATION_OPTIONS.map((gen) => {
+                  const isActive = settings.selectedGens.includes(gen);
 
-                    <button type="button" onClick={() => selectOnlyGeneration(gen)}>
-                      Nur
-                    </button>
-                  </div>
-                ))}
+                  return (
+                    <div
+                      key={gen}
+                      className={
+                        isActive
+                          ? "solo-gen-card solo-gen-card-active"
+                          : "solo-gen-card"
+                      }
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggleGeneration(gen)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          toggleGeneration(gen);
+                        }
+                      }}
+                    >
+                      <div className="solo-gen-card-top">
+                        <span className="solo-gen-mini-switch">
+                          <input
+                            type="checkbox"
+                            checked={isActive}
+                            readOnly
+                            tabIndex={-1}
+                          />
+                        </span>
+
+                        <span className="solo-gen-title">Gen {gen}</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="solo-gen-only-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          selectOnlyGeneration(gen);
+                        }}
+                      >
+                        Nur
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </section>
 
             {settings.playMode === GUESS_PLAY_MODES.TIPS && (
-              <section className="guess-settings-card guess-wide-card">
-                <h2>Tipp-Reihenfolge</h2>
-                <p>Nur im Tipps-Modus. Die Hinweise oben kommen zuerst.</p>
+              <section className="solo-clean-card solo-wide-card">
+                <div className="solo-clean-section-head">
+                  <span>04</span>
+                  <div>
+                    <h2>Tipp-Reihenfolge</h2>
+                    <p>
+                      Nur im Tipps-Modus. Die Hinweise oben kommen zuerst.
+                    </p>
+                  </div>
+                </div>
 
-                <div className="guess-tip-order-list">
+                <div className="solo-tip-order-list">
                   {settings.tipOrder.map((clueType, index) => (
-                    <div key={clueType} className="guess-tip-order-item">
+                    <div key={clueType} className="solo-tip-order-item">
                       <span>
                         {index + 1}. {GUESS_CLUE_LABELS[clueType]}
                       </span>
@@ -703,7 +778,7 @@ export default function PokemonGuessSolo() {
                   ))}
                 </div>
 
-                <div className="guess-add-tip-list">
+                <div className="solo-add-tip-list">
                   {getAvailableTipTypes()
                     .filter((clueType) => !settings.tipOrder.includes(clueType))
                     .map((clueType) => (
@@ -720,18 +795,22 @@ export default function PokemonGuessSolo() {
             )}
           </div>
 
-          {loadingText && <div className="guess-loading-box">{loadingText}</div>}
+          {loadingText && (
+            <div className="solo-clean-alert solo-clean-alert-loading">
+              {loadingText}
+            </div>
+          )}
 
           <button
-            className="guess-start-button"
+            className="solo-start-button"
             type="button"
             onClick={startGame}
             disabled={Boolean(loadingText)}
           >
             {loadingText ? "Lädt..." : "Spiel starten"}
           </button>
-        </div>
-      </div>
+        </section>
+      </main>
     );
   }
 
@@ -927,7 +1006,7 @@ function ModeOptions({ settings, updateSetting, updateVisualSettings, effectiveR
     settings.playMode === GUESS_PLAY_MODES.DISTORTED;
 
   return (
-    <div className="guess-mode-options">
+    <div className="solo-mode-options">
       {settings.playMode === GUESS_PLAY_MODES.PIXEL && (
         <>
           <SliderRow
@@ -977,18 +1056,18 @@ function ModeOptions({ settings, updateSetting, updateVisualSettings, effectiveR
       )}
 
       {showReveal && (
-        <div className="guess-reveal-block">
+        <div className="solo-reveal-block">
           <span>Aufdecken</span>
 
-          <div className="guess-reveal-choice-grid">
+          <div className="solo-reveal-choice-grid">
             {Object.entries(GUESS_REVEAL_LABELS).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
                 className={
                   effectiveRevealMode === value
-                    ? "guess-choice-button guess-choice-button-active"
-                    : "guess-choice-button"
+                    ? "solo-choice-button solo-choice-button-active"
+                    : "solo-choice-button"
                 }
                 onClick={() => updateSetting("revealMode", value)}
               >
@@ -1007,19 +1086,19 @@ function ModeOptions({ settings, updateSetting, updateVisualSettings, effectiveR
       )}
 
       {settings.playMode === GUESS_PLAY_MODES.SILHOUETTE && (
-        <p className="guess-simple-mode-info">
+        <p className="solo-simple-mode-info">
           Du siehst direkt nur die schwarze Silhouette.
         </p>
       )}
 
       {settings.playMode === GUESS_PLAY_MODES.STATS && (
-        <p className="guess-simple-mode-info">
+        <p className="solo-simple-mode-info">
           Du siehst direkt nur die Basiswerte.
         </p>
       )}
 
       {settings.playMode === GUESS_PLAY_MODES.TIPS && (
-        <p className="guess-simple-mode-info">
+        <p className="solo-simple-mode-info">
           Du spielst mit mehreren Hinweisen. Die Reihenfolge kannst du unten ändern.
         </p>
       )}
@@ -1029,7 +1108,7 @@ function ModeOptions({ settings, updateSetting, updateVisualSettings, effectiveR
 
 function SliderRow({ label, value, min, max, onChange }) {
   return (
-    <label className="guess-slider-row">
+    <label className="solo-slider-row">
       <div>
         <span>{label}</span>
         <strong>{value}/{max}</strong>
@@ -1048,7 +1127,7 @@ function SliderRow({ label, value, min, max, onChange }) {
 
 function ToggleRow({ label, checked, onChange }) {
   return (
-    <label className="guess-toggle-row">
+    <label className="solo-toggle-row">
       <span>{label}</span>
       <input
         type="checkbox"

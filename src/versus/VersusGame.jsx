@@ -1,4 +1,4 @@
-// src/versus/VersusGame.js
+// src/versus/VersusGame.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -14,16 +14,18 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { db, auth } from "../firebase"; // ggf. Pfad anpassen
+import { db, auth } from "../firebase";
 
 /* =========================================================
    CONFIG
 ========================================================= */
-const ROOMS_COL = "duoRooms"; // muss zu deinen Duo-Rooms passen!
+
+const ROOMS_COL = "duoRooms";
 
 /* =========================================================
-   HELPERS (named exports)
+   HELPERS
 ========================================================= */
+
 export function normalizeRoomId(v) {
   return String(v || "").trim().replace(/\s+/g, "");
 }
@@ -32,25 +34,35 @@ async function resolveRoomDocId(roomIdOrCode) {
   const key = normalizeRoomId(roomIdOrCode);
   if (!key) return null;
 
-  // 1) Direkt als docId probieren
   const directRef = doc(db, ROOMS_COL, key);
   const directSnap = await getDoc(directRef);
-  if (directSnap.exists()) return { docId: key, data: directSnap.data() };
 
-  // 2) Als code-Feld probieren
+  if (directSnap.exists()) {
+    return {
+      docId: key,
+      data: directSnap.data(),
+    };
+  }
+
   const q = query(collection(db, ROOMS_COL), where("code", "==", key));
   const qsnap = await getDocs(q);
+
   if (!qsnap.empty) {
     const found = qsnap.docs[0];
-    return { docId: found.id, data: found.data() };
+
+    return {
+      docId: found.id,
+      data: found.data(),
+    };
   }
 
   return null;
 }
 
 /* =========================================================
-   ROOM API (named exports)
+   ROOM API
 ========================================================= */
+
 export async function createRoom({ title = "Versus Run", edition = null, code = null } = {}) {
   const uid = auth?.currentUser?.uid;
   if (!uid) throw new Error("Not authenticated");
@@ -64,7 +76,7 @@ export async function createRoom({ title = "Versus Run", edition = null, code = 
     code: cleanCode || roomRef.id,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    status: "lobby", // lobby | auction | playing | finished
+    status: "lobby",
     players: {
       [uid]: {
         uid,
@@ -89,7 +101,11 @@ export async function createRoom({ title = "Versus Run", edition = null, code = 
 export async function getRoom(roomIdOrCode) {
   const resolved = await resolveRoomDocId(roomIdOrCode);
   if (!resolved) return null;
-  return { id: resolved.docId, ...resolved.data };
+
+  return {
+    id: resolved.docId,
+    ...resolved.data,
+  };
 }
 
 export async function joinRoom(roomIdOrCode, { name = "Player" } = {}) {
@@ -120,6 +136,7 @@ export function subscribeRoom(roomIdOrCode, cb) {
 
   (async () => {
     const resolved = await resolveRoomDocId(roomIdOrCode);
+
     if (!resolved) {
       cb(null);
       return;
@@ -130,8 +147,15 @@ export function subscribeRoom(roomIdOrCode, cb) {
     unsub = onSnapshot(
       roomRef,
       (snap) => {
-        if (!snap.exists()) return cb(null);
-        cb({ id: snap.id, ...snap.data() });
+        if (!snap.exists()) {
+          cb(null);
+          return;
+        }
+
+        cb({
+          id: snap.id,
+          ...snap.data(),
+        });
       },
       () => cb(null)
     );
@@ -172,10 +196,6 @@ export async function setRoomStatus(roomIdOrCode, status) {
   return true;
 }
 
-/**
- * Startet die "Auction/Draft"-Phase (der eigentliche Draft läuft dann in DuoVersusAuction.jsx)
- * -> setzt room.status auf "auction" und optional ein Log.
- */
 export async function startAuction(roomIdOrCode) {
   const resolved = await resolveRoomDocId(roomIdOrCode);
   if (!resolved) return false;
@@ -187,18 +207,23 @@ export async function startAuction(roomIdOrCode) {
     status: "auction",
     "versus.phase": "auction",
     "versus.startedAt": serverTimestamp(),
-    "versus.log": arrayUnion({ t: Date.now(), type: "AUCTION_STARTED" }),
+    "versus.log": arrayUnion({
+      t: Date.now(),
+      type: "AUCTION_STARTED",
+    }),
   });
 
   return true;
 }
 
 /* =========================================================
-   DEFAULT EXPORT: React Page/Component
+   PAGE
 ========================================================= */
+
 export default function VersusGame() {
   const navigate = useNavigate();
-  const { roomId } = useParams(); // passt zu /versus/:roomId/game
+  const { roomId } = useParams();
+
   const roomIdOrCode = roomId || "";
 
   const [room, setRoom] = useState(null);
@@ -208,6 +233,14 @@ export default function VersusGame() {
   const [starting, setStarting] = useState(false);
 
   const uid = auth?.currentUser?.uid || null;
+
+  useEffect(() => {
+    document.body.classList.add("versus-page");
+
+    return () => {
+      document.body.classList.remove("versus-page");
+    };
+  }, []);
 
   const players = useMemo(() => {
     if (!room?.players) return [];
@@ -220,13 +253,14 @@ export default function VersusGame() {
   }, [room, uid]);
 
   const allReady = useMemo(() => {
-  if (!players || players.length === 0) return false;
-  if (players.length === 1) {
-    return players[0]?.ready === true;
-  }
-  return players.every((p) => p?.ready === true);
-}, [players]);
+    if (!players || players.length === 0) return false;
 
+    if (players.length === 1) {
+      return players[0]?.ready === true;
+    }
+
+    return players.every((p) => p?.ready === true);
+  }, [players]);
 
   useEffect(() => {
     if (!roomIdOrCode) {
@@ -245,6 +279,7 @@ export default function VersusGame() {
         setLoading(false);
         return;
       }
+
       setRoom(r);
       setNotFound(false);
       setLoading(false);
@@ -253,7 +288,6 @@ export default function VersusGame() {
     return () => unsub();
   }, [roomIdOrCode]);
 
-  // ✅ Snapshot-Bridge: IMMER mit aufgelöster Doc-ID nach /duo/:docId/versus
   useEffect(() => {
     if (!room?.id) return;
     if (room.status !== "auction") return;
@@ -261,15 +295,17 @@ export default function VersusGame() {
     (async () => {
       const resolved = await resolveRoomDocId(roomIdOrCode);
       const targetId = resolved?.docId || room.id;
+
       navigate(`/duo/${targetId}/versus`, { replace: true });
     })();
   }, [room?.status, room?.id, roomIdOrCode, navigate]);
 
   async function handleToggleReady() {
     if (!room) return;
+
     try {
       setErr("");
-      await setReady(room.id, !(myPlayer?.ready));
+      await setReady(room.id, !myPlayer?.ready);
     } catch (e) {
       setErr(e?.message || "Fehler beim Ready-Update.");
     }
@@ -277,29 +313,28 @@ export default function VersusGame() {
 
   async function handleStartGame() {
     if (!room || starting) return;
+
     try {
       setErr("");
       setStarting(true);
 
-      // Nur starten, wenn alle ready sind
       if (!allReady) {
-        setErr("Noch nicht alle bereit. Beide müssen auf Ready sein.");
+        setErr("Noch nicht alle bereit. Alle Spieler müssen auf Ready sein.");
         setStarting(false);
         return;
       }
 
-      // ✅ targetId für Navigation: immer echte Firestore Doc-ID
       const resolved = await resolveRoomDocId(roomIdOrCode);
       const targetId = resolved?.docId || room.id;
 
       const ok = await startAuction(targetId);
+
       if (!ok) {
-        setErr("Konnte Auction nicht starten (Room nicht gefunden).");
+        setErr("Konnte Auction nicht starten. Room wurde nicht gefunden.");
         setStarting(false);
         return;
       }
 
-      // ✅ Ergebnis: DUO AUCTION URL (damit du garantiert auf DuoVersusAuction landest)
       navigate(`/duo/${targetId}/versus`, { replace: true });
     } catch (e) {
       setErr(e?.message || "Fehler beim Starten.");
@@ -309,21 +344,37 @@ export default function VersusGame() {
 
   if (loading) {
     return (
-      <div style={{ padding: 16 }}>
-        <h2>Versus</h2>
-        <p>Lade Room…</p>
+      <div className="pnt-page pnt-center-page versus-bridge-page">
+        <div className="pnt-panel versus-bridge-panel">
+          <span className="pnt-kicker">Versus</span>
+          <h1 className="pnt-title">Room laden</h1>
+          <div className="pnt-alert pnt-alert-info versus-bridge-alert">
+            Room wird geladen ...
+          </div>
+        </div>
       </div>
     );
   }
 
   if (notFound) {
     return (
-      <div style={{ padding: 16 }}>
-        <h2>Versus</h2>
-        <p style={{ marginTop: 8 }}>Room nicht gefunden.</p>
-        <button onClick={() => navigate("/versus")} style={{ marginTop: 12 }}>
-          Zurück
-        </button>
+      <div className="pnt-page pnt-center-page versus-bridge-page">
+        <div className="pnt-panel pnt-panel-with-top-button versus-bridge-panel">
+          <button
+            type="button"
+            className="pnt-back-button"
+            onClick={() => navigate("/versus")}
+          >
+            ← Zurück
+          </button>
+
+          <span className="pnt-kicker">Versus</span>
+          <h1 className="pnt-title">Room fehlt</h1>
+
+          <div className="pnt-alert pnt-alert-error versus-bridge-alert">
+            Room nicht gefunden.
+          </div>
+        </div>
       </div>
     );
   }
@@ -332,71 +383,148 @@ export default function VersusGame() {
   const status = room?.status || "lobby";
 
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <div>
-          <h2 style={{ margin: 0 }}>Versus Lobby</h2>
+    <div className="pnt-page pnt-center-page versus-bridge-page">
+      <div className="pnt-panel pnt-panel-with-top-button versus-bridge-panel">
+        <button
+          type="button"
+          className="pnt-back-button"
+          onClick={() => navigate("/versus")}
+          disabled={starting}
+        >
+          ← Zurück
+        </button>
 
-          <div style={{ opacity: 0.85, marginTop: 6 }}>
-            <span>Run: </span>
-            <strong>{room.title || "—"}</strong>
-            <span style={{ marginLeft: 12 }}>Status: </span>
+        <header className="versus-bridge-header">
+          <span className="pnt-kicker">Draft Start</span>
+          <h1 className="pnt-title">Versus Lobby</h1>
+          <p className="pnt-subtitle">
+            Alle Spieler machen sich bereit. Danach startet die eigentliche Auction.
+          </p>
+        </header>
+
+        {err && (
+          <div className="pnt-alert pnt-alert-error versus-bridge-alert">
+            <strong>Hinweis:</strong> {err}
+          </div>
+        )}
+
+        <section className="versus-bridge-room-strip">
+          <div>
+            <span>Run</span>
+            <strong>{room.title || "Versus Run"}</strong>
+          </div>
+
+          <div>
+            <span>Status</span>
             <strong>{status}</strong>
-            <span style={{ marginLeft: 12 }}>Phase: </span>
+          </div>
+
+          <div>
+            <span>Phase</span>
             <strong>{phase}</strong>
           </div>
 
-          <div style={{ opacity: 0.7, marginTop: 6 }}>
-            Room ID: <code>{room.id}</code>
+          <div>
+            <span>Room-ID</span>
+            <strong>{room.id}</strong>
           </div>
+        </section>
 
-          {err ? (
-            <div style={{ marginTop: 8, padding: 10, border: "1px solid #c33", borderRadius: 8 }}>
-              <strong>Hinweis:</strong> {err}
+        <div className="versus-bridge-layout">
+          <section className="pnt-card pnt-card-primary versus-bridge-player-card">
+            <div className="versus-bridge-section-head">
+              <span>01</span>
+              <div>
+                <h2 className="pnt-section-title">Spieler</h2>
+                <p className="pnt-section-text">
+                  {allReady
+                    ? "Alle Spieler sind bereit."
+                    : "Warte, bis alle Spieler bereit sind."}
+                </p>
+              </div>
             </div>
-          ) : null}
+
+            {players.length === 0 ? (
+              <div className="pnt-alert pnt-alert-info">
+                Keine Spieler gefunden.
+              </div>
+            ) : (
+              <div className="versus-bridge-player-list">
+                {players.map((p) => {
+                  const isMe = p.uid === uid;
+
+                  return (
+                    <div
+                      key={p.uid}
+                      className={[
+                        "versus-bridge-player-row",
+                        isMe ? "versus-bridge-player-row-self" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <div>
+                        <strong>
+                          {p.name || "Player"}
+                          {isMe ? " (du)" : ""}
+                        </strong>
+
+                        <span>
+                          {p.ready ? "Bereit für den Draft" : "Noch nicht bereit"}
+                        </span>
+                      </div>
+
+                      {p.ready ? (
+                        <em className="pnt-pill">Ready</em>
+                      ) : (
+                        <em className="pnt-pill pnt-pill-muted">Wartet</em>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <aside className="pnt-card versus-bridge-action-card">
+            <div className="versus-bridge-section-head">
+              <span>02</span>
+              <div>
+                <h2 className="pnt-section-title">Start</h2>
+                <p className="pnt-section-text">
+                  Sobald alle ready sind, wechselst du in den Draft-Screen.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className={[
+                "pnt-button",
+                myPlayer?.ready ? "pnt-button-danger" : "pnt-button-primary",
+                "versus-bridge-action-button",
+              ].join(" ")}
+              onClick={handleToggleReady}
+              disabled={starting}
+            >
+              {myPlayer?.ready ? "Ready aus" : "Ready"}
+            </button>
+
+            <button
+              type="button"
+              className="pnt-button pnt-button-primary versus-bridge-action-button"
+              onClick={handleStartGame}
+              disabled={starting || !allReady || status === "auction"}
+            >
+              {starting ? "Starte ..." : status === "auction" ? "Wechsel ..." : "Spiel starten"}
+            </button>
+
+            <div className="pnt-alert pnt-alert-info versus-bridge-note">
+              Beide klicken zuerst auf <strong>Ready</strong>. Danach wird zur Auction unter{" "}
+              <code>/duo/:roomId/versus</code> gewechselt.
+            </div>
+          </aside>
         </div>
-
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button onClick={() => navigate(-1)} disabled={starting}>
-            Zurück
-          </button>
-
-          <button onClick={handleToggleReady} disabled={starting}>
-            {myPlayer?.ready ? "Ready aus" : "Ready"}
-          </button>
-
-          <button onClick={handleStartGame} disabled={starting || !allReady || status === "auction"}>
-            {starting ? "Starte…" : status === "auction" ? "Wechsel…" : "Spiel starten"}
-          </button>
-        </div>
-      </div>
-
-      <hr style={{ margin: "16px 0" }} />
-
-      <h3>Spieler</h3>
-      {players.length === 0 ? (
-        <p>Keine Spieler gefunden.</p>
-      ) : (
-        <ul style={{ lineHeight: 1.7 }}>
-          {players.map((p) => (
-            <li key={p.uid}>
-              <strong>{p.name || "Player"}</strong> {p.ready ? "✅ ready" : "⏳ not ready"}
-              {p.uid === uid ? " (du)" : ""}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <hr style={{ margin: "16px 0" }} />
-
-      <div style={{ padding: 12, border: "1px dashed #666", borderRadius: 10 }}>
-        <h3 style={{ marginTop: 0 }}>So funktioniert’s jetzt</h3>
-        <p style={{ marginBottom: 0, opacity: 0.85 }}>
-          Beide klicken <strong>Ready</strong>. Sobald alle ready sind, kann einer <strong>Spiel starten</strong>.
-          Dann setzen wir <code>room.status = "auction"</code> und leiten zu{" "}
-          <code>/duo/:roomId/versus</code> (DuoVersusAuction) weiter.
-        </p>
       </div>
     </div>
   );

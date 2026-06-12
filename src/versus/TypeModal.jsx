@@ -182,19 +182,23 @@ function calcOffensiveGaps(teamPokemons) {
 /* ============================
    Pretty cards
 ============================ */
-function Card({ title, subtitle, children, accent = "rgba(255,255,255,0.08)" }) {
+function Card({ title, subtitle, children, accent = "rgba(52,211,153,0.12)" }) {
   return (
     <div
       style={{
-        borderRadius: 16,
-        border: "1px solid rgba(255,255,255,0.12)",
-        background: `radial-gradient(circle at 20% 0%, ${accent} 0%, transparent 55%), rgba(255,255,255,0.05)`,
+        borderRadius: 10,
+        border: "1px solid rgba(137,155,184,0.24)",
+        background: `radial-gradient(circle at 18% 0%, ${accent} 0%, transparent 52%), linear-gradient(180deg, rgba(13,24,42,0.86), rgba(8,15,28,0.86))`,
         padding: 14,
-        boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 24px rgba(0,0,0,0.24)",
       }}
     >
-      <div style={{ fontSize: 14, fontWeight: 950 }}>{title}</div>
-      {subtitle ? <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78 }}>{subtitle}</div> : null}
+      <div style={{ color: "#ffffff", fontSize: 14, fontWeight: 950 }}>{title}</div>
+      {subtitle ? (
+        <div style={{ marginTop: 4, color: "rgba(235,241,250,0.72)", fontSize: 12, fontWeight: 700 }}>
+          {subtitle}
+        </div>
+      ) : null}
       <div style={{ marginTop: 12 }}>{children}</div>
     </div>
   );
@@ -332,7 +336,7 @@ export default function TypeModal({
                 onClick={() => setFitMode((v) => !v)}
                 style={{
                   ...btnGhost,
-                  background: fitMode ? "rgba(99,102,241,0.18)" : "rgba(255,255,255,0.08)",
+                  background: fitMode ? "linear-gradient(180deg, rgba(18,38,70,0.96), rgba(10,23,44,0.96))" : "rgba(8,16,30,0.86)",
                   fontWeight: 950,
                 }}
                 title={fitMode ? "Skaliert so, dass alles sichtbar ist" : "Originalgröße"}
@@ -353,7 +357,7 @@ export default function TypeModal({
             onClick={() => setTab("table")}
             style={{
               ...tabBtn,
-              background: tab === "table" ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.06)",
+              background: tab === "table" ? "linear-gradient(180deg, rgba(18,38,70,0.96), rgba(10,23,44,0.96))" : "rgba(8,16,30,0.86)",
             }}
           >
             Typentabelle
@@ -363,7 +367,7 @@ export default function TypeModal({
             onClick={() => setTab("analysis")}
             style={{
               ...tabBtn,
-              background: tab === "analysis" ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.06)",
+              background: tab === "analysis" ? "linear-gradient(180deg, rgba(18,38,70,0.96), rgba(10,23,44,0.96))" : "rgba(8,16,30,0.86)",
             }}
           >
             Analyse
@@ -689,11 +693,18 @@ export default function TypeModal({
 /* ============================
    Styles
 ============================ */
+/* ============================
+   Styles
+============================ */
+
 const overlay = {
   position: "fixed",
   inset: 0,
   zIndex: 9999,
-  background: "rgba(0,0,0,0.55)",
+  background:
+    "radial-gradient(circle at 20% 0%, rgba(52,211,153,0.12), transparent 34%), radial-gradient(circle at 80% 10%, rgba(96,165,250,0.12), transparent 34%), rgba(0,0,0,0.68)",
+  backdropFilter: "blur(8px)",
+  WebkitBackdropFilter: "blur(8px)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -705,21 +716,24 @@ const modal = {
   height: "min(920px, 96vh)",
   maxHeight: "96vh",
   overflow: "hidden",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(18,18,22,0.97)",
-  boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
-  padding: 14,
+  borderRadius: 14,
+  border: "1px solid rgba(137,155,184,0.34)",
+  background:
+    "radial-gradient(circle at 50% 0%, rgba(52,211,153,0.10), transparent 42%), linear-gradient(180deg, rgba(10,18,33,0.98), rgba(8,15,28,0.98))",
+  boxShadow:
+    "0 24px 80px rgba(0,0,0,0.62), inset 0 1px 0 rgba(255,255,255,0.05)",
+  padding: 16,
   display: "grid",
   gridTemplateRows: "auto auto 1fr",
-  gap: 10,
+  gap: 12,
+  color: "#f8fafc",
 };
 
 const header = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: 10,
+  gap: 12,
 };
 
 const tabRow = {
@@ -727,31 +741,44 @@ const tabRow = {
   gap: 8,
   alignItems: "center",
   flexWrap: "wrap",
+  padding: 8,
+  borderRadius: 10,
+  border: "1px solid rgba(137,155,184,0.18)",
+  background: "rgba(5,11,21,0.28)",
 };
 
 const tabBtn = {
-  padding: "8px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.18)",
-  color: "white",
+  minHeight: 40,
+  padding: "0 14px",
+  borderRadius: 7,
+  border: "1px solid rgba(100,140,215,0.45)",
+  color: "#f8fafc",
   cursor: "pointer",
   fontWeight: 950,
-  background: "rgba(255,255,255,0.06)",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 18px rgba(0,0,0,0.16)",
 };
 
 const btnGhost = {
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.08)",
-  color: "white",
+  minHeight: 40,
+  padding: "0 12px",
+  borderRadius: 7,
+  border: "1px solid rgba(120,138,170,0.45)",
+  background: "rgba(8,16,30,0.92)",
+  color: "#e8eef8",
   cursor: "pointer",
   fontWeight: 900,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 18px rgba(0,0,0,0.18)",
 };
 
 const btnClose = {
   ...btnGhost,
-  width: 40,
+  width: 42,
+  padding: 0,
+  color: "#fee2e2",
+  border: "1px solid rgba(248,113,113,0.28)",
+  background: "rgba(127,29,29,0.30)",
 };
 
 const stickyCorner = {
@@ -759,10 +786,10 @@ const stickyCorner = {
   left: 0,
   top: 0,
   zIndex: 6,
-  background: "rgba(18,18,22,0.97)",
+  background: "rgba(8,15,28,0.98)",
   padding: 6,
-  borderBottom: "1px solid rgba(255,255,255,0.10)",
-  borderRight: "1px solid rgba(255,255,255,0.10)",
+  borderBottom: "1px solid rgba(137,155,184,0.18)",
+  borderRight: "1px solid rgba(137,155,184,0.18)",
 };
 
 const stickyTop = {
@@ -770,7 +797,7 @@ const stickyTop = {
   top: 0,
   zIndex: 5,
   padding: 6,
-  borderBottom: "1px solid rgba(255,255,255,0.10)",
+  borderBottom: "1px solid rgba(137,155,184,0.18)",
 };
 
 const stickyLeft = {
@@ -778,5 +805,5 @@ const stickyLeft = {
   left: 0,
   zIndex: 4,
   padding: 6,
-  borderRight: "1px solid rgba(255,255,255,0.10)",
+  borderRight: "1px solid rgba(137,155,184,0.18)",
 };

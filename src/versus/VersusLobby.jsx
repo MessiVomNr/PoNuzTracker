@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getRoom, subscribeRoom, setReady, setRoomStatus, transferHost, heartbeat } from "./versusService";
+import {
+  getRoom,
+  subscribeRoom,
+  setReady,
+  setRoomStatus,
+  transferHost,
+  heartbeat,
+} from "./versusService";
 
 export default function VersusLobby() {
   const { roomId } = useParams();
@@ -19,31 +26,70 @@ export default function VersusLobby() {
   }, [roomKey]);
 
   const [room, setRoom] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    let unsub = null;
-
-    (async () => {
-      setErr("");
-      const r = await getRoom(roomKey);
-      setRoom(r);
-
-      unsub = subscribeRoom(roomKey, (next) => setRoom(next));
-    })().catch((e) => setErr(e?.message || String(e)));
+    document.body.classList.add("versus-page");
 
     return () => {
+      document.body.classList.remove("versus-page");
+    };
+  }, []);
+
+  useEffect(() => {
+    let unsub = null;
+    let alive = true;
+
+    (async () => {
+      try {
+        setErr("");
+        setLoading(true);
+
+        const r = await getRoom(roomKey);
+
+        if (!alive) return;
+
+        setRoom(r || null);
+        setLoading(false);
+
+        unsub = subscribeRoom(roomKey, (next) => {
+          setRoom(next || null);
+          setLoading(false);
+        });
+      } catch (e) {
+        if (!alive) return;
+
+        setErr(e?.message || String(e));
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
       if (unsub) unsub();
     };
   }, [roomKey]);
 
-  // Auto-Redirect: Wenn Room schon in Auction ist -> direkt zur Auction
   useEffect(() => {
     if (!room) return;
+
     if (room.status === "auction") {
       nav(`/versus/${roomKey}/auction`, { replace: true });
     }
   }, [room, nav, roomKey]);
+
+  useEffect(() => {
+    if (!roomKey || !myPlayerId) return;
+
+    heartbeat(roomKey, myPlayerId);
+
+    const t = setInterval(() => {
+      heartbeat(roomKey, myPlayerId);
+    }, 12000);
+
+    return () => clearInterval(t);
+  }, [roomKey, myPlayerId]);
 
   const players = room?.players || [];
   const me = players.find((p) => p.id === myPlayerId);
@@ -52,27 +98,18 @@ export default function VersusLobby() {
   const allReady = players.length >= 2 && players.every((p) => !!p.ready);
   const canStart =
     isHost &&
-    ((players.length === 1 && players[0]?.ready === true) || (players.length > 1 && allReady));
-
-  useEffect(() => {
-    if (!roomId || !myPlayerId) return;
-
-    heartbeat(roomId, myPlayerId);
-
-    const t = setInterval(() => {
-      heartbeat(roomId, myPlayerId);
-    }, 12000);
-
-    return () => clearInterval(t);
-  }, [roomId, myPlayerId]);
+    ((players.length === 1 && players[0]?.ready === true) ||
+      (players.length > 1 && allReady));
 
   async function toggleReady() {
     try {
       setErr("");
+
       if (!myPlayerId) {
-        setErr("Dein Spieler-Token fehlt (Tab-Session). Bitte erneut beitreten.");
+        setErr("Dein Spieler-Token fehlt. Bitte tritt der Lobby erneut bei.");
         return;
       }
+
       await setReady(roomKey, myPlayerId, !me?.ready);
     } catch (e) {
       setErr(e?.message || String(e));
@@ -82,6 +119,7 @@ export default function VersusLobby() {
   async function makeAdmin(targetPlayerId, targetName) {
     try {
       setErr("");
+
       if (!isHost) return;
       if (!targetPlayerId || targetPlayerId === myPlayerId) return;
 
@@ -97,8 +135,9 @@ export default function VersusLobby() {
   async function startGame() {
     try {
       setErr("");
+
       if (!myPlayerId) {
-        setErr("Dein Spieler-Token fehlt (Tab-Session). Bitte erneut beitreten.");
+        setErr("Dein Spieler-Token fehlt. Bitte tritt der Lobby erneut bei.");
         return;
       }
 
@@ -109,99 +148,170 @@ export default function VersusLobby() {
     }
   }
 
-  return (
-    <div style={page}>
-      {/* Hintergrundbild */}
-      <div style={bg} />
-      {/* dunkles Overlay für Lesbarkeit (nicht zu stark!) */}
-      <div style={overlay} />
+  function getLobbyStatusText() {
+    if (!room) return "";
 
-      <div style={card}>
-        <button style={topRightBtn} onClick={() => nav("/")}>
-          Zur Startseite
+    if (players.length === 1) {
+      return players[0]?.ready
+        ? "Solo-Start ist bereit."
+        : "Drücke Bereit, um auch solo starten zu können.";
+    }
+
+    if (allReady) {
+      return "Alle Spieler sind bereit.";
+    }
+
+    return "Warte, bis alle Spieler bereit sind.";
+  }
+
+  return (
+    <div className="pnt-page pnt-center-page versus-lobby-page">
+      <div className="pnt-panel pnt-panel-with-top-button versus-lobby-panel">
+        <button
+          type="button"
+          className="pnt-back-button"
+          onClick={() => nav("/")}
+        >
+          ← Zur Startseite
         </button>
 
-        <h2 style={{ marginTop: 0 }}>Versus Lobby</h2>
+        <header className="versus-lobby-header">
+          <span className="pnt-kicker">Draft Lobby</span>
+          <h1 className="pnt-title">Versus Lobby</h1>
+          <p className="pnt-subtitle">
+            Warte auf deine Mitspieler, übertrage bei Bedarf den Host und starte dann den Draft.
+          </p>
+        </header>
 
-        <p style={{ marginTop: 6 }}>
-          <strong>Room-ID:</strong> <span style={{ color: "#4ade80" }}>{roomKey}</span>
-        </p>
+        <section className="versus-lobby-code-card">
+          <div>
+            <span>Room-ID</span>
+            <strong>{roomKey}</strong>
+          </div>
 
-        {!room && !err && <p>Room wird geladen …</p>}
-        {err && <p style={{ color: "crimson" }}>{err}</p>}
-        {!err && room === null && <p style={{ color: "crimson" }}>Room nicht gefunden.</p>}
+          <button
+            type="button"
+            className="pnt-button pnt-button-ghost"
+            onClick={() => navigator.clipboard?.writeText(roomKey)}
+          >
+            Code kopieren
+          </button>
+        </section>
+
+        {loading && (
+          <div className="pnt-alert pnt-alert-info versus-lobby-alert">
+            Room wird geladen ...
+          </div>
+        )}
+
+        {err && (
+          <div className="pnt-alert pnt-alert-error versus-lobby-alert">
+            {err}
+          </div>
+        )}
+
+        {!loading && !err && !room && (
+          <div className="pnt-alert pnt-alert-error versus-lobby-alert">
+            Room nicht gefunden.
+          </div>
+        )}
 
         {room && (
-          <>
-            <h3 style={{ marginTop: 14 }}>Spieler</h3>
+          <div className="versus-lobby-layout">
+            <section className="pnt-card pnt-card-primary versus-lobby-player-card">
+              <div className="versus-lobby-section-head">
+                <span>01</span>
+                <div>
+                  <h2 className="pnt-section-title">Spieler</h2>
+                  <p className="pnt-section-text">
+                    {getLobbyStatusText()}
+                  </p>
+                </div>
+              </div>
 
-            <ul style={{ paddingLeft: 18, marginTop: 8 }}>
-              {players.map((p) => {
-                const isMe = p.id === myPlayerId;
-                const readyIcon = p.ready ? "✅" : "⏳";
-                const hostIcon = room.hostPlayerId === p.id ? " 👑" : "";
+              <div className="versus-lobby-player-list">
+                {players.map((p) => {
+                  const isMe = p.id === myPlayerId;
+                  const isPlayerHost = room.hostPlayerId === p.id;
 
-                return (
-                  <li
-                    key={p.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      padding: "6px 0",
-                    }}
-                  >
-                    <div>
-                      {readyIcon} {p.displayName}
-                      {hostIcon}
-                      {isMe ? " (du)" : ""}
-                    </div>
+                  return (
+                    <div
+                      key={p.id}
+                      className={[
+                        "versus-lobby-player-row",
+                        isMe ? "versus-lobby-player-row-self" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <div className="versus-lobby-player-info">
+                        <strong>
+                          {p.displayName}
+                          {isMe ? " (du)" : ""}
+                        </strong>
 
-                    {isHost && !isMe && (
-                      <div style={{ display: "flex", gap: 8 }}>
+                        <div className="versus-lobby-player-badges">
+                          {p.ready ? (
+                            <span className="pnt-pill">Bereit</span>
+                          ) : (
+                            <span className="pnt-pill pnt-pill-muted">Wartet</span>
+                          )}
+
+                          {isPlayerHost && (
+                            <span className="pnt-pill pnt-pill-blue">Host</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {isHost && !isMe && (
                         <button
+                          type="button"
+                          className="pnt-button pnt-button-ghost versus-lobby-admin-button"
                           onClick={() => makeAdmin(p.id, p.displayName)}
-                          style={btnSmall}
                           title="Überträgt die Admin/Host-Rechte an diesen Spieler"
                         >
                           Zum Admin machen
                         </button>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
 
-            <p style={{ opacity: 0.85, marginTop: 10 }}>
-              {players.length === 1
-                ? players[0]?.ready
-                  ? "Solo-Start bereit ✅"
-                  : "Drücke „Bereit“, um solo zu starten …"
-                : allReady
-                ? "Alle sind bereit ✅"
-                : "Warte, bis alle bereit sind …"}
-            </p>
+            <aside className="pnt-card versus-lobby-action-card">
+              <div className="versus-lobby-section-head">
+                <span>02</span>
+                <div>
+                  <h2 className="pnt-section-title">Aktionen</h2>
+                  <p className="pnt-section-text">
+                    Markiere dich als bereit. Der Host kann starten, sobald die Lobby bereit ist.
+                  </p>
+                </div>
+              </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-              <button onClick={toggleReady} style={btnGreen}>
+              <button
+                type="button"
+                className={[
+                  "pnt-button",
+                  me?.ready ? "pnt-button-danger" : "pnt-button-primary",
+                  "versus-lobby-action-button",
+                ].join(" ")}
+                onClick={toggleReady}
+              >
                 {me?.ready ? "Nicht bereit" : "Bereit"}
               </button>
 
               <button
+                type="button"
+                className="pnt-button pnt-button-primary versus-lobby-action-button"
                 onClick={startGame}
                 disabled={!canStart}
-                style={{
-                  ...btnGreen,
-                  opacity: canStart ? 1 : 0.5,
-                  cursor: canStart ? "pointer" : "not-allowed",
-                }}
                 title={
                   !isHost
                     ? "Nur der Host kann starten."
                     : players.length === 1 && !players[0]?.ready
-                    ? "Drücke zuerst „Bereit“."
+                    ? "Drücke zuerst Bereit."
                     : players.length > 1 && !allReady
                     ? "Alle müssen bereit sein."
                     : ""
@@ -209,100 +319,24 @@ export default function VersusLobby() {
               >
                 Draft starten
               </button>
-            </div>
-          </>
-        )}
 
-        <div style={{ marginTop: 18, display: "flex", gap: 10 }}>
-          <button onClick={() => nav("/versus")} style={btnGhost}>
-            Zurück
-          </button>
-        </div>
+              <button
+                type="button"
+                className="pnt-button pnt-button-ghost versus-lobby-action-button"
+                onClick={() => nav("/versus")}
+              >
+                Zurück
+              </button>
+
+              {!isHost && (
+                <div className="pnt-alert pnt-alert-info versus-lobby-host-note">
+                  Nur der Host kann den Draft starten.
+                </div>
+              )}
+            </aside>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-/* =======================
-   Styles
-======================= */
-
-const page = {
-  minHeight: "100vh",
-  position: "relative",
-  overflow: "hidden",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 16,
-};
-
-const bg = {
-  position: "absolute",
-  inset: 0,
-  backgroundImage: `url("/backgrounds/background_1.png")`,
-  backgroundSize: "cover",
-  backgroundPosition: "center",
-  backgroundRepeat: "no-repeat",
-  transform: "scale(1.02)",
-  zIndex: 0,
-};
-
-const overlay = {
-  position: "absolute",
-  inset: 0,
-  zIndex: 1,
-};
-
-const card = {
-  width: "min(560px, 92vw)",
-  padding: 16,
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.14)",
-  color: "white",
-  position: "relative",
-  zIndex: 2,
-};
-
-const topRightBtn = {
-  position: "absolute",
-  top: 12,
-  right: 12,
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 900,
-};
-
-const btnGhost = {
-  padding: "10px 14px",
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 950,
-};
-
-const btnGreen = {
-  padding: "10px 14px",
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "linear-gradient(135deg, rgba(67,233,123,0.30), rgba(56,249,215,0.16))",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 950,
-};
-
-const btnSmall = {
-  padding: "6px 10px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 900,
-};

@@ -33,7 +33,8 @@ import {
   btnDanger,
   pokeHeroOverlayFlashStrong,
   selectOption,
-  selectDark
+  selectDark,
+  checkboxStyle
 } from "./DuoVersusAuction.styles";
 function normalizeBehavior(v) {
   return String(v || "none").trim().toLowerCase();
@@ -4842,12 +4843,14 @@ function teamTitle(tid) {
     ...panel,
     width: "min(1240px, calc(100vw - 36px))",
     margin: "22px auto 0",
-    padding: 18,
+    padding: 20,
     background:
-      "linear-gradient(180deg, rgba(9,13,21,0.86), rgba(5,8,13,0.78))",
-    border: "1px solid rgba(255,255,255,0.09)",
-    boxShadow: "0 20px 70px rgba(0,0,0,0.38)",
-    backdropFilter: "blur(13px)",
+      "radial-gradient(circle at 18% 0%, rgba(52,211,153,0.11), transparent 38%), radial-gradient(circle at 84% 0%, rgba(96,165,250,0.11), transparent 34%), linear-gradient(180deg, rgba(10,18,33,0.94), rgba(5,11,21,0.91))",
+    border: "1px solid rgba(137,155,184,0.24)",
+    boxShadow:
+      "0 24px 80px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.045)",
+    backdropFilter: "blur(14px)",
+    WebkitBackdropFilter: "blur(14px)",
   };
 
   const lobbyLayout = {
@@ -4858,48 +4861,52 @@ function teamTitle(tid) {
   };
 
   const lobbyTitle = {
-    fontSize: 21,
+    fontSize: 24,
     fontWeight: 950,
     marginBottom: 3,
-    letterSpacing: 0.1,
+    letterSpacing: "-0.02em",
+    color: "#ffffff",
+    textShadow: "0 2px 12px rgba(52,211,153,0.16)",
   };
 
   const lobbyHint = {
     fontSize: 12,
     lineHeight: 1.45,
-    color: "rgba(255,255,255,0.58)",
+    color: "rgba(235,241,250,0.66)",
+    fontWeight: 700,
   };
 
   const lobbySummaryCard = {
     width: "100%",
     boxSizing: "border-box",
     textAlign: "left",
-    padding: "14px 15px",
-    borderRadius: 16,
-    border: "1px solid rgba(255,255,255,0.09)",
+    padding: "16px 16px",
+    borderRadius: 12,
+    border: "1px solid rgba(137,155,184,0.22)",
     background:
-      "linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025))",
+      "radial-gradient(circle at 0% 0%, rgba(52,211,153,0.075), transparent 44%), linear-gradient(180deg, rgba(13,24,42,0.82), rgba(8,15,28,0.82))",
     color: "white",
     cursor: "pointer",
     display: "grid",
     gap: 7,
-    boxShadow: "0 10px 24px rgba(0,0,0,0.18)",
+    boxShadow:
+      "inset 0 1px 0 rgba(255,255,255,0.035), 0 10px 24px rgba(0,0,0,0.22)",
   };
 
   const lobbyTeamList = {
     display: "grid",
-    gap: 8,
+    gap: 10,
     minWidth: 0,
   };
 
   const lobbyTeamRow = {
     width: "100%",
     boxSizing: "border-box",
-    padding: "11px 13px",
-    borderRadius: 15,
-    border: "1px solid rgba(255,255,255,0.09)",
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: "1px solid rgba(100,140,215,0.28)",
     background:
-      "linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.026))",
+      "radial-gradient(circle at 0% 0%, rgba(96,165,250,0.08), transparent 42%), linear-gradient(180deg, rgba(13,24,42,0.78), rgba(8,15,28,0.78))",
     color: "white",
     cursor: "pointer",
     display: "grid",
@@ -4908,14 +4915,18 @@ function teamTitle(tid) {
     alignItems: "center",
     textAlign: "left",
     minWidth: 0,
-    boxShadow: "0 8px 20px rgba(0,0,0,0.16)",
+    boxShadow:
+      "inset 0 1px 0 rgba(255,255,255,0.035), 0 8px 20px rgba(0,0,0,0.2)",
   };
 
   const modalBackdrop = {
     position: "fixed",
     inset: 0,
     zIndex: 9999,
-    background: "rgba(0,0,0,0.72)",
+    background:
+      "radial-gradient(circle at 20% 0%, rgba(52,211,153,0.11), transparent 34%), radial-gradient(circle at 80% 10%, rgba(96,165,250,0.12), transparent 34%), rgba(0,0,0,0.72)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
     display: "grid",
     placeItems: "center",
     padding: 18,
@@ -4926,21 +4937,23 @@ function teamTitle(tid) {
     maxHeight: "86vh",
     overflow: "auto",
     padding: 18,
-    borderRadius: 22,
-    border: "1px solid rgba(255,255,255,0.13)",
+    borderRadius: 14,
+    border: "1px solid rgba(137,155,184,0.34)",
     background:
-      "linear-gradient(180deg, rgba(13,18,29,0.98), rgba(7,10,17,0.98))",
+      "radial-gradient(circle at 50% 0%, rgba(52,211,153,0.10), transparent 42%), linear-gradient(180deg, rgba(10,18,33,0.98), rgba(8,15,28,0.98))",
     color: "white",
-    boxShadow: "0 26px 90px rgba(0,0,0,0.60)",
+    boxShadow:
+      "0 26px 90px rgba(0,0,0,0.64), inset 0 1px 0 rgba(255,255,255,0.05)",
   };
 
   const modalSection = {
     display: "grid",
     gap: 10,
-    padding: 12,
-    borderRadius: 16,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(255,255,255,0.04)",
+    padding: 13,
+    borderRadius: 12,
+    border: "1px solid rgba(137,155,184,0.22)",
+    background:
+      "radial-gradient(circle at 0% 0%, rgba(96,165,250,0.08), transparent 42%), rgba(5,11,21,0.34)",
   };
 
   function lobbyStatusPill(info) {
@@ -5060,7 +5073,17 @@ function teamTitle(tid) {
         <div style={modalBox} onClick={(e) => e.stopPropagation()}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 14 }}>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 950 }}>{title}</div>
+              <div
+                style={{
+                  fontSize: 22,
+                  fontWeight: 950,
+                  color: "#ffffff",
+                  letterSpacing: "-0.02em",
+                  textShadow: "0 2px 12px rgba(52,211,153,0.18)",
+                }}
+              >
+                {title}
+              </div>
               <div style={lobbyHint}>Änderungen werden direkt für den Raum gespeichert.</div>
             </div>
 
@@ -5197,7 +5220,7 @@ function teamTitle(tid) {
                       type="checkbox"
                       checked={!!settings.blindMultiLoserCompensation}
                       onChange={(e) => updateSettings({ blindMultiLoserCompensation: e.target.checked })}
-                      style={{ marginTop: 3 }}
+                      style={{ ...checkboxStyle, marginTop: 3 }}
                     />
                     <span>Überbotene Bieter bekommen ein anderes Auswahl-Pokémon und zahlen ihr Gebot.</span>
                   </label>
@@ -5307,9 +5330,31 @@ function teamTitle(tid) {
         <div style={modalBox} onClick={(e) => e.stopPropagation()}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 14 }}>
             <div>
-              <div style={{ fontSize: 12, opacity: 0.55, fontWeight: 950 }}>TEAM {slotIdx + 1}</div>
-              <div style={{ fontSize: 24, fontWeight: 950 }}>{info.teamName}</div>
-              <div style={{ opacity: 0.72, marginTop: 4 }}>{info.playerName}</div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "rgba(52,211,153,0.9)",
+                  fontWeight: 950,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                }}
+              >
+                TEAM {slotIdx + 1}
+              </div>
+              <div
+                style={{
+                  fontSize: 24,
+                  fontWeight: 950,
+                  color: "#ffffff",
+                  letterSpacing: "-0.02em",
+                  textShadow: "0 2px 12px rgba(52,211,153,0.18)",
+                }}
+              >
+                {info.teamName}
+              </div>
+              <div style={{ color: "rgba(235,241,250,0.72)", marginTop: 4, fontWeight: 700 }}>
+                {info.playerName}
+              </div>
             </div>
 
             <button type="button" style={btnGhostSmall} onClick={() => setTeamModal(null)}>
@@ -5712,8 +5757,12 @@ const draftBgStyle = {
                               ? "rgba(59,130,246,0.35)"
                               : "rgba(34,197,94,0.34)",
                         background: info.mine
-                          ? "rgba(34,197,94,0.12)"
-                          : "rgba(255,255,255,0.045)",
+                          ? "radial-gradient(circle at 0% 0%, rgba(52,211,153,0.20), transparent 48%), linear-gradient(180deg, rgba(13,44,34,0.78), rgba(8,20,18,0.78))"
+                          : info.ownerIsBot
+                            ? "radial-gradient(circle at 0% 0%, rgba(96,165,250,0.16), transparent 44%), linear-gradient(180deg, rgba(12,28,52,0.78), rgba(8,15,28,0.78))"
+                            : info.free
+                              ? "linear-gradient(180deg, rgba(13,24,42,0.72), rgba(8,15,28,0.72))"
+                              : "radial-gradient(circle at 0% 0%, rgba(52,211,153,0.14), transparent 44%), linear-gradient(180deg, rgba(13,32,34,0.78), rgba(8,15,28,0.78))",
                       }}
                       onClick={() => setTeamModal({ tid, slotIdx })}
                     >

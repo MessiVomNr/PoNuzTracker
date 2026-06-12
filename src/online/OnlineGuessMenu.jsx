@@ -5,6 +5,7 @@ import {
   createOnlineGuessRoom,
   joinOnlineGuessRoom,
 } from "./onlineGuessService";
+import controllerIcon from "../assets/Controller.png";
 import "../games/guessStyles.css";
 
 function getSavedName() {
@@ -23,8 +24,41 @@ function getSavedRoomCode() {
   }
 }
 
+function OnlineMenuIcon({ label, children }) {
+  return (
+    <span className="online-menu-icon" aria-hidden="true">
+      {children || <span>{label}</span>}
+    </span>
+  );
+}
+
+function ControllerIcon() {
+  return (
+    <OnlineMenuIcon>
+      <img
+        className="online-menu-controller-img"
+        src={controllerIcon}
+        alt=""
+      />
+    </OnlineMenuIcon>
+  );
+}
+
 export default function OnlineGuessMenu() {
   const navigate = useNavigate();
+
+  const [playerName, setPlayerName] = useState(getSavedName);
+  const [roomCode, setRoomCode] = useState(getSavedRoomCode);
+  const [loadingText, setLoadingText] = useState("");
+  const [errorText, setErrorText] = useState("");
+
+  const cleanName = useMemo(() => playerName.trim(), [playerName]);
+  const cleanRoomCode = useMemo(
+    () => roomCode.trim().toUpperCase(),
+    [roomCode]
+  );
+
+  const canSubmit = cleanName.length > 0 && !loadingText;
 
   function navigateToOnlineRoom(result) {
     const code = String(result?.code || "").trim().toUpperCase();
@@ -40,19 +74,6 @@ export default function OnlineGuessMenu() {
 
     navigate(`/games/pokemon-guess/online/${code}`);
   }
-
-  const [playerName, setPlayerName] = useState(getSavedName);
-  const [roomCode, setRoomCode] = useState(getSavedRoomCode);
-  const [loadingText, setLoadingText] = useState("");
-  const [errorText, setErrorText] = useState("");
-
-  const cleanName = useMemo(() => playerName.trim(), [playerName]);
-  const cleanRoomCode = useMemo(
-    () => roomCode.trim().toUpperCase(),
-    [roomCode]
-  );
-
-  const canSubmit = cleanName.length > 0 && !loadingText;
 
   async function handleCreateRoom() {
     if (!canSubmit) {
@@ -102,42 +123,55 @@ export default function OnlineGuessMenu() {
   }
 
   return (
-    <div className="games-page">
-      <div className="games-panel guess-panel">
-        <div className="guess-page-actions">
-          <button
-            className="games-back-button"
-            type="button"
-            onClick={() => navigate("/games/pokemon-guess")}
-          >
-            Zurück
-          </button>
-        </div>
+    <main className="games-page games-hub-page online-menu-page">
+      <section className="games-hub-panel online-menu-panel">
+        <button
+          type="button"
+          className="games-hub-back-button"
+          onClick={() => navigate("/games/pokemon-guess")}
+        >
+          <span className="games-hub-back-arrow">‹</span>
+          Zurück
+        </button>
 
-        <div className="guess-header">
-          <p className="guess-kicker">Online-Modus</p>
+        <header className="games-hub-header online-menu-header">
           <h1>Pokémon Guess Online</h1>
-          <p className="games-subtitle">
+          <p>
             Erstelle eine Lobby, teile den Code mit Freunden und spielt mit
             Timer oder Buzzer gegeneinander.
           </p>
-        </div>
+        </header>
 
-        {errorText && <div className="guess-error-box">{errorText}</div>}
-        {loadingText && <div className="guess-loading-box">{loadingText}</div>}
+        {errorText && (
+          <div className="online-menu-alert online-menu-alert-error">
+            {errorText}
+          </div>
+        )}
 
-        <div className="guess-clean-setup online-menu-grid">
-          <section className="guess-settings-card">
-            <h2>Spieler</h2>
-            <p>
-              Dieser Name wird in der Lobby, beim Buzzer und in der Punkteliste
-              angezeigt.
-            </p>
+        {loadingText && (
+          <div className="online-menu-alert online-menu-alert-loading">
+            {loadingText}
+          </div>
+        )}
 
-            <label className="online-form-label">
+        <div className="online-menu-layout">
+          <section className="online-menu-card online-menu-player-card">
+            <div className="online-menu-card-head">
+              <OnlineMenuIcon label="DU" />
+
+              <div>
+                <h2>Spieler</h2>
+                <p>
+                  Dieser Name wird in der Lobby, beim Buzzer und in der
+                  Punkteliste angezeigt.
+                </p>
+              </div>
+            </div>
+
+            <label className="online-menu-label">
               <span>Dein Name</span>
               <input
-                className="guess-name-input"
+                className="online-menu-input"
                 value={playerName}
                 maxLength={18}
                 onChange={(event) => setPlayerName(event.target.value)}
@@ -147,15 +181,21 @@ export default function OnlineGuessMenu() {
             </label>
           </section>
 
-          <section className="guess-settings-card">
-            <h2>Lobby erstellen</h2>
-            <p>
-              Du wirst Host der Lobby. Als Host kannst du später Modus,
-              Rundenzahl, Zeit, Punkte und Strafen einstellen.
-            </p>
+          <section className="online-menu-card online-menu-create-card">
+            <div className="online-menu-card-head">
+              <ControllerIcon />
+
+              <div>
+                <h2>Lobby erstellen</h2>
+                <p>
+                  Du wirst Host der Lobby und kannst danach Modus, Rundenzahl,
+                  Timer, Punkte und Strafen einstellen.
+                </p>
+              </div>
+            </div>
 
             <button
-              className="guess-start-button online-card-button"
+              className="online-menu-main-button"
               type="button"
               onClick={handleCreateRoom}
               disabled={!canSubmit}
@@ -164,26 +204,36 @@ export default function OnlineGuessMenu() {
             </button>
           </section>
 
-          <section className="guess-settings-card guess-wide-card">
-            <h2>Lobby beitreten</h2>
-            <p>
-              Gib den Lobbycode ein, den du vom Host bekommen hast.
-            </p>
+          <section className="online-menu-card online-menu-join-card">
+            <div className="online-menu-card-head">
+              <OnlineMenuIcon label="ID" />
 
-            <form className="online-join-row" onSubmit={handleJoinRoom}>
-              <input
-                className="guess-name-input online-code-input"
-                value={roomCode}
-                maxLength={6}
-                onChange={(event) =>
-                  setRoomCode(event.target.value.toUpperCase())
-                }
-                placeholder="LOBBYCODE"
-                disabled={Boolean(loadingText)}
-              />
+              <div>
+                <h2>Lobby beitreten</h2>
+                <p>
+                  Gib den Lobbycode ein, den du vom Host bekommen hast. Wenn die
+                  Runde schon läuft, kommst du direkt wieder ins Spiel.
+                </p>
+              </div>
+            </div>
+
+            <form className="online-menu-join-form" onSubmit={handleJoinRoom}>
+              <label className="online-menu-label">
+                <span>Lobbycode</span>
+                <input
+                  className="online-menu-input online-menu-code-input"
+                  value={roomCode}
+                  maxLength={6}
+                  onChange={(event) =>
+                    setRoomCode(event.target.value.toUpperCase())
+                  }
+                  placeholder="LOBBY"
+                  disabled={Boolean(loadingText)}
+                />
+              </label>
 
               <button
-                className="guess-submit-button"
+                className="online-menu-secondary-button"
                 type="submit"
                 disabled={!cleanName || !cleanRoomCode || Boolean(loadingText)}
               >
@@ -192,7 +242,7 @@ export default function OnlineGuessMenu() {
             </form>
           </section>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
