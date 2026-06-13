@@ -13,6 +13,9 @@ import { upsertRecentRoom } from "./duo/recentRooms";
 import levelCapsByGen from "./guides/level_caps";
 import { getFossilPoolForRunGen } from "./data/fossilsByGen";
 import { evolutionFamiliesByDex } from "./data/evolutionFamilies";
+import GeflohenIconImg from "./assets/Geflohen.png";
+import PokeballIconImg from "./assets/Pokeball.png";
+import BesiegtIconImg from "./assets/Besiegt.png";
 
 function getDexIdFromName(pokemonName, pokedex) {
   const entry = Object.entries(pokedex).find(([, name]) => name === pokemonName);
@@ -24,6 +27,94 @@ function getFamilyDexIds(dexId) {
   const id = Number(dexId);
   if (!id) return [];
   return evolutionFamiliesByDex[id] || [id];
+}
+
+function PencilIcon({ size = 18 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      aria-hidden="true"
+      focusable="false"
+      style={{
+        display: "block",
+        filter:
+          "drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35)) drop-shadow(0 0 8px rgba(160, 190, 255, 0.14))",
+      }}
+    >
+      <path
+        d="M43.5 8.5L55.5 20.5L24.5 51.5L10.5 55.5L14.5 41.5L43.5 8.5Z"
+        fill="rgba(255, 255, 255, 0.96)"
+        stroke="rgba(220, 235, 255, 0.96)"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M38.5 14.5L49.5 25.5"
+        fill="none"
+        stroke="rgba(82, 122, 190, 0.72)"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M14.5 41.5L24.5 51.5"
+        fill="none"
+        stroke="rgba(82, 122, 190, 0.72)"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10.5 55.5L15.3 43.5L22.5 50.7L10.5 55.5Z"
+        fill="rgba(67, 233, 123, 0.92)"
+        stroke="rgba(210, 255, 230, 0.88)"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M43.5 8.5L55.5 20.5L59 17C61 15 61 11.8 59 9.8L54.2 5C52.2 3 49 3 47 5L43.5 8.5Z"
+        fill="rgba(255, 145, 88, 0.95)"
+        stroke="rgba(255, 224, 205, 0.86)"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+const STATUS_ICON_MAP = {
+  Gefangen: {
+    src: PokeballIconImg,
+    alt: "Gefangen",
+  },
+  Besiegt: {
+    src: BesiegtIconImg,
+    alt: "Besiegt",
+  },
+  Entkommen: {
+    src: GeflohenIconImg,
+    alt: "Geflohen",
+  },
+};
+
+function StatusIcon({ status, size = 22, style = {} }) {
+  const entry = STATUS_ICON_MAP[status];
+  if (!entry) return null;
+
+  return (
+    <img
+      src={entry.src}
+      alt={entry.alt}
+      style={{
+        width: size,
+        height: size,
+        objectFit: "contain",
+        display: "block",
+        flexShrink: 0,
+        ...style,
+      }}
+    />
+  );
 }
 // ===== Spezial-Formen (PokeAPI IDs / Anzeigeoptionen) =====
 // formKey wird in encounters als form1/form2/form3 gespeichert
@@ -214,6 +305,99 @@ const SPECIAL_FORM_OPTIONS = {
   1017: ["wellspring", "hearthflame", "cornerstone"],
 };
 
+function addSpecialForm(baseDexId, formKey, formPokemonId) {
+  const id = Number(baseDexId);
+  if (!id || !formKey || !formPokemonId) return;
+
+  SPECIAL_FORM_IDS[id] = {
+    ...(SPECIAL_FORM_IDS[id] || {}),
+    [formKey]: formPokemonId,
+  };
+
+  const oldOptions = SPECIAL_FORM_OPTIONS[id] || [];
+  if (!oldOptions.includes(formKey)) {
+    SPECIAL_FORM_OPTIONS[id] = [...oldOptions, formKey];
+  }
+}
+
+[
+  // ===== Fehlende Megas / Proto-Formen =====
+  [302, "mega", 10066], // Zobiris
+  [384, "mega", 10079], // Rayquaza
+  [428, "mega", 10088], // Schlapor
+  [475, "mega", 10068], // Galagladi
+  [382, "primal", 10077], // Kyogre
+  [383, "primal", 10078], // Groudon
+
+  // ===== Alola-Formen =====
+  [19, "alola", 10091],
+  [20, "alola", 10092],
+  [26, "alola", 10100],
+  [27, "alola", 10101],
+  [28, "alola", 10102],
+  [37, "alola", 10103],
+  [38, "alola", 10104],
+  [50, "alola", 10105],
+  [51, "alola", 10106],
+  [52, "alola", 10107],
+  [53, "alola", 10108],
+  [74, "alola", 10109],
+  [75, "alola", 10110],
+  [76, "alola", 10111],
+  [88, "alola", 10112],
+  [89, "alola", 10113],
+  [103, "alola", 10114],
+  [105, "alola", 10115],
+
+  // ===== Galar-Formen =====
+  [52, "galar", 10161],
+  [77, "galar", 10162],
+  [78, "galar", 10163],
+  [79, "galar", 10164],
+  [80, "galar", 10165],
+  [83, "galar", 10166],
+  [110, "galar", 10167],
+  [122, "galar", 10168],
+  [144, "galar", 10169],
+  [145, "galar", 10170],
+  [146, "galar", 10171],
+  [199, "galar", 10172],
+  [222, "galar", 10173],
+  [263, "galar", 10174],
+  [264, "galar", 10175],
+  [554, "galar", 10176],
+  [555, "galar", 10177],
+  [555, "galar-zen", 10178],
+  [562, "galar", 10179],
+  [618, "galar", 10180],
+
+  // ===== Hisui-Formen =====
+  [58, "hisui", 10229],
+  [59, "hisui", 10230],
+  [100, "hisui", 10231],
+  [101, "hisui", 10232],
+  [157, "hisui", 10233],
+  [211, "hisui", 10234],
+  [215, "hisui", 10235],
+  [503, "hisui", 10236],
+  [549, "hisui", 10237],
+  [570, "hisui", 10238],
+  [571, "hisui", 10239],
+  [628, "hisui", 10240],
+  [705, "hisui", 10241],
+  [706, "hisui", 10242],
+  [713, "hisui", 10243],
+  [724, "hisui", 10244],
+
+  // ===== Paldea-Formen =====
+  [128, "paldea-combat", 10250],
+  [128, "paldea-blaze", 10251],
+  [128, "paldea-aqua", 10252],
+  [194, "paldea", 10253],
+].forEach(([baseDexId, formKey, formPokemonId]) => {
+  addSpecialForm(baseDexId, formKey, formPokemonId);
+});
+
 function getFormOptionsForDexId(dexId) {
   const id = Number(dexId);
   return SPECIAL_FORM_OPTIONS[id] || [];
@@ -230,10 +414,21 @@ function nextSpecialForm(current, options) {
 function formLabel(formKey) {
   if (!formKey) return "Normal";
 
-  // ===== Mega =====
+  // ===== Mega / Proto =====
   if (formKey === "mega") return "Mega";
   if (formKey === "mega-x") return "Mega X";
   if (formKey === "mega-y") return "Mega Y";
+  if (formKey === "primal") return "Proto";
+
+  // ===== Regionalformen =====
+  if (formKey === "alola") return "Alola";
+  if (formKey === "galar") return "Galar";
+  if (formKey === "galar-zen") return "Galar Zen";
+  if (formKey === "hisui") return "Hisui";
+  if (formKey === "paldea") return "Paldea";
+  if (formKey === "paldea-combat") return "Paldea Kampf";
+  if (formKey === "paldea-blaze") return "Paldea Feuer";
+  if (formKey === "paldea-aqua") return "Paldea Wasser";
 
   // ===== Rotom =====
   if (formKey === "heat") return "Feuer";
@@ -362,6 +557,163 @@ function fossilFieldForSlot(slotIndex) {
   // slotIndex 0..2
   return `fossil${slotIndex + 1}`; // fossil1 / fossil2 / fossil3
 }
+
+function EncounterCustomSelect({
+  value,
+  options,
+  onChange,
+  disabled = false,
+  placeholder = "-",
+  className = "",
+  dotPrefix = "encounter-status-dot",
+  showDot = true,
+}) {
+  const [open, setOpen] = useState(false);
+
+  const safeOptions = Array.isArray(options) && options.length
+    ? options
+    : [{ value: "", label: placeholder }];
+
+  const selected =
+    safeOptions.find((opt) => String(opt.value) === String(value)) ||
+    safeOptions[0];
+
+  return (
+    <div
+      className={[
+        "encounter-custom-select",
+        open ? "encounter-custom-select-open" : "",
+        disabled ? "encounter-custom-select-disabled" : "",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      tabIndex={-1}
+      onBlur={() => {
+        window.setTimeout(() => setOpen(false), 120);
+      }}
+    >
+      <button
+        type="button"
+        disabled={disabled}
+        className={[
+          "encounter-custom-select-trigger",
+          open ? "encounter-custom-select-trigger-open" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onClick={() => {
+          if (disabled) return;
+          setOpen((prev) => !prev);
+        }}
+      >
+        <span className="encounter-custom-select-label">
+          {showDot && (
+            <span
+              className={[
+                "encounter-custom-select-dot",
+                `${dotPrefix}-${selected.value || "empty"}`,
+              ].join(" ")}
+            />
+          )}
+
+          <span className="encounter-custom-select-text">{selected.label}</span>
+        </span>
+
+        <span className="encounter-custom-select-arrow" />
+      </button>
+
+      {open && !disabled && (
+        <div className="encounter-custom-select-menu">
+          {safeOptions.map((opt) => (
+            <button
+              key={opt.value || "empty"}
+              type="button"
+              className={[
+                "encounter-custom-select-option",
+                String(opt.value) === String(value)
+                  ? "encounter-custom-select-option-active"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+            >
+              <span className="encounter-custom-select-label">
+                {showDot && (
+                  <span
+                    className={[
+                      "encounter-custom-select-dot",
+                      `${dotPrefix}-${opt.value || "empty"}`,
+                    ].join(" ")}
+                  />
+                )}
+
+                <span className="encounter-custom-select-text">{opt.label}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EncounterStatusSelect({ value, allFilled, onChange }) {
+  const options = useMemo(() => {
+    const next = [{ value: "", label: "-" }];
+
+    if (allFilled) {
+      next.push({ value: "Gefangen", label: "Gefangen" });
+      next.push({ value: "Besiegt", label: "Besiegt" });
+    }
+
+    next.push({ value: "Entkommen", label: "Entkommen" });
+
+    return next;
+  }, [allFilled]);
+
+  return (
+    <EncounterCustomSelect
+      value={value}
+      options={options}
+      onChange={onChange}
+      className="encounter-status-select"
+      dotPrefix="encounter-status-dot"
+    />
+  );
+}
+
+function EncounterSinnerSelect({ value, disabled, options, onChange }) {
+  const selectOptions = useMemo(() => {
+    if (disabled) return [{ value: "", label: "—" }];
+
+    return [
+      { value: "", label: "-" },
+      ...options.map((opt) => ({
+        value: opt.key,
+        label: opt.label,
+      })),
+    ];
+  }, [disabled, options]);
+
+  return (
+    <EncounterCustomSelect
+      value={disabled ? "" : value}
+      options={selectOptions}
+      onChange={onChange}
+      disabled={disabled}
+      className="encounter-sinner-select"
+      dotPrefix="encounter-sinner-dot"
+      showDot={false}
+    />
+  );
+}
+
 function EncounterTable() {
   const navigate = useNavigate();
 
@@ -1015,22 +1367,23 @@ function getOwnedStatusText(statuses = [], isFamilyMatch = false) {
 
   return isFamilyMatch ? "Familie schon im Run" : "schon im Run";
 }
+
 function getOwnedStatusIcon(statuses = []) {
   if (statuses.includes("Gefangen")) {
-    return (
-      <img
-        src={process.env.PUBLIC_URL + "/pokeball.png"}
-        alt="Gefangen"
-        style={{ height: 16, width: 16, objectFit: "contain", display: "block" }}
-      />
-    );
+    return <StatusIcon status="Gefangen" size={16} />;
   }
 
-  if (statuses.includes("Besiegt")) return "☠️";
-  if (statuses.includes("Entkommen")) return "👟";
+  if (statuses.includes("Besiegt")) {
+    return <StatusIcon status="Besiegt" size={16} />;
+  }
+
+  if (statuses.includes("Entkommen")) {
+    return <StatusIcon status="Entkommen" size={16} />;
+  }
 
   return "•";
 }
+
   let filteredLocations = locationList.filter((loc) => {
     const status = encounters[loc]?.status || "Offen";
     return filters[status];
@@ -1075,66 +1428,149 @@ const usedFossilsBySlot = useMemo(() => {
 }, [encounters, slotCount]);
 
   const getSelectStyles = () => {
-    const dark = theme === "dark";
     return {
-      control: (styles) => ({
+      control: (styles, state) => ({
         ...styles,
-        backgroundColor: dark ? "rgba(0,0,0,0.35)" : "#fff",
-        color: dark ? "#fff" : "#000",
-        borderColor: dark ? "rgba(255,255,255,0.14)" : "#ccc",
-        boxShadow: "none",
-        backdropFilter: dark ? "blur(8px)" : "none",
+        minHeight: 42,
+        borderRadius: 8,
+        background:
+          "linear-gradient(135deg, rgba(14, 23, 42, 0.88), rgba(8, 13, 28, 0.86))",
+        color: "#ffffff",
+        borderColor: state.isFocused
+          ? "rgba(126, 165, 255, 0.72)"
+          : "rgba(140, 165, 210, 0.34)",
+        boxShadow: state.isFocused
+          ? "0 0 0 2px rgba(90, 130, 220, 0.18), 0 0 18px rgba(120, 165, 255, 0.12)"
+          : "inset 0 1px 0 rgba(255, 255, 255, 0.06)",
+        backdropFilter: "blur(10px)",
+        cursor: "text",
+        transition: "border-color 160ms ease, box-shadow 160ms ease, background 160ms ease",
+        overflow: "hidden",
       }),
+
+      valueContainer: (styles) => ({
+        ...styles,
+        padding: "2px 10px",
+      }),
+
+      placeholder: (styles) => ({
+        ...styles,
+        color: "rgba(255, 255, 255, 0.46)",
+        fontWeight: 750,
+      }),
+
       input: (styles) => ({
         ...styles,
-        color: dark ? "#fff" : "#000",
+        color: "#ffffff",
+        fontWeight: 800,
       }),
-      menu: (styles) => ({
-        ...styles,
-        backgroundColor: dark ? "rgba(10,10,16,0.92)" : "#fff",
-        border: dark ? "1px solid rgba(255,255,255,0.14)" : "1px solid #ddd",
-        zIndex: 9999,
-        backdropFilter: dark ? "blur(10px)" : "none",
-      }),
+
       singleValue: (styles) => ({
         ...styles,
-        color: dark ? "#fff" : "#000",
+        color: "#ffffff",
+        fontWeight: 850,
       }),
+
+      indicatorsContainer: (styles) => ({
+        ...styles,
+        color: "rgba(255, 255, 255, 0.72)",
+      }),
+
+      dropdownIndicator: (styles, state) => ({
+        ...styles,
+        color: state.isFocused ? "rgba(170, 200, 255, 0.95)" : "rgba(255, 255, 255, 0.58)",
+        padding: 8,
+        transition: "color 160ms ease, transform 160ms ease",
+        transform: state.selectProps.menuIsOpen ? "rotate(180deg)" : "none",
+        ":hover": {
+          color: "rgba(210, 228, 255, 1)",
+        },
+      }),
+
+      clearIndicator: (styles) => ({
+        ...styles,
+        color: "rgba(255, 255, 255, 0.50)",
+        padding: 8,
+        ":hover": {
+          color: "rgba(255, 255, 255, 0.88)",
+        },
+      }),
+
+      indicatorSeparator: (styles) => ({
+        ...styles,
+        backgroundColor: "rgba(255, 255, 255, 0.10)",
+      }),
+
+      menuPortal: (styles) => ({
+        ...styles,
+        zIndex: 999999,
+      }),
+
+      menu: (styles) => ({
+        ...styles,
+        marginTop: 8,
+        borderRadius: 12,
+        overflow: "hidden",
+        background:
+          "linear-gradient(145deg, rgba(10, 16, 32, 0.96), rgba(5, 9, 20, 0.96))",
+        border: "1px solid rgba(140, 165, 210, 0.28)",
+        boxShadow:
+          "0 24px 70px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
+        backdropFilter: "blur(14px)",
+        zIndex: 9999,
+      }),
+
+      menuList: (styles) => ({
+        ...styles,
+        padding: 6,
+        maxHeight: 260,
+        scrollbarWidth: "none",
+        msOverflowStyle: "none",
+      }),
+
       option: (styles, { isFocused, isSelected, data }) => ({
-  ...styles,
-  backgroundColor: dark
-    ? isSelected
-      ? "rgba(67,233,123,0.22)"
-      : isFocused
-      ? "rgba(255,255,255,0.10)"
-      : "transparent"
-    : isFocused
-    ? "#eee"
-    : "#fff",
-  color: dark
-    ? data?.alreadyOwned
-      ? "rgba(255,255,255,0.78)"
-      : "#fff"
-    : "#000",
-  fontStyle: data?.alreadyOwned ? "italic" : "normal",
-  opacity: data?.alreadyOwned ? 0.88 : 1,
-}),
+        ...styles,
+        borderRadius: 8,
+        marginBottom: 3,
+        backgroundColor: isSelected
+          ? "rgba(67, 233, 123, 0.22)"
+          : isFocused
+          ? "rgba(120, 165, 255, 0.14)"
+          : "transparent",
+        color: data?.alreadyOwned ? "rgba(255, 255, 255, 0.68)" : "#ffffff",
+        fontStyle: data?.alreadyOwned ? "italic" : "normal",
+        opacity: data?.alreadyOwned ? 0.82 : 1,
+        fontWeight: isSelected ? 900 : 750,
+        cursor: "pointer",
+        ":active": {
+          backgroundColor: "rgba(67, 233, 123, 0.26)",
+        },
+      }),
+
+      noOptionsMessage: (styles) => ({
+        ...styles,
+        color: "rgba(255, 255, 255, 0.62)",
+      }),
     };
   };
 
+  
   const getStatusIcon = (status) => {
+    if (!status) return null;
+
     if (status === "Gefangen") {
-      return (
-        <img
-          src={process.env.PUBLIC_URL + "/pokeball.png"}
-          alt="Pokéball"
-          style={{ height: "28px", verticalAlign: "middle", marginLeft: "8px" }}
-        />
-      );
+      return <StatusIcon status="Gefangen" size={45} style={{ marginLeft: 10 }} />;
     }
-    if (status === "Besiegt") return <span style={{ fontSize: "24px", marginLeft: "8px" }}>☠️</span>;
-    if (status === "Entkommen") return <span style={{ fontSize: "24px", marginLeft: "8px" }}>👟</span>;
-    return "";
+
+    if (status === "Besiegt") {
+      return <StatusIcon status="Besiegt" size={50} style={{ marginLeft: 10 }} />;
+    }
+
+    if (status === "Entkommen") {
+      return <StatusIcon status="Entkommen" size={45} style={{ marginLeft: 10 }} />;
+    }
+
+    return null;
   };
 
   const openInternalPokedex = (baseDexId, formKey, pokemonName) => {
@@ -1160,7 +1596,7 @@ const usedFossilsBySlot = useMemo(() => {
   const dark = theme === "dark";
 
   return (
-    <div style={pageWrap(dark)}>
+    <div className="encounter-page" style={pageWrap(dark)}>
       {dark && <div style={bg} />}
       {dark && <div style={bgOverlay} />}
 
@@ -1212,6 +1648,18 @@ const usedFossilsBySlot = useMemo(() => {
               }}
             />
 
+            <div style={encounterTitleBlock}>
+              <h1 style={encounterTableTitle}>
+                {effectiveEdition} Encounter-Tabelle (
+                {effectiveLinkMode === "solo"
+                  ? "Solo"
+                  : effectiveLinkMode === "trio"
+                  ? "Trio"
+                  : "Duo"}
+                )
+              </h1>
+            </div>
+
             <div style={{ marginBottom: 12, textAlign: "center" }}>
               <div style={{ fontWeight: 700, opacity: 0.9 }}>
                 Online: {presence.online.length ? presence.online.map((p) => p.name).join(", ") : "—"}
@@ -1231,17 +1679,21 @@ const usedFossilsBySlot = useMemo(() => {
         )}
 
         {/* Titelzeile + Actions rechts oben */}
-        <div style={headerRow}>
-          <h1 style={{ marginTop: 6, marginBottom: 0 }}>
-  {effectiveEdition} Encounter-Tabelle (
-  {effectiveLinkMode === "solo"
-    ? "Solo"
-    : effectiveLinkMode === "trio"
-    ? "Trio"
-    : "Duo"}
-  )
-</h1>
+        {!isDuo && (
+          <div style={encounterTitleBlock}>
+            <h1 style={encounterTableTitle}>
+              {effectiveEdition} Encounter-Tabelle (
+              {effectiveLinkMode === "solo"
+                ? "Solo"
+                : effectiveLinkMode === "trio"
+                ? "Trio"
+                : "Duo"}
+              )
+            </h1>
+          </div>
+        )}
 
+        <div style={headerRow}>
           <div style={topRightActions}>
             <button onClick={() => navigate("/team")}>Zum Team</button>
             <button onClick={() => navigate("/guide")}>Story-Guide öffnen</button>
@@ -1268,8 +1720,8 @@ const usedFossilsBySlot = useMemo(() => {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      marginBottom: 8,
-      minHeight: 38,
+      marginBottom: 6,
+      minHeight: 32,
     }}
   >
     <div
@@ -1287,12 +1739,12 @@ const usedFossilsBySlot = useMemo(() => {
       style={{
         ...editIconBtn,
         position: "absolute",
-        right: 0,
+        right: 34,
         top: "50%",
         transform: "translateY(-50%)",
       }}
     >
-      ✏️
+      <PencilIcon size={18} />
     </button>
   </div>
 
@@ -1301,12 +1753,36 @@ const usedFossilsBySlot = useMemo(() => {
             <div style={{ fontSize: 28, fontWeight: 950, lineHeight: 1.1 }}>{runCounter}</div>
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 12 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 10 }}>
             {sinnerStats.map((s) => (
               <div key={s.label} style={sinnerStatPill(dark)}>
                 <div style={{ fontWeight: 900 }}>{s.label}</div>
-                <div style={{ fontSize: 12, opacity: 0.9 }}>
-                  👟 Entkommen: <b>{s.escaped}</b> &nbsp;|&nbsp; ☠️ Besiegt: <b>{s.fainted}</b>
+                <div
+                  style={{
+                    fontSize: 12,
+                    opacity: 0.9,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexWrap: "wrap",
+                    gap: 10,
+                  }}
+                >
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <StatusIcon status="Entkommen" size={14} />
+                    <span>
+                      Entkommen: <b>{s.escaped}</b>
+                    </span>
+                  </span>
+
+                  <span style={{ opacity: 0.45 }}>|</span>
+
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <StatusIcon status="Besiegt" size={14} />
+                    <span>
+                      Besiegt: <b>{s.fainted}</b>
+                    </span>
+                  </span>
                 </div>
               </div>
             ))}
@@ -1317,8 +1793,12 @@ const usedFossilsBySlot = useMemo(() => {
   {Object.keys(filters).map((status) => (
     <button
       key={status}
+      className={
+        filters[status]
+          ? "encounter-filter-button encounter-filter-button-active"
+          : "encounter-filter-button"
+      }
       onClick={() => toggleFilter(status)}
-      style={{ backgroundColor: filters[status] ? "#079e4b" : "#999" }}
     >
       {status}
     </button>
@@ -1338,7 +1818,7 @@ const usedFossilsBySlot = useMemo(() => {
 
   <button
     onClick={handleClearListOnly}
-    style={{ backgroundColor: "#d97706", color: "white", fontWeight: 800 }}
+    className="encounter-filter-button encounter-filter-button-warn"
     title="Leert nur die Encounter-Liste, behält aber die gesamten Sündiger-Zahlen"
   >
     Liste leeren
@@ -1346,7 +1826,7 @@ const usedFossilsBySlot = useMemo(() => {
 
   <button
     onClick={handleReset}
-    style={{ backgroundColor: "#b91c1c", color: "white", fontWeight: 800 }}
+    className="encounter-filter-button encounter-filter-button-danger"
     title="Setzt alles zurück, inklusive gesamter Sündiger-Zahlen"
   >
     Alles zurücksetzen
@@ -1367,15 +1847,9 @@ const usedFossilsBySlot = useMemo(() => {
                       <button
                         onClick={() => editSlotName(i)}
                         title="Spaltenname bearbeiten"
-                        style={{
-                          padding: "2px 4px",
-                          borderRadius: 8,
-                          fontSize: 12,
-                          lineHeight: 1.2,
-                          cursor: "pointer",
-                        }}
+                        style={smallEditIconBtn}
                       >
-                        ✏️
+                        <PencilIcon size={15} />
                       </button>
                     </div>
                   </th>
@@ -1621,40 +2095,25 @@ const dexId = selected ? nameToDexId.get(selected) : null;
 })}
 
                   <td>
-                    <select value={status || ""} onChange={(e) => handleChange(loc, "status", e.target.value)}>
-                      <option value="">-</option>
-                      {allFilled && <option value="Gefangen">Gefangen</option>}
-                      {allFilled && <option value="Besiegt">Besiegt</option>}
-                      <option value="Entkommen">Entkommen</option>
-                    </select>
-                    {getStatusIcon(status)}
+                    <div className="encounter-status-cell">
+                      <EncounterStatusSelect
+                        value={status || ""}
+                        allFilled={allFilled}
+                        onChange={(nextStatus) => handleChange(loc, "status", nextStatus)}
+                      />
+
+                      {getStatusIcon(status)}
+                    </div>
                   </td>
 
                   {/* ✅ NEU: Sündiger */}
                   <td>
-                    <select
-                      value={sinnerEnabled ? (sinnerKey || "") : ""}
+                    <EncounterSinnerSelect
+                      value={sinnerKey || ""}
                       disabled={!sinnerEnabled}
-                      onChange={(e) => handleChange(loc, "sinner", e.target.value)}
-                      style={{
-                        width: "100%",
-                        opacity: sinnerEnabled ? 1 : 0.35,
-                        cursor: sinnerEnabled ? "pointer" : "not-allowed",
-                      }}
-                    >
-                      {!sinnerEnabled ? (
-                        <option value="">—</option>
-                      ) : (
-                        <>
-                          <option value="">-</option>
-                          {sinnerOptions.map((opt) => (
-                            <option key={opt.key} value={opt.key}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </>
-                      )}
-                    </select>
+                      options={sinnerOptions}
+                      onChange={(nextSinner) => handleChange(loc, "sinner", nextSinner)}
+                    />
                   </td>
                 </tr>
               );
@@ -1819,7 +2278,18 @@ const dexId = selected ? nameToDexId.get(selected) : null;
                       }}
                     >
                       <div style={{ display: "grid", gap: 6 }}>
-                        <label style={{ fontSize: 13, opacity: 0.9 }}>Entkommen</label>
+                        <label
+                          style={{
+                            fontSize: 13,
+                            opacity: 0.9,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <StatusIcon status="Entkommen" size={14} />
+                          Entkommen
+                        </label>
                         <input
                           type="number"
                           min="0"
@@ -1841,7 +2311,18 @@ const dexId = selected ? nameToDexId.get(selected) : null;
                       </div>
 
                       <div style={{ display: "grid", gap: 6 }}>
-                        <label style={{ fontSize: 13, opacity: 0.9 }}>Besiegt</label>
+                        <label
+                          style={{
+                            fontSize: 13,
+                            opacity: 0.9,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <StatusIcon status="Besiegt" size={14} />
+                          Besiegt
+                        </label>
                         <input
                           type="number"
                           min="0"
@@ -2016,9 +2497,9 @@ export default EncounterTable;
 const pageWrap = (dark) => ({
   position: "relative",
   minHeight: "100vh",
-  padding: 16,
-  overflow: "hidden",
-  background: dark ? "#05070b" : "transparent",
+  padding: "22px 18px",
+  overflowX: "hidden",
+  background: dark ? "#050914" : "#07111f",
 });
 
 const bg = {
@@ -2030,7 +2511,7 @@ const bg = {
   backgroundRepeat: "no-repeat",
   transform: "scale(1.03)",
   zIndex: 0,
-  filter: "blur(0px)",
+  filter: "saturate(1.05) brightness(0.78)",
 };
 
 const bgOverlay = {
@@ -2038,38 +2519,58 @@ const bgOverlay = {
   inset: 0,
   zIndex: 1,
   background:
-    "radial-gradient(1200px 600px at 20% 10%, rgba(0,0,0,0.35), rgba(0,0,0,0.78)), rgba(0,0,0,0.35)",
+    "radial-gradient(900px 520px at 18% 8%, rgba(66, 153, 225, 0.16), transparent 62%), radial-gradient(760px 520px at 84% 12%, rgba(67, 233, 123, 0.11), transparent 64%), linear-gradient(180deg, rgba(3, 7, 18, 0.55), rgba(3, 7, 18, 0.86))",
 };
 
 const contentCard = (dark) => ({
   position: "relative",
   zIndex: 2,
-  maxWidth: 1400,
+  maxWidth: 1460,
   margin: "0 auto",
-  padding: 18,
-  borderRadius: 18,
-  border: dark ? "1px solid rgba(255,255,255,0.12)" : "none",
-  background: dark ? "rgba(10,10,16,0.62)" : "transparent",
-  backdropFilter: dark ? "blur(10px)" : "none",
-  boxShadow: dark ? "0 30px 90px rgba(0,0,0,0.45)" : "none",
+  padding: 20,
+  borderRadius: 26,
+  border: "1px solid rgba(180, 205, 255, 0.14)",
+  background:
+    "linear-gradient(145deg, rgba(15, 23, 42, 0.76), rgba(5, 9, 20, 0.66))",
+  backdropFilter: "blur(14px)",
+  boxShadow:
+    "0 30px 90px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
+  color: "#ffffff",
 });
 
-/* Titel + Buttons rechts */
+/* Titel + Buttons */
+const encounterTitleBlock = {
+  width: "100%",
+  display: "flex",
+  justifyContent: "center",
+  marginTop: 8,
+  marginBottom: 10,
+  padding: "0 12px",
+};
+
+const encounterTableTitle = {
+  margin: 0,
+  maxWidth: 980,
+  textAlign: "center",
+  lineHeight: 1.08,
+  overflowWrap: "anywhere",
+  wordBreak: "normal",
+};
+
 const headerRow = {
-  position: "relative",
   display: "flex",
   alignItems: "center",
-  justifyContent: "center",
+  justifyContent: "flex-end",
   gap: 12,
-  marginTop: 6,
+  marginTop: -20,
+  marginBottom: -30,
+  minHeight: 34,
 };
 
 const topRightActions = {
-  position: "absolute",
-  right: 0,
-  top: -50,
   display: "flex",
   alignItems: "center",
+  justifyContent: "flex-end",
   gap: 10,
   flexWrap: "wrap",
 };
@@ -2077,16 +2578,16 @@ const topRightActions = {
 /* Level-Cap */
 const levelCapBanner = (dark) => ({
   margin: "10px auto 14px auto",
-  maxWidth: 320,
-  padding: "10px 12px",
-  borderRadius: 14,
+  maxWidth: 300,
+  padding: "10px 14px",
+  borderRadius: 12,
   textAlign: "center",
-  border: dark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.10)",
-  background: dark
-    ? "linear-gradient(135deg, rgba(67,233,123,0.18), rgba(56,249,215,0.10))"
-    : "rgba(7,158,75,0.12)",
-  backdropFilter: dark ? "blur(10px)" : "none",
-  boxShadow: dark ? "0 18px 40px rgba(0,0,0,0.35)" : "none",
+  border: "1px solid rgba(67, 233, 123, 0.28)",
+  background:
+    "linear-gradient(135deg, rgba(7, 158, 75, 0.22), rgba(56, 249, 215, 0.08)), rgba(5, 12, 26, 0.54)",
+  backdropFilter: "blur(12px)",
+  boxShadow:
+    "0 18px 46px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
 });
 
 const megaBtn = (dark, active) => ({
@@ -2117,111 +2618,650 @@ const spriteBtn = {
 
 /* ✅ Sünden-Zähler Box */
 const sinnerStatsBox = (dark) => ({
-  margin: "10px auto 14px auto",
-  maxWidth: 500,
-  padding: "12px 14px",
-  borderRadius: 16,
+  margin: "0 auto 10px auto",
+  maxWidth: 520,
+  padding: "0 14px",
+  borderRadius: 0,
   textAlign: "center",
-  border: dark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.10)",
-  background: dark ? "rgba(0,0,0,0.20)" : "rgba(0,0,0,0.04)",
-  backdropFilter: dark ? "blur(10px)" : "none",
+  border: "none",
+  background: "transparent",
+  backdropFilter: "none",
+  boxShadow: "none",
 });
 
 const sinnerStatPill = (dark) => ({
-  padding: "10px 12px",
-  borderRadius: 14,
-  border: dark ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.08)",
-  background: dark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.85)",
-  minWidth: 200,
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(140, 165, 210, 0.22)",
+  background:
+    "linear-gradient(135deg, rgba(70, 105, 165, 0.14), rgba(28, 42, 74, 0.12)), rgba(7, 12, 26, 0.42)",
+  minWidth: 170,
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.06)",
 });
 
 const tableCss = (dark) => {
-  if (!dark) return "";
-
   return `
-    table {
+    .encounter-page,
+    .encounter-page * {
+      box-sizing: border-box;
+    }
+
+    .encounter-page {
+      color: rgba(255, 255, 255, 0.90);
+    }
+
+    .encounter-page::-webkit-scrollbar,
+    .encounter-page *::-webkit-scrollbar {
+      display: none;
+    }
+
+    .encounter-page,
+    .encounter-page * {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .encounter-page h1 {
+      color: #ffffff !important;
+      text-shadow: 3px 3px #079e4b;
+      letter-spacing: -0.03em;
+    }
+
+    .encounter-page button {
+      margin: 0 !important;
+      border-radius: 8px !important;
+      border: 1px solid rgba(120, 155, 220, 0.42);
+      background:
+        linear-gradient(135deg, rgba(70, 105, 165, 0.18), rgba(28, 42, 74, 0.16)),
+        rgba(7, 12, 26, 0.54);
+      color: #ffffff;
+      font-weight: 950;
+      box-shadow:
+        0 10px 22px rgba(0, 0, 0, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      transition:
+        transform 160ms ease,
+        border-color 160ms ease,
+        background 160ms ease,
+        box-shadow 160ms ease,
+        filter 160ms ease;
+    }
+
+    .encounter-page button:hover,
+    .encounter-page button:focus-visible {
+      transform: translateY(-2px);
+      border-color: rgba(165, 195, 255, 0.62);
+      background:
+        linear-gradient(135deg, rgba(90, 130, 200, 0.24), rgba(35, 54, 92, 0.20)),
+        rgba(9, 15, 32, 0.64);
+      box-shadow:
+        0 14px 28px rgba(0, 0, 0, 0.24),
+        0 0 18px rgba(120, 165, 255, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      outline: none;
+      filter: brightness(1.04);
+    }
+
+    .encounter-page button[title^="Info öffnen:"] {
+      appearance: none !important;
+      min-width: 0 !important;
+      min-height: 0 !important;
+      width: auto !important;
+      height: auto !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: none !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      cursor: pointer;
+      filter: none !important;
+    }
+
+    .encounter-page button[title^="Info öffnen:"]:hover,
+    .encounter-page button[title^="Info öffnen:"]:focus-visible {
+      transform: none !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: none !important;
+      filter: none !important;
+    }
+
+    .encounter-page button[title^="Info öffnen:"] img {
+      display: block;
+      transition: transform 140ms ease, filter 140ms ease;
+      filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.24));
+    }
+
+    .encounter-page button[title^="Info öffnen:"]:hover img,
+    .encounter-page button[title^="Info öffnen:"]:focus-visible img {
+      transform: scale(1.06);
+      filter:
+        drop-shadow(0 10px 18px rgba(0, 0, 0, 0.30))
+        drop-shadow(0 0 10px rgba(120, 165, 255, 0.12));
+    }
+        
+    .encounter-page .button-row {
+      width: fit-content;
+      max-width: 100%;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      margin: 12px auto 14px !important;
+      padding: 8px 10px;
+      border-radius: 14px;
+      border: 1px solid rgba(180, 205, 255, 0.10);
+      background: rgba(5, 10, 24, 0.30);
+      backdrop-filter: blur(10px);
+    }
+
+    .encounter-page .button-row button {
+      min-height: 40px;
+      padding: 9px 15px !important;
+    }
+
+    .encounter-page .encounter-filter-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 38px;
+      padding: 8px 14px !important;
+      border-radius: 8px !important;
+      border-color: rgba(140, 165, 210, 0.28) !important;
+      background:
+        linear-gradient(135deg, rgba(45, 62, 96, 0.16), rgba(10, 16, 32, 0.32)),
+        rgba(6, 11, 24, 0.52) !important;
+      color: rgba(255, 255, 255, 0.76) !important;
+      box-shadow:
+        0 8px 18px rgba(0, 0, 0, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+    }
+
+    .encounter-page .encounter-filter-button::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.30);
+      box-shadow: none;
+    }
+
+    .encounter-page .encounter-filter-button-active {
+      border-color: rgba(67, 233, 123, 0.26) !important;
+      background:
+        linear-gradient(135deg, rgba(20, 84, 67, 0.22), rgba(10, 18, 32, 0.34)),
+        rgba(6, 13, 25, 0.56) !important;
+      color: rgba(231, 255, 242, 0.92) !important;
+    }
+
+    .encounter-page .encounter-filter-button-active::before {
+      background: rgba(67, 233, 123, 0.86);
+      box-shadow: 0 0 10px rgba(67, 233, 123, 0.20);
+    }
+      
+    .encounter-page .encounter-filter-button-warn {
+      border-color: rgba(255, 185, 80, 0.22) !important;
+      background:
+        linear-gradient(135deg, rgba(110, 78, 24, 0.18), rgba(10, 16, 32, 0.32)),
+        rgba(6, 11, 24, 0.52) !important;
+      color: rgba(255, 244, 224, 0.90) !important;
+    }
+
+    .encounter-page .encounter-filter-button-warn::before {
+      background: rgba(255, 185, 80, 0.82);
+      box-shadow: 0 0 10px rgba(255, 185, 80, 0.16);
+    }
+
+    .encounter-page .encounter-filter-button-danger {
+      border-color: rgba(255, 110, 130, 0.22) !important;
+      background:
+        linear-gradient(135deg, rgba(110, 34, 46, 0.18), rgba(10, 16, 32, 0.32)),
+        rgba(6, 11, 24, 0.52) !important;
+      color: rgba(255, 232, 236, 0.90) !important;
+    }
+
+    .encounter-page .encounter-filter-button-danger::before {
+      background: rgba(255, 110, 130, 0.82);
+      box-shadow: 0 0 10px rgba(255, 110, 130, 0.16);
+    }
+
+    .encounter-page .button-row select,
+    .encounter-page select {
+      min-height: 40px;
+      border-radius: 8px;
+      border: 1px solid rgba(140, 165, 210, 0.34);
+      background:
+        linear-gradient(135deg, rgba(14, 23, 42, 0.88), rgba(8, 13, 28, 0.86));
+      color: #ffffff;
+      font-weight: 850;
+      outline: none;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(10px);
+    }
+
+    .encounter-page .encounter-status-cell {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .encounter-page .encounter-status-cell img {
+      margin-left: 0 !important;
+    }
+
+    .encounter-page .encounter-custom-select {
+      position: relative;
+      width: 150px;
+      z-index: 20;
+    }
+
+    .encounter-page .encounter-status-select {
+      width: 166px;
+    }
+
+    .encounter-page .encounter-custom-select-open {
+      z-index: 999999;
+    }
+
+    .encounter-page .encounter-sinner-select {
+      width: 154px;
+    }
+
+    .encounter-page .encounter-sinner-select .encounter-custom-select-menu {
+      min-width: 154px;
+    }
+
+    .encounter-page .encounter-sinner-select .encounter-custom-select-trigger {
+      padding: 9px 12px !important;
+    }
+
+    .encounter-page .encounter-sinner-select .encounter-custom-select-option {
+      min-height: 40px !important;
+      padding: 10px 12px !important;
+    }
+
+    .encounter-page .encounter-custom-select-disabled {
+      opacity: 0.42;
+      pointer-events: none;
+    }
+
+    .encounter-page .encounter-custom-select-trigger {
+      width: 100%;
+      min-height: 40px !important;
+      padding: 8px 11px !important;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-radius: 8px !important;
+      border: 1px solid rgba(140, 165, 210, 0.34) !important;
+      background:
+        linear-gradient(135deg, rgba(14, 23, 42, 0.92), rgba(8, 13, 28, 0.88)) !important;
+      color: rgba(255, 255, 255, 0.92) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.07),
+        0 8px 18px rgba(0, 0, 0, 0.14) !important;
+    }
+
+    .encounter-page .encounter-custom-select-trigger:hover,
+    .encounter-page .encounter-custom-select-trigger:focus-visible {
+      transform: none !important;
+      border-color: rgba(165, 195, 255, 0.56) !important;
+      outline: none;
+    }
+
+    .encounter-page .encounter-custom-select-trigger-open {
+      border-color: rgba(126, 165, 255, 0.72) !important;
+      box-shadow:
+        0 0 0 2px rgba(90, 130, 220, 0.18),
+        0 0 18px rgba(120, 165, 255, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    }
+
+    .encounter-page .encounter-custom-select-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      max-width: 100%;
+      font-weight: 900;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+
+    .encounter-page .encounter-custom-select-text {
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .encounter-page .encounter-custom-select-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+      background: rgba(255, 255, 255, 0.34);
+    }
+
+    .encounter-page .encounter-status-dot-Gefangen {
+      background: rgba(67, 233, 123, 0.90);
+      box-shadow: 0 0 10px rgba(67, 233, 123, 0.20);
+    }
+
+    .encounter-page .encounter-status-dot-Besiegt {
+      background: rgba(255, 110, 130, 0.86);
+      box-shadow: 0 0 10px rgba(255, 110, 130, 0.16);
+    }
+
+    .encounter-page .encounter-status-dot-Entkommen {
+      background: rgba(255, 185, 80, 0.86);
+      box-shadow: 0 0 10px rgba(255, 185, 80, 0.16);
+    }
+
+    .encounter-page .encounter-sinner-dot-empty {
+      background: rgba(255, 255, 255, 0.24);
+    }
+
+    .encounter-page .encounter-sinner-dot-p1 {
+      background: rgba(135, 170, 255, 0.88);
+      box-shadow: 0 0 10px rgba(135, 170, 255, 0.16);
+    }
+
+    .encounter-page .encounter-sinner-dot-p2 {
+      background: rgba(190, 135, 255, 0.88);
+      box-shadow: 0 0 10px rgba(190, 135, 255, 0.16);
+    }
+
+    .encounter-page .encounter-sinner-dot-p3 {
+      background: rgba(255, 185, 80, 0.88);
+      box-shadow: 0 0 10px rgba(255, 185, 80, 0.16);
+    }
+
+    .encounter-page .encounter-custom-select-arrow {
+      width: 9px;
+      height: 9px;
+      display: inline-block;
+      flex: 0 0 auto;
+      border-right: 2px solid rgba(255, 255, 255, 0.72);
+      border-bottom: 2px solid rgba(255, 255, 255, 0.72);
+      transform: rotate(45deg) translateY(-1px);
+      transform-origin: center;
+      opacity: 0.88;
+      transition:
+        transform 160ms ease,
+        opacity 160ms ease,
+        border-color 160ms ease;
+      margin-right: 2px;
+    }
+
+    .encounter-page .encounter-custom-select-trigger-open .encounter-custom-select-arrow {
+      transform: rotate(225deg) translateY(1px);
+      opacity: 1;
+      border-right-color: rgba(210, 228, 255, 0.96);
+      border-bottom-color: rgba(210, 228, 255, 0.96);
+    }
+
+    .encounter-page .encounter-custom-select-menu {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 6px);
+      z-index: 999999;
+      padding: 6px;
+      border-radius: 10px;
+      border: 1px solid rgba(140, 165, 210, 0.30);
+      background:
+        linear-gradient(145deg, rgba(10, 16, 32, 0.99), rgba(5, 9, 20, 0.99));
+      box-shadow:
+        0 20px 50px rgba(0, 0, 0, 0.56),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(14px);
+      overflow: hidden;
+    }
+
+    .encounter-page td {
+      overflow: visible;
+    }
+
+    .encounter-page tr {
+      position: relative;
+    }
+
+    .encounter-page .encounter-custom-select-option {
+      width: 100%;
+      min-height: 34px !important;
+      margin: 0 0 4px 0 !important;
+      padding: 8px 10px !important;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      border-radius: 7px !important;
+      border: 1px solid transparent !important;
+      background: transparent !important;
+      color: rgba(255, 255, 255, 0.82) !important;
+      text-align: left;
+      box-shadow: none !important;
+    }
+
+    .encounter-page .encounter-custom-select-option:last-child {
+      margin-bottom: 0 !important;
+    }
+
+    .encounter-page .encounter-custom-select-option:hover,
+    .encounter-page .encounter-custom-select-option:focus-visible {
+      transform: none !important;
+      border-color: rgba(140, 165, 210, 0.22) !important;
+      background: rgba(120, 165, 255, 0.12) !important;
+      outline: none;
+    }
+
+    .encounter-page .encounter-custom-select-option-active {
+      border-color: rgba(67, 233, 123, 0.20) !important;
+      background:
+        linear-gradient(135deg, rgba(20, 84, 67, 0.22), rgba(10, 18, 32, 0.28)) !important;
+      color: rgba(231, 255, 242, 0.95) !important;
+    }
+
+    .encounter-page input {
+      border-radius: 8px;
+      border: 1px solid rgba(140, 165, 210, 0.34);
+      background:
+        linear-gradient(135deg, rgba(14, 23, 42, 0.88), rgba(8, 13, 28, 0.86));
+      color: #ffffff;
+      font-weight: 800;
+      outline: none;
+    }
+
+    .encounter-page input:focus,
+    .encounter-page select:focus {
+      border-color: rgba(126, 165, 255, 0.72);
+      box-shadow:
+        0 0 0 2px rgba(90, 130, 220, 0.18),
+        0 0 18px rgba(120, 165, 255, 0.12);
+    }
+
+    .encounter-page table {
       width: 100%;
       border-collapse: separate;
       border-spacing: 0;
-      overflow: hidden;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.10);
-      background: rgba(0,0,0,0.18);
-      backdrop-filter: blur(8px);
+      overflow: visible;
+      border-radius: 18px;
+      border: 1px solid rgba(180, 205, 255, 0.12);
+      background:
+        linear-gradient(145deg, rgba(9, 15, 32, 0.76), rgba(5, 9, 20, 0.70));
+      backdrop-filter: blur(12px);
+      box-shadow:
+        0 24px 70px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
     }
 
-    thead th {
-      background: rgba(0,0,0,0.35);
-      color: rgba(255,255,255,0.92);
-      border-bottom: 1px solid rgba(255,255,255,0.10);
+    .encounter-page thead th {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      background:
+        linear-gradient(135deg, rgba(21, 33, 58, 0.96), rgba(9, 16, 34, 0.96));
+      color: rgba(255, 255, 255, 0.94);
+      font-weight: 950;
+      letter-spacing: 0.01em;
+      text-shadow: none;
     }
 
-    td, th {
-      border-right: 1px solid rgba(255,255,255,0.10);
-      border-bottom: 1px solid rgba(255,255,255,0.10);
-      padding: 10px 12px;
+    .encounter-page td,
+    .encounter-page th {
+      border: 0 !important;
+      padding: 11px 12px;
       vertical-align: middle;
     }
 
-    tr:last-child td { border-bottom: none; }
-    th:last-child, td:last-child { border-right: none; }
-
-    tbody tr {
-      background: rgba(0,0,0,0.22);
+    /* Innere vertikale Linien */
+    .encounter-page th + th,
+    .encounter-page td + td {
+      border-left: 2px solid rgba(180, 205, 255, 0.08) !important;
     }
 
-    tbody tr:nth-child(even) {
-      background: rgba(0,0,0,0.16);
+    /* Trennlinie zwischen Header und Body */
+    .encounter-page tbody tr:first-child td {
+      border-top: 2px solid rgba(180, 205, 255, 0.09) !important;
     }
 
-    select {
-      background: rgba(0,0,0,0.28);
-      color: white;
-      border: 1px solid rgba(255,255,255,0.14);
-      border-radius: 10px;
-      padding: 8px 10px;
-      outline: none;
-      backdrop-filter: blur(8px);
+    /* Innere horizontale Linien */
+    .encounter-page tbody tr + tr td {
+      border-top: 2px solid rgba(180, 205, 255, 0.08) !important;
     }
 
-    .button-row button {
-      backdrop-filter: blur(8px);
+    .encounter-page tbody tr {
+      background: rgba(5, 10, 24, 0.38);
+      transition:
+        background 160ms ease,
+        filter 160ms ease;
+    }
+
+    .encounter-page tbody tr:nth-child(even) {
+      background: rgba(10, 18, 36, 0.34);
+    }
+
+    .encounter-page tbody tr:hover td {
+      background: rgba(120, 165, 255, 0.055);
+    }
+
+    .encounter-page tr[data-status="Gefangen"],
+    .encounter-page tr[data-status="Gefangen"] td {
+      background:
+        linear-gradient(135deg, rgba(7, 158, 75, 0.30), rgba(7, 158, 75, 0.12)) !important;
+    }
+
+    .encounter-page tr[data-status="Besiegt"],
+    .encounter-page tr[data-status="Besiegt"] td {
+      background:
+        linear-gradient(135deg, rgba(185, 28, 28, 0.30), rgba(185, 28, 28, 0.12)) !important;
+    }
+
+    .encounter-page tr[data-status="Entkommen"],
+    .encounter-page tr[data-status="Entkommen"] td {
+      background:
+        linear-gradient(135deg, rgba(118, 128, 145, 0.28), rgba(45, 52, 66, 0.22)) !important;
+      color: rgba(235, 240, 248, 0.78);
+    }
+
+    .encounter-page tr[data-status="Entkommen"] td:first-child {
+      color: rgba(235, 240, 248, 0.66);
+      font-style: italic;
+    }
+
+    .encounter-page .unused-location td:first-child {
+      color: rgba(255, 255, 255, 0.52);
+      font-style: italic;
+    }
+
+    .encounter-page img {
+      image-rendering: auto;
+    }
+
+    @media (max-width: 900px) {
+      .encounter-page {
+        overflow-x: hidden;
+      }
+
+      .encounter-page table {
+        min-width: 980px;
+      }
+
+      .encounter-page .button-row {
+        justify-content: flex-start;
+      }
     }
   `;
 };
 
 const editIconBtn = {
-  padding: "6px 10px",
+  width: 38,
+  height: 38,
+  padding: 0,
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.08)",
+  border: "1px solid rgba(150, 180, 235, 0.34)",
+  background:
+    "linear-gradient(145deg, rgba(42, 58, 92, 0.52), rgba(8, 14, 30, 0.54))",
   color: "white",
   cursor: "pointer",
   fontSize: 14,
   fontWeight: 900,
   lineHeight: 1,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  boxShadow:
+    "0 10px 22px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
+};
+
+const smallEditIconBtn = {
+  width: 28,
+  height: 28,
+  padding: 0,
+  borderRadius: 9,
+  border: "1px solid rgba(150, 180, 235, 0.30)",
+  background:
+    "linear-gradient(145deg, rgba(42, 58, 92, 0.48), rgba(8, 14, 30, 0.50))",
+  color: "white",
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  boxShadow:
+    "0 8px 18px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.09)",
 };
 
 const runCounterCard = (dark) => ({
   margin: "0 auto",
-  maxWidth: 150,
-  padding: "12px 14px",
-  borderRadius: 14,
+  maxWidth: 130,
+  padding: "10px 12px",
+  borderRadius: 10,
   textAlign: "center",
-  border: dark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.10)",
-  background: dark
-    ? "linear-gradient(135deg, rgba(67,233,123,0.14), rgba(255,255,255,0.04))"
-    : "rgba(7,158,75,0.08)",
-  boxShadow: dark ? "0 14px 30px rgba(0,0,0,0.26)" : "none",
+  border: "1px solid rgba(67, 233, 123, 0.24)",
+  background:
+    "linear-gradient(135deg, rgba(67, 233, 123, 0.16), rgba(56, 249, 215, 0.06)), rgba(7, 12, 26, 0.44)",
+  boxShadow:
+    "0 14px 32px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
 });
 
 const modalNumberInput = {
   width: "100%",
   padding: "12px 14px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
+  borderRadius: 8,
+  border: "1px solid rgba(140, 165, 210, 0.34)",
+  background:
+    "linear-gradient(135deg, rgba(14, 23, 42, 0.88), rgba(8, 13, 28, 0.86))",
   color: "white",
   outline: "none",
   boxSizing: "border-box",
+  fontWeight: 850,
 };

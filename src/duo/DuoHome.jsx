@@ -9,24 +9,97 @@ import DarkSelect from "../components/DarkSelect";
 import editionData from "../data/editionData.js";
 import { getGenFromEdition } from "../utils/editionHelpers";
 
-const DARK_SELECT_CSS = `
-  /* macht native Select-Popup dunkler (Browser "best effort") */
-  select.darkSelect { color-scheme: dark; }
+const DUO_HOME_CSS = `
+  .duo-home-page,
+  .duo-home-page * {
+    box-sizing: border-box;
+  }
 
-  select.darkSelect option {
+  .duo-home-page::-webkit-scrollbar,
+  .duo-home-page *::-webkit-scrollbar {
+    display: none;
+  }
+
+  .duo-home-page,
+  .duo-home-page * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .duo-home-page select.darkSelect {
+    color-scheme: dark;
+  }
+
+  .duo-home-page select.darkSelect option {
     background: #0b0f16;
     color: #e5e7eb;
   }
 
-  select.darkSelect optgroup {
+  .duo-home-page select.darkSelect optgroup {
     background: #0b0f16;
     color: #9ca3af;
-    font-weight: 800;
+    font-weight: 900;
   }
 
-  select.darkSelect option:checked {
+  .duo-home-page select.darkSelect option:checked {
     background: #111827;
     color: #ffffff;
+  }
+
+  .duo-home-page button {
+    border-radius: 8px !important;
+    font-weight: 950 !important;
+    transition:
+      transform 160ms ease,
+      border-color 160ms ease,
+      background 160ms ease,
+      box-shadow 160ms ease,
+      filter 160ms ease;
+  }
+
+  .duo-home-page button:hover,
+  .duo-home-page button:focus-visible {
+    transform: translateY(-2px);
+    border-color: rgba(165, 195, 255, 0.62) !important;
+    box-shadow:
+      0 14px 28px rgba(0, 0, 0, 0.24),
+      0 0 18px rgba(120, 165, 255, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+    outline: none;
+    filter: brightness(1.04);
+  }
+
+  .duo-home-page input,
+  .duo-home-page select {
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      background 160ms ease;
+  }
+
+  .duo-home-page input:focus,
+  .duo-home-page select:focus {
+    border-color: rgba(126, 165, 255, 0.72) !important;
+    box-shadow:
+      0 0 0 2px rgba(90, 130, 220, 0.18),
+      0 0 18px rgba(120, 165, 255, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+  }
+
+  .duo-home-page .duo-create-button {
+    border-color: rgba(67, 233, 123, 0.34) !important;
+    background:
+      linear-gradient(135deg, rgba(20, 84, 67, 0.34), rgba(10, 18, 32, 0.30)),
+      rgba(6, 13, 25, 0.58) !important;
+  }
+
+  .duo-home-page .duo-create-button:hover,
+  .duo-home-page .duo-create-button:focus-visible {
+    border-color: rgba(67, 233, 123, 0.52) !important;
+    box-shadow:
+      0 14px 28px rgba(0, 0, 0, 0.24),
+      0 0 18px rgba(67, 233, 123, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
   }
 `;
 
@@ -111,8 +184,8 @@ export default function DuoHome() {
   }
 
   return (
-    <div style={page}>
-      <style>{DARK_SELECT_CSS}</style>
+    <div className="duo-home-page" style={page}>
+      <style>{DUO_HOME_CSS}</style>
 
       {/* Hintergrundbild */}
       <div style={bg} />
@@ -120,11 +193,16 @@ export default function DuoHome() {
       <div style={overlay} />
 
       <div style={card}>
-        <button style={topRightBtn} onClick={() => nav("/")}>
-          Zur Startseite
-        </button>
+        <header style={header}>
+          <div>
+            <div style={kicker}>Soullink Lobby</div>
+            <h1 style={title}>Online</h1>
+          </div>
 
-        <h2 style={{ marginTop: 0 }}>Online</h2>
+          <button style={topRightBtn} onClick={() => nav("/")}>
+            Zur Startseite
+          </button>
+        </header>
 
         <label style={label}>Dein Name</label>
         <input value={name} onChange={(e) => setName(e.target.value)} style={input} />
@@ -163,7 +241,11 @@ export default function DuoHome() {
         />
 
         <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-          <button onClick={onCreate} style={btnGreen}>
+          <button
+            className="duo-create-button"
+            onClick={onCreate}
+            style={btnGreen}
+          >
             Online-Run erstellen
           </button>
         </div>
@@ -192,11 +274,11 @@ export default function DuoHome() {
 const page = {
   minHeight: "100vh",
   position: "relative",
-  overflow: "hidden",
+  overflowX: "hidden",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: 16,
+  padding: "24px 18px",
 };
 
 const bg = {
@@ -206,63 +288,119 @@ const bg = {
   backgroundSize: "cover",
   backgroundPosition: "center",
   backgroundRepeat: "no-repeat",
-  transform: "scale(1.02)",
+  transform: "scale(1.025)",
   zIndex: 0,
+  filter: "saturate(1.05) brightness(0.76)",
 };
 
 const overlay = {
   position: "absolute",
   inset: 0,
-  background: "rgba(0,0,0,0.22)", // <- hier wird es dunkler/heller
+  background:
+    "radial-gradient(760px 520px at 18% 16%, rgba(255, 120, 60, 0.13), transparent 62%), radial-gradient(840px 560px at 82% 18%, rgba(66, 153, 225, 0.16), transparent 64%), linear-gradient(180deg, rgba(3, 7, 18, 0.50), rgba(3, 7, 18, 0.84))",
   zIndex: 1,
 };
 
 const card = {
-  width: "min(560px, 92vw)",
-  padding: 16,
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(10,10,16,0.55)",
-  backdropFilter: "blur(10px)",
+  width: "min(620px, 94vw)",
+  padding: 22,
+  borderRadius: 22,
+  border: "1px solid rgba(180, 205, 255, 0.14)",
+  background:
+    "linear-gradient(145deg, rgba(15, 23, 42, 0.78), rgba(5, 9, 20, 0.68))",
+  backdropFilter: "blur(14px)",
+  boxShadow:
+    "0 30px 90px rgba(0, 0, 0, 0.50), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
   color: "white",
   position: "relative",
   zIndex: 2,
 };
 
-const topRightBtn = {
-  position: "absolute",
-  top: 12,
-  right: 12,
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 900,
+const header = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 16,
+  marginBottom: 18,
 };
 
-const label = { display: "block", marginTop: 12, fontWeight: 800, opacity: 0.9 };
+const kicker = {
+  color: "#43e97b",
+  textTransform: "uppercase",
+  letterSpacing: "0.18em",
+  fontSize: 12,
+  fontWeight: 950,
+  marginBottom: 10,
+};
+
+const title = {
+  margin: 0,
+  color: "#ffffff",
+  fontSize: 40,
+  lineHeight: 0.95,
+  fontWeight: 950,
+  letterSpacing: "-0.04em",
+  textShadow: "3px 3px #079e4b",
+};
+
+const subtitle = {
+  margin: "10px 0 0",
+  maxWidth: 390,
+  color: "rgba(255, 255, 255, 0.74)",
+  fontSize: 14,
+  lineHeight: 1.45,
+  fontWeight: 750,
+};
+
+const topRightBtn = {
+  flex: "0 0 auto",
+  padding: "10px 14px",
+  borderRadius: 8,
+  border: "1px solid rgba(140, 165, 210, 0.36)",
+  background:
+    "linear-gradient(135deg, rgba(70, 105, 165, 0.18), rgba(28, 42, 74, 0.16)), rgba(7, 12, 26, 0.58)",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 950,
+  boxShadow:
+    "0 10px 22px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
+};
+
+const label = {
+  display: "block",
+  marginTop: 14,
+  marginBottom: 6,
+  fontWeight: 900,
+  color: "rgba(255, 255, 255, 0.82)",
+};
 
 const input = {
   width: "100%",
   maxWidth: "100%",
   boxSizing: "border-box",
   padding: "12px 14px",
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(0,0,0,0.45)",
+  minHeight: 44,
+  borderRadius: 8,
+  border: "1px solid rgba(140, 165, 210, 0.34)",
+  background:
+    "linear-gradient(135deg, rgba(14, 23, 42, 0.90), rgba(8, 13, 28, 0.88))",
   color: "#fff",
   outline: "none",
   marginBottom: 14,
+  fontWeight: 850,
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.06)",
 };
 
 const btnGreen = {
-  padding: "10px 14px",
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "linear-gradient(135deg, rgba(67,233,123,0.30), rgba(56,249,215,0.16))",
+  padding: "11px 16px",
+  minHeight: 44,
+  borderRadius: 8,
+  border: "1px solid rgba(67, 233, 123, 0.34)",
+  background:
+    "linear-gradient(135deg, rgba(20, 84, 67, 0.34), rgba(10, 18, 32, 0.30)), rgba(6, 13, 25, 0.58)",
   color: "white",
   cursor: "pointer",
   fontWeight: 950,
+  boxShadow:
+    "0 10px 22px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
 };

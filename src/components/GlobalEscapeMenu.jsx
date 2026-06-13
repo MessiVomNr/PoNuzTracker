@@ -724,7 +724,14 @@ export default function GlobalEscapeMenu() {
           {typeMode === "atk" && (
             <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
               <div style={{ opacity: 0.85, fontWeight: 900 }}>Atk (mehrere):</div>
-              <div className="tm-scroll" style={{ display: "flex", flexWrap: "wrap", gap: 8, maxHeight: 160, overflow: "auto" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                  gap: 8,
+                  alignItems: "stretch",
+                }}
+              >
                 {TYPES.map((t) => (
                   <TypePill key={t} t={t} active={atkTypes.includes(t)} onClick={() => toggleAtk(t)} />
                 ))}
@@ -773,7 +780,7 @@ export default function GlobalEscapeMenu() {
 
             <div style={{ display: "grid", gap: 10 }}>
               <button
-                style={btnBlue}
+                style={btnGhost}
                 onClick={() => {
                   setOpen(false);
                   nav("/");
@@ -783,7 +790,7 @@ export default function GlobalEscapeMenu() {
               </button>
 
               <button
-                style={btnGreen}
+                style={btnGhost}
                 onClick={() => {
                   setOpen(false);
                   nav(lobbyPath);
@@ -792,7 +799,7 @@ export default function GlobalEscapeMenu() {
                 Zur Lobby
               </button>
 
-              <button style={btnPurple} onClick={() => setDexOpen((v) => !v)}>
+              <button style={btnGhost} onClick={() => setDexOpen((v) => !v)}>
                 Dex
               </button>
 
@@ -825,7 +832,7 @@ export default function GlobalEscapeMenu() {
               )}
 
               <button
-                style={btnBlue}
+                style={btnGhost}
                 onClick={() => {
                   setTypeOpen((v) => !v);
                   setDexOpen(false);
@@ -909,7 +916,7 @@ export default function GlobalEscapeMenu() {
               )}
 
               <button
-                style={btnBlue}
+                style={btnGhost}
                 onClick={() => {
                   setOpen(false);
                   setDexOpen(false);

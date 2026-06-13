@@ -12,13 +12,23 @@ import {
   formatKeyForDisplay,
   labelHotkey,
 } from "../utils/hotkeys";
+import DexBackground from "../assets/DexBackground.png";
 
-const pageWrap = {
+const pageShell = {
   minHeight: "100vh",
   padding: 16,
+  color: "#f8fafc",
+  backgroundImage:
+    `linear-gradient(180deg, rgba(3, 7, 18, 0.54), rgba(3, 7, 18, 0.86)), url(${DexBackground})`,
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  backgroundRepeat: "no-repeat",
+  backgroundAttachment: "fixed",
+};
+
+const pageWrap = {
   maxWidth: 980,
   margin: "0 auto",
-  color: "#f8fafc",
 };
 
 const card = {
@@ -232,8 +242,9 @@ export default function Controls() {
   }, []);
 
   return (
-    <div style={pageWrap}>
-      <div style={{ ...card }}>
+    <div style={pageShell}>
+      <div style={pageWrap}>
+        <div style={{ ...card }}>
         {/* ✅ Header mit Zurück-Button */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <div style={{ fontSize: 20, fontWeight: 950 }}>Steuerung</div>
@@ -415,6 +426,7 @@ export default function Controls() {
           />
         </div>
       )}
+      </div>
     </div>
   );
 }

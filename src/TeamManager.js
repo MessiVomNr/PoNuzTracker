@@ -109,12 +109,110 @@ const SPECIAL_FORM_IDS = {
   },
 };
 
+function addSpecialForm(baseDexId, formKey, formPokemonId) {
+  const id = Number(baseDexId);
+  if (!id || !formKey || !formPokemonId) return;
+
+  SPECIAL_FORM_IDS[id] = {
+    ...(SPECIAL_FORM_IDS[id] || {}),
+    [formKey]: formPokemonId,
+  };
+}
+
+[
+  // ===== Fehlende Megas / Proto-Formen =====
+  [302, "mega", 10066], // Zobiris
+  [384, "mega", 10079], // Rayquaza
+  [428, "mega", 10088], // Schlapor
+  [475, "mega", 10068], // Galagladi
+  [382, "primal", 10077], // Kyogre
+  [383, "primal", 10078], // Groudon
+
+  // ===== Alola-Formen =====
+  [19, "alola", 10091],
+  [20, "alola", 10092],
+  [26, "alola", 10100],
+  [27, "alola", 10101],
+  [28, "alola", 10102],
+  [37, "alola", 10103],
+  [38, "alola", 10104],
+  [50, "alola", 10105],
+  [51, "alola", 10106],
+  [52, "alola", 10107],
+  [53, "alola", 10108],
+  [74, "alola", 10109],
+  [75, "alola", 10110],
+  [76, "alola", 10111],
+  [88, "alola", 10112],
+  [89, "alola", 10113],
+  [103, "alola", 10114],
+  [105, "alola", 10115],
+
+  // ===== Galar-Formen =====
+  [52, "galar", 10161],
+  [77, "galar", 10162],
+  [78, "galar", 10163],
+  [79, "galar", 10164],
+  [80, "galar", 10165],
+  [83, "galar", 10166],
+  [110, "galar", 10167],
+  [122, "galar", 10168],
+  [144, "galar", 10169],
+  [145, "galar", 10170],
+  [146, "galar", 10171],
+  [199, "galar", 10172],
+  [222, "galar", 10173],
+  [263, "galar", 10174],
+  [264, "galar", 10175],
+  [554, "galar", 10176],
+  [555, "galar", 10177],
+  [555, "galar-zen", 10178],
+  [562, "galar", 10179],
+  [618, "galar", 10180],
+
+  // ===== Hisui-Formen =====
+  [58, "hisui", 10229],
+  [59, "hisui", 10230],
+  [100, "hisui", 10231],
+  [101, "hisui", 10232],
+  [157, "hisui", 10233],
+  [211, "hisui", 10234],
+  [215, "hisui", 10235],
+  [503, "hisui", 10236],
+  [549, "hisui", 10237],
+  [570, "hisui", 10238],
+  [571, "hisui", 10239],
+  [628, "hisui", 10240],
+  [705, "hisui", 10241],
+  [706, "hisui", 10242],
+  [713, "hisui", 10243],
+  [724, "hisui", 10244],
+
+  // ===== Paldea-Formen =====
+  [128, "paldea-combat", 10250],
+  [128, "paldea-blaze", 10251],
+  [128, "paldea-aqua", 10252],
+  [194, "paldea", 10253],
+].forEach(([baseDexId, formKey, formPokemonId]) => {
+  addSpecialForm(baseDexId, formKey, formPokemonId);
+});
+
 function formBadgeLabel(formKey) {
   if (!formKey) return "";
 
   if (formKey === "mega") return "Mega";
   if (formKey === "mega-x") return "Mega X";
   if (formKey === "mega-y") return "Mega Y";
+  if (formKey === "primal") return "Proto";
+
+  if (formKey === "alola") return "Alola";
+  if (formKey === "galar") return "Galar";
+  if (formKey === "galar-zen") return "Galar Zen";
+  if (formKey === "hisui") return "Hisui";
+  if (formKey === "paldea") return "Paldea";
+  if (formKey === "paldea-combat") return "Paldea Kampf";
+  if (formKey === "paldea-blaze") return "Paldea Feuer";
+  if (formKey === "paldea-aqua") return "Paldea Wasser";
 
   if (formKey === "heat") return "Feuer";
   if (formKey === "wash") return "Wasser";
@@ -345,9 +443,72 @@ function normalizeTeamsSource(teamsSrc, teamCount) {
 }
 
 /* =========================
-   Box: Anti-Wobble CSS
+   Team Page CSS
 ========================= */
-const BOX_STATIC_CSS = `
+const TEAM_PAGE_CSS = `
+  .team-page,
+  .team-page * {
+    box-sizing: border-box;
+  }
+
+  .team-page::-webkit-scrollbar,
+  .team-page *::-webkit-scrollbar {
+    display: none;
+  }
+
+  .team-page,
+  .team-page * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .team-page button {
+    margin: 0 !important;
+    border-radius: 12px !important;
+    border: 1px solid rgba(120, 155, 220, 0.34);
+    background:
+      linear-gradient(135deg, rgba(70, 105, 165, 0.18), rgba(28, 42, 74, 0.16)),
+      rgba(7, 12, 26, 0.54);
+    color: #ffffff;
+    font-weight: 950;
+    box-shadow:
+      0 10px 22px rgba(0, 0, 0, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transition:
+      transform 160ms ease,
+      border-color 160ms ease,
+      background 160ms ease,
+      box-shadow 160ms ease,
+      filter 160ms ease;
+  }
+
+  .team-page button:hover,
+  .team-page button:focus-visible {
+    transform: translateY(-2px);
+    border-color: rgba(165, 195, 255, 0.58);
+    background:
+      linear-gradient(135deg, rgba(90, 130, 200, 0.24), rgba(35, 54, 92, 0.20)),
+      rgba(9, 15, 32, 0.64);
+    box-shadow:
+      0 14px 28px rgba(0, 0, 0, 0.24),
+      0 0 18px rgba(120, 165, 255, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    outline: none;
+    filter: brightness(1.04);
+  }
+
+  .team-page h1 {
+    color: #ffffff !important;
+    text-shadow: 3px 3px #079e4b;
+    letter-spacing: -0.03em;
+  }
+
+  .team-page h2,
+  .team-page h3 {
+    color: rgba(255, 255, 255, 0.96);
+    letter-spacing: -0.02em;
+  }
+
   .pokeboxItemStatic,
   .pokeboxItemStatic:hover,
   .pokeboxItemStatic:active,
@@ -842,8 +1003,8 @@ useEffect(() => {
   };
 
   return (
-    <div style={page}>
-      <style>{BOX_STATIC_CSS}</style>
+    <div className="team-page" style={page}>
+      <style>{TEAM_PAGE_CSS}</style>
 
       <div style={bg} />
       <div style={overlay} />
@@ -968,6 +1129,11 @@ useEffect(() => {
                                           src={imgUrl}
                                           alt={p}
                                           onClick={() => toggleLinkedPokemon(i, p)}
+                                          onContextMenu={(e) => {
+                                            e.preventDefault();
+                                            if (idToUse) navigate(`/pokemon/${idToUse}`);
+                                          }}
+                                          title="Linksklick: aus Team entfernen | Rechtsklick: Pokédex öffnen"
                                           style={{
                                             width: 72,
                                             height: 72,
@@ -1017,11 +1183,11 @@ useEffect(() => {
                                               alt={type}
                                               title={type}
                                               style={{
-                                                width: 28,
-                                                height: 28,
+                                                width: 36,
+                                                height: 36,
                                                 opacity: 0.98,
-                                                borderRadius: 8,
-                                                padding: 4,
+                                                borderRadius: 10,
+                                                padding: 5,
                                                 background: "rgba(0,0,0,0.35)",
                                                 border: "1px solid rgba(255,255,255,0.12)",
                                                 boxShadow: "0 6px 14px rgba(0,0,0,0.35)",
@@ -1084,7 +1250,11 @@ useEffect(() => {
                       <button
                         key={`box-${i}-${rowIndex}-${p}`}
                         onClick={() => toggleLinkedPokemon(i, p)}
-                        title={`${rowIndex + 1}. ${p}${row.route ? ` - ${row.route}` : ""}`}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          if (idToUse) navigate(`/pokemon/${idToUse}`);
+                        }}
+                        title={`${rowIndex + 1}. ${p}${row.route ? ` - ${row.route}` : ""} | Linksklick: ins Team | Rechtsklick: Pokédex`}
                         className="pokeboxItemStatic"
                         style={pokeboxItem}
                       >
@@ -1303,42 +1473,48 @@ export default TeamManager;
 const page = {
   minHeight: "100vh",
   position: "relative",
-  overflow: "hidden",
+  overflowX: "hidden",
+  background: "#050914",
 };
 
 const bg = {
-  position: "absolute",
+  position: "fixed",
   inset: 0,
   backgroundImage: `url("/backgrounds/background_5.png")`,
   backgroundSize: "cover",
   backgroundPosition: "center",
   backgroundRepeat: "no-repeat",
-  transform: "scale(1.02)",
+  transform: "scale(1.03)",
   zIndex: 0,
+  filter: "saturate(1.05) brightness(0.78)",
 };
 
 const overlay = {
-  position: "absolute",
+  position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.72)",
   zIndex: 1,
+  background:
+    "radial-gradient(900px 520px at 18% 8%, rgba(66, 153, 225, 0.16), transparent 62%), radial-gradient(760px 520px at 84% 12%, rgba(67, 233, 123, 0.11), transparent 64%), linear-gradient(180deg, rgba(3, 7, 18, 0.55), rgba(3, 7, 18, 0.86))",
 };
 
 const content = {
   position: "relative",
   zIndex: 2,
-  padding: 16,
+  padding: "22px 18px",
   color: "white",
 };
 
 const topBar = {
   width: "min(1200px, 96vw)",
   margin: "0 auto 12px auto",
-  padding: "10px 12px",
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(10,10,16,0.40)",
-  backdropFilter: "blur(10px)",
+  padding: "12px 14px",
+  borderRadius: 18,
+  border: "1px solid rgba(180, 205, 255, 0.14)",
+  background:
+    "linear-gradient(145deg, rgba(15, 23, 42, 0.68), rgba(5, 9, 20, 0.56))",
+  backdropFilter: "blur(14px)",
+  boxShadow:
+    "0 18px 46px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -1348,11 +1524,14 @@ const topBar = {
 const headerCard = {
   width: "min(1200px, 96vw)",
   margin: "0 auto 16px auto",
-  padding: 16,
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(10,10,16,0.40)",
-  backdropFilter: "blur(10px)",
+  padding: 18,
+  borderRadius: 24,
+  border: "1px solid rgba(180, 205, 255, 0.14)",
+  background:
+    "linear-gradient(145deg, rgba(15, 23, 42, 0.76), rgba(5, 9, 20, 0.66))",
+  backdropFilter: "blur(14px)",
+  boxShadow:
+    "0 30px 90px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
 };
 
 const teamsWrap = {
@@ -1368,16 +1547,18 @@ const teamsWrap = {
 const teamCol = {
   width: "min(520px, 96vw)",
   display: "grid",
-  gap: 12,
+  gap: 14,
 };
 
 const glassCard = {
-  padding: 14,
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(10,10,16,0.40)",
-  backdropFilter: "blur(10px)",
-  boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
+  padding: 16,
+  borderRadius: 22,
+  border: "1px solid rgba(180, 205, 255, 0.13)",
+  background:
+    "linear-gradient(145deg, rgba(15, 23, 42, 0.62), rgba(5, 10, 24, 0.50))",
+  backdropFilter: "blur(14px)",
+  boxShadow:
+    "0 24px 70px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
 };
 
 const teamList = {
@@ -1389,10 +1570,12 @@ const teamList = {
 };
 
 const teamSlot = {
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(0,0,0,0.35)",
+  borderRadius: 16,
+  border: "1px solid rgba(180, 205, 255, 0.12)",
+  background:
+    "linear-gradient(135deg, rgba(10, 18, 36, 0.58), rgba(5, 9, 20, 0.50))",
   padding: 10,
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.06)",
 };
 
 const slotContent = {
@@ -1410,11 +1593,13 @@ const pokeboxList = {
 const pokeboxItem = {
   width: "100%",
   aspectRatio: "1 / 1",
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(0,0,0,0.28)",
+  borderRadius: 16,
+  border: "1px solid rgba(180, 205, 255, 0.12)",
+  background:
+    "linear-gradient(135deg, rgba(10, 18, 36, 0.52), rgba(5, 9, 20, 0.42))",
   padding: 6,
   cursor: "pointer",
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.06)",
 };
 
 const btnGreen = {

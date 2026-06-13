@@ -187,11 +187,80 @@ export default function VersusHome() {
   }
 
   return (
-    <div className="pnt-page pnt-center-page versus-home-page">
+    <div
+      className="pnt-page pnt-center-page versus-home-page"
+      style={{
+        backgroundImage:
+          "linear-gradient(180deg, rgba(5, 8, 18, 0.62), rgba(5, 8, 18, 0.82)), url('/backgrounds/draft_background.png')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed",
+      }}
+    >
+      <style>{`
+        .versus-home-page .pnt-button,
+        .versus-home-page .pnt-back-button {
+          border-radius: 8px !important;
+          font-weight: 950;
+        }
+
+        .versus-home-page .pnt-back-button {
+          padding: 10px 18px !important;
+          min-height: 0 !important;
+          background: rgba(8, 14, 28, 0.58) !important;
+          border: 1px solid rgba(140, 165, 210, 0.42) !important;
+          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.20) !important;
+        }
+
+        .versus-home-page .pnt-button {
+          min-height: 42px;
+          padding: 10px 18px;
+          background:
+            linear-gradient(135deg, rgba(70, 105, 165, 0.18), rgba(28, 42, 74, 0.16)),
+            rgba(7, 12, 26, 0.54);
+          border: 1px solid rgba(120, 155, 220, 0.42);
+          box-shadow:
+            0 10px 22px rgba(0, 0, 0, 0.18),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+
+        .versus-home-page .pnt-button:hover,
+        .versus-home-page .pnt-button:focus-visible,
+        .versus-home-page .pnt-back-button:hover,
+        .versus-home-page .pnt-back-button:focus-visible {
+          transform: translateY(-2px);
+          border-color: rgba(165, 195, 255, 0.62) !important;
+          box-shadow:
+            0 14px 28px rgba(0, 0, 0, 0.24),
+            0 0 18px rgba(120, 165, 255, 0.12),
+            inset 0 1px 0 rgba(255, 255, 255, 0.12);
+          outline: none;
+        }
+
+        .versus-home-page .versus-home-wide-button {
+          min-height: 50px;
+          border-radius: 8px !important;
+        }
+
+        .versus-home-page .pnt-button-danger,
+        .versus-home-page .pnt-alert-error + .pnt-button-danger {
+          border-radius: 8px !important;
+        }
+      `}</style>
+
       <div className="pnt-panel pnt-panel-with-top-button versus-home-panel">
         <button
           type="button"
           className="pnt-back-button"
+          style={{
+            borderRadius: 8,
+            padding: "10px 18px",
+            minHeight: 0,
+            background: "rgba(8, 14, 28, 0.58)",
+            border: "1px solid rgba(140, 165, 210, 0.42)",
+            boxShadow: "0 10px 24px rgba(0, 0, 0, 0.20)",
+          }}
           onClick={() => nav("/")}
         >
           ← Zur Startseite

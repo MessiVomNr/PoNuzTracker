@@ -220,6 +220,40 @@ function prettyFormSuffixDe(apiName) {
   return cap(s);
 }
 
+function apiSpecialFormDisplayName(apiName, baseDe) {
+  const n = String(apiName || "").toLowerCase();
+  const name = String(baseDe || "").trim();
+
+  if (!name) return prettyFormSuffixDe(apiName);
+
+  const regionForms = [
+    { key: "-alola", label: "Alola" },
+    { key: "-galar", label: "Galar" },
+    { key: "-hisui", label: "Hisui" },
+    { key: "-paldea", label: "Paldea" },
+  ];
+
+  const region = regionForms.find((f) => n.includes(f.key));
+  if (region) return `${region.label}-${name}`;
+
+  const namedForms = [
+    { key: "-origin", label: "Urform" },
+    { key: "-sky", label: "Zenit" },
+    { key: "-therian", label: "Tiergeist" },
+    { key: "-black", label: "Schwarz" },
+    { key: "-white", label: "Weiß" },
+    { key: "-blade", label: "Klinge" },
+    { key: "-zen", label: "Zen" },
+    { key: "-resolute", label: "Resolut" },
+    { key: "-female", label: "Weiblich" },
+  ];
+
+  const form = namedForms.find((f) => n.includes(f.key));
+  if (form) return `${form.label}-${name}`;
+
+  return name;
+}
+
 function officialArtworkUrl(dexId) {
   const id = Number(dexId);
   if (!Number.isFinite(id) || id <= 0) return "";
@@ -717,8 +751,7 @@ export default function Pokedex() {
       }
       if (p.kind === "gigas_api") return `Gigas-${baseDe}`;
       if (p.kind === "special_api") {
-        const suf = prettyFormSuffixDe(apiName);
-        return suf ? `${suf}-${baseDe}` : baseDe;
+        return apiSpecialFormDisplayName(apiName, baseDe);
       }
       return baseDe; // normal_api
     }

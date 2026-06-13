@@ -84,7 +84,8 @@ function AppContent() {
         <Route path="/versus" element={<VersusHome />} />
         <Route path="/versus/:roomId" element={<VersusLobby />} />
         <Route path="/versus/:roomId/game" element={<VersusGame />} />
-        <Route path="/duo" element={<DuoHome />} />
+        <Route path="/duo" element={<SoullinkStart />} />
+        <Route path="/duo/create" element={<DuoHome />} />
         <Route path="/duo/:roomId" element={<DuoLobby />} />
         <Route path="/duo/:roomId/versus" element={<DuoVersusAuction />} />
         <Route path="/versus/:roomId/auction" element={<DuoVersusAuction />} />
