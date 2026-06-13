@@ -5262,6 +5262,7 @@ function teamTitle(tid) {
                   type="checkbox"
                   checked={!settings.allowLegendary}
                   onChange={(e) => updateSettings({ allowLegendary: !e.target.checked })}
+                  style={checkboxStyle}
                 />
                 <span>Legendäre deaktivieren</span>
               </label>
@@ -5271,6 +5272,7 @@ function teamTitle(tid) {
                   type="checkbox"
                   checked={!settings.allowSubLegendary}
                   onChange={(e) => updateSettings({ allowSubLegendary: !e.target.checked })}
+                  style={checkboxStyle}
                 />
                 <span>Sub-Legendäre deaktivieren</span>
               </label>
@@ -5280,6 +5282,7 @@ function teamTitle(tid) {
                   type="checkbox"
                   checked={!settings.allowMythical}
                   onChange={(e) => updateSettings({ allowMythical: !e.target.checked })}
+                  style={checkboxStyle}
                 />
                 <span>Mythische deaktivieren</span>
               </label>
@@ -5289,6 +5292,7 @@ function teamTitle(tid) {
                   type="checkbox"
                   checked={!settings.allowPseudo}
                   onChange={(e) => updateSettings({ allowPseudo: !e.target.checked })}
+                  style={checkboxStyle}
                 />
                 <span>Pseudo-Legendäre deaktivieren</span>
               </label>

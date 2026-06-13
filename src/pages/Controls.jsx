@@ -13,35 +13,133 @@ import {
   labelHotkey,
 } from "../utils/hotkeys";
 
-const card = {
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(0, 0, 0, 0.55)",
-  borderRadius: 14,
-  padding: 14,
-  color: "white",
+const pageWrap = {
+  minHeight: "100vh",
+  padding: 16,
+  maxWidth: 980,
+  margin: "0 auto",
+  color: "#f8fafc",
 };
 
-const tabRow = { display: "flex", gap: 10, flexWrap: "wrap" };
-const tabBtn = {
-  padding: "8px 10px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 900,
+const card = {
+  border: "1px solid rgba(137,155,184,0.26)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(52,211,153,0.075), transparent 44%), linear-gradient(180deg, rgba(10,18,33,0.94), rgba(5,11,21,0.92))",
+  borderRadius: 14,
+  padding: 14,
+  color: "#f8fafc",
+  boxShadow:
+    "0 18px 50px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.045)",
 };
+
+const tabRow = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+};
+
+const tabBtn = {
+  padding: "9px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(120,138,170,0.42)",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.88), rgba(8,15,28,0.88))",
+  color: "#f8fafc",
+  cursor: "pointer",
+  fontWeight: 950,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 18px rgba(0,0,0,0.18)",
+};
+
 const tabBtnActive = {
   ...tabBtn,
-  background: "rgba(255,255,255,0.12)",
-  border: "1px solid rgba(255,255,255,0.22)",
+  border: "1px solid rgba(52,211,153,0.5)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(52,211,153,0.18), transparent 46%), linear-gradient(180deg, rgba(13,44,34,0.88), rgba(8,20,18,0.88))",
+  boxShadow:
+    "0 0 0 1px rgba(52,211,153,0.14), 0 10px 20px rgba(0,0,0,0.2)",
+};
+
+const rowStyle = {
+  display: "grid",
+  gridTemplateColumns: "1fr 180px 110px",
+  gap: 10,
+  alignItems: "center",
+  padding: 10,
+  borderRadius: 12,
+  border: "1px solid rgba(137,155,184,0.16)",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.54), rgba(8,15,28,0.54))",
+};
+
+const keyInputStyle = {
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(137,155,184,0.3)",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.96), rgba(8,15,28,0.96))",
+  color: "#f8fafc",
+  fontWeight: 950,
+  outline: "none",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.045), 0 8px 18px rgba(0,0,0,0.18)",
+};
+
+const keyInputActiveStyle = {
+  ...keyInputStyle,
+  border: "1px solid rgba(52,211,153,0.78)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(52,211,153,0.16), transparent 46%), linear-gradient(180deg, rgba(13,44,34,0.96), rgba(8,20,18,0.96))",
+  color: "#ffffff",
+  boxShadow:
+    "0 0 0 3px rgba(52,211,153,0.14), 0 0 24px rgba(52,211,153,0.18), inset 0 1px 0 rgba(255,255,255,0.055)",
+};
+
+const rowActiveStyle = {
+  ...rowStyle,
+  border: "1px solid rgba(52,211,153,0.42)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(52,211,153,0.10), transparent 46%), linear-gradient(180deg, rgba(13,24,42,0.68), rgba(8,15,28,0.68))",
+};
+
+const clearButtonStyle = (hasValue) => ({
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: hasValue
+    ? "1px solid rgba(248,113,113,0.32)"
+    : "1px solid rgba(120,138,170,0.22)",
+  background: hasValue
+    ? "linear-gradient(180deg, rgba(127,29,29,0.34), rgba(69,10,10,0.34))"
+    : "linear-gradient(180deg, rgba(13,24,42,0.48), rgba(8,15,28,0.48))",
+  color: hasValue ? "#fee2e2" : "rgba(248,250,252,0.48)",
+  cursor: hasValue ? "pointer" : "not-allowed",
+  fontWeight: 950,
+  opacity: hasValue ? 1 : 0.58,
+  textAlign: "center",
+  boxShadow: hasValue
+    ? "inset 0 1px 0 rgba(255,255,255,0.035), 0 8px 18px rgba(0,0,0,0.18)"
+    : "none",
+});
+
+const backButtonStyle = {
+  padding: "8px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(120,138,170,0.42)",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.88), rgba(8,15,28,0.88))",
+  color: "#f8fafc",
+  cursor: "pointer",
+  fontWeight: 950,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 18px rgba(0,0,0,0.18)",
 };
 
 function Row({ title, value, onChange, conflict }) {
   const hasValue = !!normalizeKeyCombo(value);
+  const [isCapturing, setIsCapturing] = useState(false);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 180px 110px", gap: 10, alignItems: "center" }}>
+    <div style={isCapturing ? rowActiveStyle : rowStyle}>
       <div>
         <div style={{ fontWeight: 950 }}>{title}</div>
         {conflict ? (
@@ -54,24 +152,20 @@ function Row({ title, value, onChange, conflict }) {
       </div>
 
       <input
-        value={formatKeyForDisplay(value)}
+        value={isCapturing ? "Taste drücken" : formatKeyForDisplay(value)}
         placeholder="—"
         readOnly
-        style={{
-          padding: "10px 12px",
-          borderRadius: 12,
-          border: "1px solid rgba(255,255,255,0.14)",
-          background: "rgba(0,0,0,0.35)",
-          color: "white",
-          fontWeight: 900,
-          outline: "none",
-        }}
+        style={isCapturing ? keyInputActiveStyle : keyInputStyle}
+        onFocus={() => setIsCapturing(true)}
+        onBlur={() => setIsCapturing(false)}
         onKeyDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
           const combo = normalizeKeyComboFromEvent(e);
           if (!combo) return; // reine Mod-Taste ignorieren
           onChange(combo);
+          setIsCapturing(false);
+          e.currentTarget.blur();
         }}
       />
 
@@ -84,17 +178,7 @@ function Row({ title, value, onChange, conflict }) {
         }}
         disabled={!hasValue}
         title={hasValue ? "Hotkey löschen (unbelegt)" : "Bereits unbelegt"}
-        style={{
-          padding: "10px 12px",
-          borderRadius: 12,
-          border: "1px solid rgba(255,255,255,0.14)",
-          background: hasValue ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.02)",
-          color: "white",
-          cursor: hasValue ? "pointer" : "not-allowed",
-          fontWeight: 950,
-          opacity: hasValue ? 1 : 0.45,
-          textAlign: "center",
-        }}
+        style={clearButtonStyle(hasValue)}
       >
         Löschen
       </button>
@@ -148,7 +232,7 @@ export default function Controls() {
   }, []);
 
   return (
-    <div style={{ padding: 16, maxWidth: 980, margin: "0 auto" }}>
+    <div style={pageWrap}>
       <div style={{ ...card }}>
         {/* ✅ Header mit Zurück-Button */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
@@ -157,15 +241,7 @@ export default function Controls() {
           <button
             type="button"
             onClick={() => nav(-1)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.14)",
-              background: "rgba(255,255,255,0.06)",
-              color: "white",
-              cursor: "pointer",
-              fontWeight: 950,
-            }}
+            style={backButtonStyle}
             title="Schließen"
           >
             Zurück
@@ -289,6 +365,30 @@ export default function Controls() {
             value={draft.minus100}
             conflict={conflicts["draft.minus100"]}
             onChange={(v) => setHotkeyChecked("draft", "minus100", v)}
+          />
+          <Row
+            title={labelHotkey("draft", "plus10")}
+            value={draft.plus10}
+            conflict={conflicts["draft.plus10"]}
+            onChange={(v) => setHotkeyChecked("draft", "plus10", v)}
+          />
+          <Row
+            title={labelHotkey("draft", "minus10")}
+            value={draft.minus10}
+            conflict={conflicts["draft.minus10"]}
+            onChange={(v) => setHotkeyChecked("draft", "minus10", v)}
+          />
+          <Row
+            title={labelHotkey("draft", "plus1")}
+            value={draft.plus1}
+            conflict={conflicts["draft.plus1"]}
+            onChange={(v) => setHotkeyChecked("draft", "plus1", v)}
+          />
+          <Row
+            title={labelHotkey("draft", "minus1")}
+            value={draft.minus1}
+            conflict={conflicts["draft.minus1"]}
+            onChange={(v) => setHotkeyChecked("draft", "minus1", v)}
           />
           <Row
             title={labelHotkey("draft", "togglePause")}

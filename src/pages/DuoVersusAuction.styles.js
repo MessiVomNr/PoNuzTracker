@@ -2,10 +2,12 @@
 
 export const statPanel = {
   padding: 12,
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(0,0,0,0.22)",
-  boxShadow: "0 12px 28px rgba(0,0,0,0.35)",
+  borderRadius: 12,
+  border: "1px solid rgba(137,155,184,0.22)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(52,211,153,0.075), transparent 44%), linear-gradient(180deg, rgba(13,24,42,0.82), rgba(8,15,28,0.82))",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.035), 0 12px 28px rgba(0,0,0,0.32)",
 };
 
 export const auctionGrid = {
@@ -18,15 +20,21 @@ export const auctionGrid = {
 export const playerCard = {
   padding: 12,
   borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(100,140,215,0.24)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(96,165,250,0.08), transparent 42%), linear-gradient(180deg, rgba(13,24,42,0.76), rgba(8,15,28,0.76))",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.035), 0 8px 20px rgba(0,0,0,0.2)",
 };
 
 export const teamSlotCard = {
   padding: 12,
   borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(137,155,184,0.2)",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.72), rgba(8,15,28,0.72))",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.03), 0 8px 18px rgba(0,0,0,0.18)",
 };
 
 export const timerBig = {
@@ -74,21 +82,27 @@ export const checkboxStyle = {
 export const btnPrimary = {
   padding: "10px 12px",
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.28)",
-  background: "rgba(255,255,255,0.16)",
-  color: "white",
+  border: "1px solid rgba(52,211,153,0.46)",
+  background:
+    "linear-gradient(180deg, rgba(32,142,112,0.92), rgba(13,86,72,0.92))",
+  color: "#ffffff",
   cursor: "pointer",
-  fontWeight: 900,
+  fontWeight: 950,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 22px rgba(0,0,0,0.24)",
 };
 
 export const btnGhost = {
   padding: "10px 12px",
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
+  border: "1px solid rgba(120,138,170,0.42)",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.88), rgba(8,15,28,0.88))",
+  color: "#f8fafc",
   cursor: "pointer",
-  fontWeight: 800,
+  fontWeight: 850,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 18px rgba(0,0,0,0.18)",
 };
 
 export const btnSecondary =
@@ -96,13 +110,16 @@ export const btnSecondary =
 
 export const btnGhostSmall = {
   padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
+  borderRadius: 9,
+  border: "1px solid rgba(120,138,170,0.42)",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.88), rgba(8,15,28,0.88))",
+  color: "#f8fafc",
   cursor: "pointer",
-  fontWeight: 800,
+  fontWeight: 850,
   fontSize: 12,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 18px rgba(0,0,0,0.18)",
 };
 
 export const imgBtn = {
@@ -118,9 +135,11 @@ export const pokeHeroWrap = {
   height: 320,
   borderRadius: 18,
   overflow: "hidden",
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(0,0,0,0.18)",
-  boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
+  border: "1px solid rgba(137,155,184,0.3)",
+  background:
+    "radial-gradient(circle at 50% 26%, rgba(52,211,153,0.18), transparent 35%), radial-gradient(circle at 50% 70%, rgba(96,165,250,0.12), transparent 42%), linear-gradient(180deg, rgba(13,24,42,0.9), rgba(5,11,21,0.9))",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.045), 0 20px 48px rgba(0,0,0,0.5)",
 };
 
 export const pokeHeroBtn = {
@@ -157,12 +176,15 @@ export const pokeHeroOverlay = {
 export const pokeHeroOverlayFlash = {};
 
 export const pokeHeroRightBadge = {
-  borderRadius: 12,
-  padding: "7px 7px",
-  background: "rgba(0,0,0,0.40)",
-  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 10,
+  padding: "7px 8px",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.92), rgba(8,15,28,0.92))",
+  border: "1px solid rgba(137,155,184,0.26)",
   minWidth: 7,
   textAlign: "center",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.035), 0 8px 16px rgba(0,0,0,0.22)",
 };
 
 export const evoCardBtn = {
@@ -170,13 +192,15 @@ export const evoCardBtn = {
   justifyItems: "center",
   gap: 4,
   padding: "10px 12px",
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.22)",
-  background: "rgba(0,0,0,0.22)",
-  color: "white",
+  borderRadius: 12,
+  border: "1px solid rgba(137,155,184,0.24)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(96,165,250,0.08), transparent 42%), linear-gradient(180deg, rgba(13,24,42,0.78), rgba(8,15,28,0.78))",
+  color: "#f8fafc",
   cursor: "pointer",
   textAlign: "center",
-  boxShadow: "0 10px 22px rgba(0,0,0,0.35)",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.035), 0 10px 22px rgba(0,0,0,0.28)",
 };
 
 export const typeIconRow = {
@@ -193,21 +217,26 @@ export const typeIcon = {
   height: 28,
   borderRadius: 8,
   padding: 3,
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.14)",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.86), rgba(8,15,28,0.86))",
+  border: "1px solid rgba(137,155,184,0.24)",
+  boxShadow: "0 6px 12px rgba(0,0,0,0.2)",
 };
 
 export const btnDanger = {
   padding: "10px 12px",
   borderRadius: 10,
-  border: "1px solid rgba(239,68,68,0.55)",
-  background: "rgba(239,68,68,0.12)",
-  color: "white",
+  border: "1px solid rgba(248,113,113,0.38)",
+  background:
+    "linear-gradient(180deg, rgba(127,29,29,0.42), rgba(69,10,10,0.42))",
+  color: "#fee2e2",
   cursor: "pointer",
-  fontWeight: 900,
+  fontWeight: 950,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.035), 0 8px 18px rgba(0,0,0,0.2)",
 };
 
 export const pokeHeroOverlayFlashStrong = {
   boxShadow:
-    "0 0 0 2px rgba(255,255,255,0.22), 0 18px 40px rgba(0,0,0,0.45)",
+    "0 0 0 2px rgba(52,211,153,0.34), 0 0 28px rgba(52,211,153,0.22), 0 18px 40px rgba(0,0,0,0.45)",
 };

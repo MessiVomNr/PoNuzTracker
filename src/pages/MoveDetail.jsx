@@ -106,6 +106,114 @@ const SPECIAL_TYPES_PRE4 = new Set([
   "dark",
 ]);
 
+const MOVE_DETAIL_CSS = `
+  .mdetail-panel {
+    border: 1px solid var(--pnt-border, rgba(137, 155, 184, 0.28)) !important;
+    background:
+      linear-gradient(180deg, rgba(10, 18, 33, 0.94), rgba(6, 12, 24, 0.92)) !important;
+    border-radius: var(--pnt-radius, 14px);
+    box-shadow:
+      var(--pnt-shadow, 0 18px 48px rgba(0, 0, 0, 0.36)),
+      inset 0 1px 0 rgba(255, 255, 255, 0.045);
+    backdrop-filter: blur(10px);
+  }
+
+  .mdetail-button {
+    min-height: 42px;
+    padding: 0 15px;
+    border-radius: var(--pnt-radius-small, 8px);
+    border: 1px solid rgba(100, 140, 215, 0.55) !important;
+    background:
+      linear-gradient(180deg, rgba(14, 30, 56, 0.96), rgba(9, 20, 39, 0.96)) !important;
+    background-color: transparent !important;
+    color: #f8fafc !important;
+    cursor: pointer;
+    font-weight: 950;
+    white-space: nowrap;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 10px 24px rgba(0, 0, 0, 0.18);
+    transition:
+      transform 0.15s ease,
+      background 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .mdetail-button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(140, 170, 230, 0.68) !important;
+    background:
+      linear-gradient(180deg, rgba(18, 38, 70, 0.96), rgba(10, 23, 44, 0.96)) !important;
+    color: #ffffff !important;
+  }
+
+  .mdetail-select {
+    min-height: 42px;
+    padding: 0 13px;
+    border-radius: var(--pnt-radius-small, 8px);
+    border: 1px solid rgba(137, 155, 184, 0.28) !important;
+    background:
+      linear-gradient(180deg, rgba(10, 19, 34, 0.96), rgba(8, 15, 28, 0.96)) !important;
+    background-color: transparent !important;
+    color: #f8fafc !important;
+    cursor: pointer;
+    outline: none;
+    font-weight: 950;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  }
+
+  .mdetail-select:focus {
+    border-color: rgba(96, 165, 250, 0.72) !important;
+    box-shadow:
+      0 0 0 3px rgba(96, 165, 250, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+  }
+
+  .mdetail-select option {
+    background: #08111f;
+    color: #f8fafc;
+    font-weight: 900;
+  }
+
+  .mdetail-card {
+    border-radius: var(--pnt-radius, 14px);
+    border: 1px solid rgba(137, 155, 184, 0.18) !important;
+    background:
+      linear-gradient(180deg, rgba(13, 24, 42, 0.68), rgba(9, 17, 31, 0.66)) !important;
+    color: var(--pnt-text, #f8fafc);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  }
+
+  .mdetail-scroll {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .mdetail-scroll::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  .mdetail-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  @media (max-width: 760px) {
+    .mdetail-stat-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .mdetail-stat-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+`;
+
 function useQuery() {
   const { search } = useLocation();
   return useMemo(() => new URLSearchParams(search), [search]);
@@ -313,11 +421,12 @@ export default function MoveDetail() {
     };
   }, [moveKey]);
 
-  const pageBg = `radial-gradient(circle at 10% 0%, rgba(255,0,150,0.18) 0%, transparent 55%),
-                  radial-gradient(circle at 85% 0%, rgba(0,255,200,0.16) 0%, transparent 55%),
-                  radial-gradient(circle at 50% 20%, rgba(0,120,255,0.14) 0%, transparent 60%),
-                  linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.75)),
-                  url(${dexBg})`;
+  const pageBg = `
+    radial-gradient(circle at 50% 0%, rgba(52, 211, 153, 0.13), transparent 34%),
+    radial-gradient(circle at 0% 25%, rgba(96, 165, 250, 0.12), transparent 38%),
+    linear-gradient(180deg, rgba(5, 10, 24, 0.22), rgba(5, 10, 24, 0.78)),
+    url(${dexBg})
+  `;
 
   const derived = useMemo(() => {
     if (!move) return null;
@@ -388,25 +497,29 @@ export default function MoveDetail() {
   return (
     <div
       style={{
+        height: "100vh",
         minHeight: "100vh",
-        padding: 16,
-        color: "white",
+        padding: 18,
+        boxSizing: "border-box",
+        color: "var(--pnt-text, white)",
         backgroundImage: pageBg,
         backgroundSize: "cover",
         backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed",
         overflow: "hidden",
       }}
     >
+      <style>{MOVE_DETAIL_CSS}</style>
       <div
+        className="mdetail-panel"
         style={{
-          maxWidth: 980,
+          width: "min(980px, 96vw)",
+          maxHeight: "calc(100vh - 36px)",
           margin: "0 auto",
-          borderRadius: 18,
-          border: "1px solid rgba(255,255,255,0.14)",
-          background: "rgba(0,0,0,0.50)",
-          backdropFilter: "blur(8px)",
-          padding: 14,
-          boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
+          padding: 16,
+          boxSizing: "border-box",
+          overflow: "hidden",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
@@ -419,23 +532,17 @@ export default function MoveDetail() {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <div style={{ opacity: 0.85, fontWeight: 900 }}>Generation</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" }}>
+            <div style={{ opacity: 0.82, fontWeight: 950, fontSize: 13 }}>Generation</div>
+
             <select
+              className="mdetail-select"
               value={gen}
               onChange={(e) => {
                 const next = Number(e.target.value);
                 setGen(next);
                 const url = `/move/${encodeURIComponent(moveKey)}?gen=${encodeURIComponent(next)}`;
                 nav(url, { replace: true });
-              }}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid rgba(255,255,255,0.18)",
-                background: "rgba(10,10,16,0.7)",
-                color: "white",
-                fontWeight: 900,
               }}
             >
               {availableGenOptions.map((g) => (
@@ -445,33 +552,11 @@ export default function MoveDetail() {
               ))}
             </select>
 
-            <button
-              onClick={() => nav("/movedex")}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid rgba(255,255,255,0.18)",
-                background: "rgba(255,255,255,0.08)",
-                color: "white",
-                fontWeight: 900,
-                cursor: "pointer",
-              }}
-            >
+            <button className="mdetail-button" onClick={() => nav("/movedex")}>
               MoveDex
             </button>
 
-            <button
-              onClick={() => nav(-1)}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid rgba(255,255,255,0.18)",
-                background: "rgba(255,255,255,0.08)",
-                color: "white",
-                fontWeight: 900,
-                cursor: "pointer",
-              }}
-            >
+            <button className="mdetail-button" onClick={() => nav(-1)}>
               Zurück
             </button>
           </div>
@@ -485,16 +570,14 @@ export default function MoveDetail() {
         {derived && !loading && !err ? (
           <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
             <div
+              className="mdetail-card"
               style={{
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.14)",
-                background: "rgba(255,255,255,0.06)",
-                padding: 12,
+                padding: 14,
               }}
             >
               <div style={{ fontWeight: 950, marginBottom: 6 }}>Werte</div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+              <div className="mdetail-stat-grid">
                 <div>
                   <div style={{ opacity: 0.7, fontSize: 12 }}>Typ</div>
                   <div style={{ fontWeight: 900 }}>{derived.typeDe}</div>
@@ -523,11 +606,9 @@ export default function MoveDetail() {
             </div>
 
             <div
+              className="mdetail-card mdetail-scroll"
               style={{
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.14)",
-                background: "rgba(255,255,255,0.06)",
-                padding: 12,
+                padding: 14,
                 maxHeight: "38vh",
                 overflow: "auto",
               }}

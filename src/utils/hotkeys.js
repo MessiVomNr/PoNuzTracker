@@ -22,6 +22,10 @@ export const DEFAULT_HOTKEYS = {
     allIn: "O",
     plus100: "ArrowUp",
     minus100: "ArrowDown",
+    plus10: "Shift+ArrowUp",
+    minus10: "Shift+ArrowDown",
+    plus1: "Alt+ArrowUp",
+    minus1: "Alt+ArrowDown",
     togglePause: "P",
   },
 
@@ -238,7 +242,11 @@ export function formatKeyForDisplay(combo) {
     .replace(/\bMeta\b/g, "Cmd")
     .replace(/\bBackspace\b/g, "Backspace")
     .replace(/\bEsc\b/g, "Esc")
-    .replace(/\bSpace\b/g, "Leertaste");
+    .replace(/\bSpace\b/g, "Leertaste")
+    .replace(/\bArrowUp\b/g, "Pfeil hoch")
+    .replace(/\bArrowDown\b/g, "Pfeil runter")
+    .replace(/\bArrowLeft\b/g, "Pfeil links")
+    .replace(/\bArrowRight\b/g, "Pfeil rechts");
 }
 
 export function labelHotkey(scope, key) {
@@ -261,6 +269,10 @@ export function labelHotkey(scope, key) {
       allIn: "All-In",
       plus100: "+100",
       minus100: "-100",
+      plus10: "+10",
+      minus10: "-10",
+      plus1: "+1",
+      minus1: "-1",
       togglePause: "Pause (Draft)",
     },
     soullink: {

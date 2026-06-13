@@ -549,10 +549,10 @@ function moveBadgeStyle(eff, emphasis, view = "my") {
   if (goodForMe) {
     return {
       ...base,
-      border: emphasis ? "1px solid rgba(90,255,170,0.65)" : "1px solid rgba(90,255,170,0.30)",
-      background: emphasis ? "rgba(90,255,170,0.20)" : "rgba(90,255,170,0.14)",
-      color: "#eafff4",
-      boxShadow: emphasis ? "0 0 0 3px rgba(90,255,170,0.14), 0 10px 24px rgba(0,0,0,0.35)" : undefined,
+      border: emphasis ? "1px solid rgba(96, 165, 250, 0.62)" : "1px solid rgba(96, 165, 250, 0.34)",
+      background: emphasis ? "rgba(30, 64, 175, 0.26)" : "rgba(30, 64, 175, 0.18)",
+      color: "#dbeafe",
+      boxShadow: emphasis ? "0 0 0 3px rgba(96, 165, 250, 0.12), 0 10px 24px rgba(0,0,0,0.35)" : undefined,
     };
   }
 
@@ -581,9 +581,9 @@ function moveRowBg(eff, view = "my") {
 
   if (goodForMe) {
     return {
-      bg: "rgba(90,255,170,0.10)",
-      border: "1px solid rgba(90,255,170,0.40)",
-      glow: "0 0 0 3px rgba(90,255,170,0.10)",
+      bg: "rgba(30, 64, 175, 0.18)",
+      border: "1px solid rgba(96, 165, 250, 0.34)",
+      glow: "0 0 0 3px rgba(96, 165, 250, 0.10)",
     };
   }
 
@@ -594,14 +594,69 @@ function moveRowBg(eff, view = "my") {
   };
 }
 
+function getStatBarColors(value) {
+  const v = safeNum(value, 0);
+
+  if (v <= 50) {
+    return {
+      start: "rgba(239, 68, 68, 0.96)",
+      end: "rgba(248, 113, 113, 0.76)",
+      glow: "rgba(239, 68, 68, 0.28)",
+    };
+  }
+
+  if (v <= 70) {
+    return {
+      start: "rgba(249, 115, 22, 0.96)",
+      end: "rgba(251, 146, 60, 0.76)",
+      glow: "rgba(249, 115, 22, 0.26)",
+    };
+  }
+
+  if (v <= 90) {
+    return {
+      start: "rgba(234, 179, 8, 0.96)",
+      end: "rgba(250, 204, 21, 0.78)",
+      glow: "rgba(234, 179, 8, 0.24)",
+    };
+  }
+
+  if (v <= 110) {
+    return {
+      start: "rgba(132, 204, 22, 0.96)",
+      end: "rgba(163, 230, 53, 0.76)",
+      glow: "rgba(132, 204, 22, 0.24)",
+    };
+  }
+
+  if (v <= 130) {
+    return {
+      start: "rgba(34, 197, 94, 0.96)",
+      end: "rgba(74, 222, 128, 0.76)",
+      glow: "rgba(34, 197, 94, 0.24)",
+    };
+  }
+
+  if (v <= 150) {
+    return {
+      start: "rgba(56, 189, 248, 0.96)",
+      end: "rgba(125, 211, 252, 0.78)",
+      glow: "rgba(56, 189, 248, 0.24)",
+    };
+  }
+
+  return {
+    start: "rgba(59, 130, 246, 0.96)",
+    end: "rgba(96, 165, 250, 0.8)",
+    glow: "rgba(59, 130, 246, 0.28)",
+  };
+}
+
 function StatBar({ label, value, compact }) {
   const v = safeNum(value, 0);
   const max = 200;
   const pct = clamp((v / max) * 100, 0, 100);
-
-  let bar = "rgba(90,255,170,0.55)";
-  if (v >= 120) bar = "rgba(110,170,255,0.75)";
-  else if (v <= 70) bar = "rgba(255,110,110,0.75)";
+  const colors = getStatBarColors(v);
 
   return (
     <div style={{ display: "grid", gap: compact ? 4 : 5 }}>
@@ -609,16 +664,26 @@ function StatBar({ label, value, compact }) {
         <span style={{ opacity: 0.85 }}>{label}</span>
         <span style={{ fontWeight: 950 }}>{v}</span>
       </div>
+
       <div
         style={{
           height: compact ? 7 : 8,
           borderRadius: 999,
-          border: "1px solid rgba(255,255,255,0.10)",
-          background: "rgba(0,0,0,0.28)",
+          border: "1px solid rgba(137, 155, 184, 0.16)",
+          background: "rgba(5, 11, 21, 0.46)",
           overflow: "hidden",
+          boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035)",
         }}
       >
-        <div style={{ width: `${pct}%`, height: "100%", background: bar }} />
+        <div
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            borderRadius: 999,
+            background: `linear-gradient(90deg, ${colors.start}, ${colors.end})`,
+            boxShadow: `0 0 12px ${colors.glow}`,
+          }}
+        />
       </div>
     </div>
   );
@@ -627,6 +692,7 @@ function StatBar({ label, value, compact }) {
 function IconBtn({ title, onClick, children, danger }) {
   return (
     <button
+      className={danger ? "tc-icon-btn tc-icon-btn-danger" : "tc-icon-btn"}
       title={title}
       onClick={onClick}
       style={{
@@ -634,7 +700,9 @@ function IconBtn({ title, onClick, children, danger }) {
         height: 34,
         borderRadius: 12,
         border: "1px solid rgba(255,255,255,0.14)",
-        background: danger ? "rgba(255,80,80,0.12)" : "rgba(255,255,255,0.06)",
+        background: danger
+          ? "linear-gradient(180deg, rgba(55, 24, 33, 0.92), rgba(38, 19, 26, 0.92))"
+          : "linear-gradient(180deg, rgba(29, 38, 55, 0.92), rgba(22, 29, 43, 0.92))",
         color: "#fff",
         cursor: "pointer",
         fontWeight: 950,
@@ -642,9 +710,20 @@ function IconBtn({ title, onClick, children, danger }) {
         placeItems: "center",
         padding: 0,
         lineHeight: 1,
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
       }}
     >
-      <span style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", transform: "translateY(-0.5px)" }}>{children}</span>
+      <span
+        style={{
+          display: "grid",
+          placeItems: "center",
+          width: "100%",
+          height: "100%",
+          transform: "translateY(-0.5px)",
+        }}
+      >
+        {children}
+      </span>
     </button>
   );
 }
@@ -967,6 +1046,7 @@ function MovePicker({
       <div style={{ display: "grid", gridTemplateColumns: "1fr 42px", gap: 8, alignItems: "stretch" }}>
         <button
           ref={btnRef}
+          className="tc-picker-button"
           onClick={() => setOpen((v) => !v)}
           style={{
             width: "100%",
@@ -1084,6 +1164,7 @@ function MovePicker({
         </button>
 
         <button
+          className="tc-picker-clear"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1863,8 +1944,160 @@ export default function TeamCompare() {
   const enemyImg = artworkForDexId(enemyDexId);
 
   const HIDE_SCROLL_CSS = `
-    .hideScroll { scrollbar-width: none; -ms-overflow-style: none; }
-    .hideScroll::-webkit-scrollbar { width: 0px; height: 0px; }
+    .hideScroll {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .hideScroll::-webkit-scrollbar {
+      width: 0;
+      height: 0;
+      display: none;
+    }
+
+    .team-compare-page button {
+      color: #f8fafc !important;
+      text-decoration: none !important;
+    }
+
+    .team-compare-page input::placeholder {
+      color: rgba(235, 241, 250, 0.46);
+    }
+
+    .team-compare-page input:focus {
+      border-color: rgba(96, 165, 250, 0.72) !important;
+      box-shadow:
+        0 0 0 3px rgba(96, 165, 250, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+    }
+
+    .tc-icon-btn {
+      transition:
+        transform 0.15s ease,
+        background 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+    }
+
+    .tc-icon-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(140, 170, 230, 0.72) !important;
+      background:
+        linear-gradient(180deg, rgba(18, 38, 70, 0.92), rgba(10, 23, 44, 0.92)) !important;
+      box-shadow:
+        0 0 0 3px rgba(96, 165, 250, 0.14),
+        0 12px 24px rgba(0, 0, 0, 0.28) !important;
+    }
+
+    .tc-icon-btn-danger:hover {
+      transform: translateY(-1px);
+      border-color: rgba(248, 113, 113, 0.72) !important;
+      background:
+        linear-gradient(180deg, rgba(127, 29, 29, 0.92), rgba(69, 10, 10, 0.92)) !important;
+      box-shadow:
+        0 0 0 3px rgba(248, 113, 113, 0.14),
+        0 12px 24px rgba(0, 0, 0, 0.28) !important;
+    }
+
+    .tc-edit-modal {
+      border: 1px solid var(--pnt-border, rgba(137, 155, 184, 0.28)) !important;
+      background:
+        linear-gradient(180deg, rgba(10, 18, 33, 0.97), rgba(6, 12, 24, 0.95)) !important;
+      box-shadow:
+        0 28px 90px rgba(0, 0, 0, 0.62),
+        inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
+    }
+
+    .tc-soft-card {
+      border: 1px solid rgba(137, 155, 184, 0.2) !important;
+      background:
+        linear-gradient(180deg, rgba(13, 24, 42, 0.72), rgba(9, 17, 31, 0.68)) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.035),
+        0 12px 28px rgba(0, 0, 0, 0.16) !important;
+    }
+
+    .tc-picker-button {
+      border: 1px solid rgba(137, 155, 184, 0.26) !important;
+      background:
+        linear-gradient(180deg, rgba(10, 19, 34, 0.96), rgba(8, 15, 28, 0.96)) !important;
+      color: #f8fafc !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+      transition:
+        transform 0.15s ease,
+        border-color 0.15s ease,
+        background 0.15s ease,
+        box-shadow 0.15s ease;
+    }
+
+    .tc-picker-button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(96, 165, 250, 0.58) !important;
+      background:
+        linear-gradient(180deg, rgba(16, 31, 56, 0.9), rgba(10, 22, 42, 0.86)) !important;
+      box-shadow:
+        0 0 0 3px rgba(96, 165, 250, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+    }
+
+    .tc-picker-clear {
+      border: 1px solid rgba(137, 155, 184, 0.24) !important;
+      background:
+        linear-gradient(180deg, rgba(31, 41, 55, 0.86), rgba(17, 24, 39, 0.86)) !important;
+      color: #f8fafc !important;
+      transition:
+        transform 0.15s ease,
+        border-color 0.15s ease,
+        background 0.15s ease,
+        box-shadow 0.15s ease;
+    }
+
+    .tc-picker-clear:hover:not(:disabled) {
+      transform: translateY(-1px);
+      border-color: rgba(248, 113, 113, 0.66) !important;
+      background:
+        linear-gradient(180deg, rgba(127, 29, 29, 0.86), rgba(69, 10, 10, 0.86)) !important;
+      box-shadow:
+        0 0 0 3px rgba(248, 113, 113, 0.12),
+        0 12px 24px rgba(0, 0, 0, 0.24) !important;
+    }
+
+    .tc-action-button {
+      background:
+        linear-gradient(180deg, rgba(14, 30, 56, 0.96), rgba(9, 20, 39, 0.96)) !important;
+      border: 1px solid rgba(100, 140, 215, 0.55) !important;
+      color: #f8fafc !important;
+      transition:
+        transform 0.15s ease,
+        background 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+    }
+
+    .tc-action-button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(140, 170, 230, 0.68) !important;
+      background:
+        linear-gradient(180deg, rgba(18, 38, 70, 0.96), rgba(10, 23, 44, 0.96)) !important;
+      box-shadow:
+        0 0 0 3px rgba(96, 165, 250, 0.12),
+        0 12px 24px rgba(0, 0, 0, 0.28) !important;
+    }
+
+    .tc-action-danger {
+      border-color: rgba(248, 113, 113, 0.44) !important;
+      background:
+        linear-gradient(180deg, rgba(64, 24, 32, 0.9), rgba(39, 16, 22, 0.9)) !important;
+    }
+
+    .tc-action-danger:hover {
+      border-color: rgba(248, 113, 113, 0.72) !important;
+      background:
+        linear-gradient(180deg, rgba(127, 29, 29, 0.92), rgba(69, 10, 10, 0.92)) !important;
+      box-shadow:
+        0 0 0 3px rgba(248, 113, 113, 0.14),
+        0 12px 24px rgba(0, 0, 0, 0.28) !important;
+    }
   `;
 
   async function buildFormListFromBaseDexId(baseDexId) {
@@ -2110,42 +2343,65 @@ export default function TeamCompare() {
     minHeight: "100vh",
     position: "relative",
     overflow: "hidden",
-    color: "#e9e9f2",
+    color: "var(--pnt-text, #f8fafc)",
+    background: "#050a18",
   };
-  const shell = { maxWidth: 1220, margin: "0 auto", padding: "14px 14px 40px" };
+
+  const shell = {
+    width: "min(1220px, 96vw)",
+    margin: "0 auto",
+    padding: "16px 0 40px",
+    boxSizing: "border-box",
+  };
+
   const card = {
-    background: "rgba(10, 12, 16, 0.72)",
-    border: "1px solid rgba(255,255,255,0.10)",
-    borderRadius: 18,
-    boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
+    background:
+      "linear-gradient(180deg, rgba(10, 18, 33, 0.94), rgba(6, 12, 24, 0.92))",
+    border: "1px solid var(--pnt-border, rgba(137, 155, 184, 0.28))",
+    borderRadius: "var(--pnt-radius, 14px)",
+    boxShadow:
+      "var(--pnt-shadow, 0 18px 48px rgba(0, 0, 0, 0.36)), inset 0 1px 0 rgba(255, 255, 255, 0.045)",
     overflow: "hidden",
+    backdropFilter: "blur(10px)",
   };
+
   const headerRow = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    marginBottom: 10,
+    marginBottom: 12,
   };
+
   const input = {
     width: "100%",
-    background: "rgba(0,0,0,0.26)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: 12,
-    color: "#fff",
+    minHeight: 42,
+    boxSizing: "border-box",
+    background:
+      "linear-gradient(180deg, rgba(10, 19, 34, 0.94), rgba(8, 15, 28, 0.94))",
+    border: "1px solid rgba(137, 155, 184, 0.28)",
+    borderRadius: 10,
+    color: "#f8fafc",
     padding: "10px 12px",
     outline: "none",
+    fontWeight: 900,
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035)",
   };
+
   const btn = {
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.14)",
-    color: "#fff",
-    borderRadius: 12,
-    padding: "10px 12px",
+    minHeight: 42,
+    background:
+      "linear-gradient(180deg, rgba(14, 30, 56, 0.96), rgba(9, 20, 39, 0.96))",
+    border: "1px solid rgba(100, 140, 215, 0.55)",
+    color: "#f8fafc",
+    borderRadius: "var(--pnt-radius-small, 8px)",
+    padding: "0 14px",
     cursor: "pointer",
     userSelect: "none",
     fontWeight: 950,
     textDecoration: "none",
+    boxShadow:
+      "inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 24px rgba(0, 0, 0, 0.18)",
   };
 
   const genItems = useMemo(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((g) => ({ value: g, label: `Gen ${g}` })), []);
@@ -2167,7 +2423,7 @@ export default function TeamCompare() {
   const speedPillStyle = useMemo(() => {
     if (!speedLine) return null;
     if (speedLine.kind === "good") {
-      return { border: "1px solid rgba(90,255,170,0.38)", background: "rgba(90,255,170,0.12)" };
+      return { border: "1px solid rgba(96, 165, 250, 0.38)", background: "rgba(30, 64, 175, 0.18)" };
     }
     if (speedLine.kind === "bad") {
       return { border: "1px solid rgba(255,120,120,0.40)", background: "rgba(255,120,120,0.14)" };
@@ -2188,7 +2444,7 @@ export default function TeamCompare() {
   }, [enemyHasLevitate, mySlot.moves?.join("|"), tick]);
 
   return (
-    <div style={pageStyle}>
+    <div className="team-compare-page" style={pageStyle}>
       {/* Background Layer 1: füllt den Screen (keine Balken), blurred */}
       <div
         style={{
@@ -2220,13 +2476,14 @@ export default function TeamCompare() {
         }}
       />
 
-      {/* leichtes Darkening für bessere Lesbarkeit */}
+      {/* Darkening + dezente Theme-Lichter */}
       <div
         style={{
           position: "fixed",
           inset: 0,
           zIndex: 2,
-          background: "rgba(0,0,0,0.35)",
+          background:
+            "radial-gradient(circle at 50% 0%, rgba(52, 211, 153, 0.08), transparent 34%), radial-gradient(circle at 0% 25%, rgba(96, 165, 250, 0.12), transparent 38%), linear-gradient(180deg, rgba(5, 10, 24, 0.46), rgba(5, 10, 24, 0.82))",
           pointerEvents: "none",
         }}
       />
@@ -2918,7 +3175,7 @@ export default function TeamCompare() {
               onClick={() => setEditOpen(false)}
             >
               <div
-                className="hideScroll"
+                className="hideScroll tc-edit-modal"
                 style={{
                   width: "min(900px, 96vw)",
                   maxHeight: "92vh",
@@ -2947,6 +3204,7 @@ export default function TeamCompare() {
                 </div>
 
                 <div
+                  className="tc-soft-card"
                   style={{
                     display: "grid",
                     gridTemplateColumns: "86px 1fr 110px",
@@ -2954,8 +3212,6 @@ export default function TeamCompare() {
                     alignItems: "center",
                     padding: 12,
                     borderRadius: 16,
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    background: "rgba(255,255,255,0.06)",
                   }}
                 >
                   <div
@@ -3042,7 +3298,7 @@ export default function TeamCompare() {
                 ) : null}
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", padding: 12 }}>
+                  <div className="tc-soft-card" style={{ borderRadius: 16, padding: 12 }}>
                     <div style={{ fontWeight: 1100, marginBottom: 10 }}>Deine 4 Attacken</div>
 
                     {!mySlot.dexId ? (
@@ -3079,21 +3335,23 @@ export default function TeamCompare() {
                     )}
                   </div>
 
-                  <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", padding: 12 }}>
+                  <div className="tc-soft-card" style={{ borderRadius: 16, padding: 12 }}>
                     <div style={{ fontWeight: 1100, marginBottom: 10 }}>Schnellaktionen</div>
 
                     <div style={{ display: "grid", gap: 10 }}>
                       <button
+                        className="tc-action-button tc-action-danger"
                         style={btn}
                         onClick={() => {
                           clearSlot(activeSlot);
                           setEditOpen(false);
                         }}
                       >
-                        Slot entfernen (X)
+                        Slot entfernen
                       </button>
 
                       <button
+                        className="tc-action-button"
                         style={btn}
                         onClick={() => {
                           writeJSON(TEAM_KEY, team);
@@ -3113,10 +3371,10 @@ export default function TeamCompare() {
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                  <button style={btn} onClick={() => writeJSON(TEAM_KEY, team)}>
+                  <button className="tc-action-button" style={btn} onClick={() => writeJSON(TEAM_KEY, team)}>
                     Team speichern
                   </button>
-                  <button style={btn} onClick={() => writeJSON(UI_KEY, { gen, activeSlot, enemyDexId, enemyLevel })}>
+                  <button className="tc-action-button" style={btn} onClick={() => writeJSON(UI_KEY, { gen, activeSlot, enemyDexId, enemyLevel })}>
                     UI speichern
                   </button>
                 </div>

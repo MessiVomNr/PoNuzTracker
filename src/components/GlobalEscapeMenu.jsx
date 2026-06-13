@@ -132,8 +132,18 @@ function typeIconUrl(typeKey) {
 
 /* Scrollbar hide helper (scrollbar bleibt nutzbar) */
 const HIDE_SCROLL_CSS = `
-.tm-scroll { scrollbar-width: none; -ms-overflow-style: none; }
-.tm-scroll::-webkit-scrollbar { width: 0px; height: 0px; }
+.tm-scroll,
+.esc-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tm-scroll::-webkit-scrollbar,
+.esc-scroll::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+  display: none;
+}
 `;
 
 /* =========================================================
@@ -655,7 +665,7 @@ export default function GlobalEscapeMenu() {
 
       {/* ✅ Dock: klein rechts, immer sichtbar wenn typeDockOpen */}
       {typeDockOpen && (
-        <div style={dockWrap}>
+        <div className="esc-scroll" style={dockWrap}>
           <div style={dockHeader}>
             <div style={{ fontWeight: 950 }}>Typenrechner</div>
             <button style={dockClose} onClick={() => setTypeDockOpen(false)} title="Schließen">
@@ -745,7 +755,7 @@ export default function GlobalEscapeMenu() {
             setTypeOpen(false);
           }}
         >
-          <div style={panel} onClick={(e) => e.stopPropagation()}>
+          <div className="esc-scroll" style={panel} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
               <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: 0.2 }}>Pause-Menü</div>
               <button
@@ -987,11 +997,14 @@ export default function GlobalEscapeMenu() {
 /* =========================================================
    STYLES
 ========================================================= */
+
 const overlay = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.55)",
+  background:
+    "radial-gradient(circle at 20% 0%, rgba(52,211,153,0.10), transparent 34%), radial-gradient(circle at 80% 10%, rgba(96,165,250,0.12), transparent 34%), rgba(0,0,0,0.72)",
   backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)",
   zIndex: 99999,
   display: "flex",
   alignItems: "center",
@@ -1001,12 +1014,18 @@ const overlay = {
 
 const panel = {
   width: "min(560px, 92vw)",
+  maxHeight: "min(780px, 92vh)",
+  overflowY: "auto",
+  overflowX: "hidden",
+  overscrollBehavior: "contain",
   borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(10,10,16,0.82)",
-  boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
+  border: "1px solid rgba(137,155,184,0.34)",
+  background:
+    "radial-gradient(circle at 50% 0%, rgba(52,211,153,0.10), transparent 42%), linear-gradient(180deg, rgba(10,18,33,0.98), rgba(8,15,28,0.98))",
+  boxShadow:
+    "0 30px 90px rgba(0,0,0,0.68), inset 0 1px 0 rgba(255,255,255,0.05)",
   padding: 16,
-  color: "white",
+  color: "#f8fafc",
   display: "flex",
   flexDirection: "column",
   gap: 12,
@@ -1014,75 +1033,133 @@ const panel = {
 
 const subPanel = {
   marginTop: 2,
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.05)",
+  borderRadius: 14,
+  border: "1px solid rgba(137,155,184,0.22)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(96,165,250,0.08), transparent 42%), rgba(5,11,21,0.34)",
   padding: 12,
   display: "grid",
   gap: 12,
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)",
 };
 
 const section = {
   marginTop: 2,
-  paddingTop: 10,
-  borderTop: "1px solid rgba(255,255,255,0.12)",
+  paddingTop: 12,
+  borderTop: "1px solid rgba(137,155,184,0.18)",
   display: "grid",
   gap: 10,
 };
 
 const sectionTitle = {
   fontWeight: 950,
-  opacity: 0.9,
+  color: "#ffffff",
+  opacity: 0.95,
+  letterSpacing: "-0.01em",
 };
 
 const baseBtn = {
   width: "100%",
-  padding: "10px 12px",
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.14)",
-  color: "white",
+  padding: "11px 13px",
+  borderRadius: 11,
+  border: "1px solid rgba(120,138,170,0.42)",
+  color: "#f8fafc",
   cursor: "pointer",
   fontWeight: 950,
   textAlign: "left",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 18px rgba(0,0,0,0.18)",
 };
 
 const btnIcon = {
   padding: "8px 10px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
+  borderRadius: 10,
+  border: "1px solid rgba(120,138,170,0.42)",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.88), rgba(8,15,28,0.88))",
+  color: "#f8fafc",
   cursor: "pointer",
-  fontWeight: 900,
+  fontWeight: 950,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 18px rgba(0,0,0,0.18)",
 };
 
-const btnGhost = { ...baseBtn, background: "rgba(255,255,255,0.06)" };
-const btnBlue = { ...baseBtn, background: "linear-gradient(135deg, rgba(79,172,254,0.35), rgba(0,242,254,0.18))" };
-const btnGreen = { ...baseBtn, background: "linear-gradient(135deg, rgba(67,233,123,0.30), rgba(56,249,215,0.16))" };
-const btnPurple = { ...baseBtn, background: "linear-gradient(135deg, rgba(161,140,209,0.32), rgba(251,194,235,0.16))" };
-const btnOrange = { ...baseBtn, background: "linear-gradient(135deg, rgba(255,183,77,0.30), rgba(255,140,0,0.16))" };
-const btnMuted = { ...baseBtn, background: "rgba(255,255,255,0.06)" };
-const btnRed = { ...baseBtn, background: "linear-gradient(135deg, rgba(255,65,108,0.22), rgba(255,75,43,0.12))" };
+const btnGhost = {
+  ...baseBtn,
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.88), rgba(8,15,28,0.88))",
+};
+
+const btnBlue = {
+  ...baseBtn,
+  border: "1px solid rgba(96,165,250,0.36)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(96,165,250,0.14), transparent 46%), linear-gradient(180deg, rgba(13,24,42,0.9), rgba(8,15,28,0.9))",
+};
+
+const btnGreen = {
+  ...baseBtn,
+  border: "1px solid rgba(52,211,153,0.42)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(52,211,153,0.18), transparent 46%), linear-gradient(180deg, rgba(13,44,34,0.82), rgba(8,20,18,0.82))",
+};
+
+const btnPurple = {
+  ...baseBtn,
+  border: "1px solid rgba(168,85,247,0.34)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(168,85,247,0.13), transparent 46%), linear-gradient(180deg, rgba(20,18,42,0.88), rgba(10,10,26,0.88))",
+};
+
+const btnOrange = {
+  ...baseBtn,
+  border: "1px solid rgba(251,146,60,0.36)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(251,146,60,0.14), transparent 46%), linear-gradient(180deg, rgba(42,28,13,0.88), rgba(24,15,8,0.88))",
+};
+
+const btnMuted = {
+  ...baseBtn,
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.88), rgba(8,15,28,0.88))",
+};
+
+const btnRed = {
+  ...baseBtn,
+  border: "1px solid rgba(248,113,113,0.36)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(248,113,113,0.13), transparent 46%), linear-gradient(180deg, rgba(69,10,10,0.52), rgba(24,8,8,0.52))",
+  color: "#fee2e2",
+};
+
 const btnDanger = {
   ...baseBtn,
-  background: "linear-gradient(135deg, rgba(255,65,108,0.32), rgba(255,75,43,0.18))",
-  border: "1px solid rgba(255,120,120,0.28)",
+  border: "1px solid rgba(248,113,113,0.42)",
+  background:
+    "linear-gradient(180deg, rgba(127,29,29,0.46), rgba(69,10,10,0.46))",
+  color: "#fee2e2",
 };
 
 const btnTab = {
   padding: "8px 10px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(0,0,0,0.22)",
-  color: "white",
+  borderRadius: 10,
+  border: "1px solid rgba(120,138,170,0.42)",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.86), rgba(8,15,28,0.86))",
+  color: "#f8fafc",
   cursor: "pointer",
   fontWeight: 950,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.035), 0 8px 16px rgba(0,0,0,0.16)",
 };
 
 const btnTabActive = {
   ...btnTab,
-  border: "1px solid rgba(255,255,255,0.22)",
-  background: "rgba(255,255,255,0.10)",
+  border: "1px solid rgba(52,211,153,0.5)",
+  background:
+    "radial-gradient(circle at 0% 0%, rgba(52,211,153,0.2), transparent 46%), linear-gradient(180deg, rgba(13,44,34,0.88), rgba(8,20,18,0.88))",
+  boxShadow:
+    "0 0 0 1px rgba(52,211,153,0.14), 0 10px 20px rgba(0,0,0,0.2)",
 };
 
 /* ✅ Dock styles */
@@ -1093,15 +1170,18 @@ const dockWrap = {
   width: "min(520px, 94vw)",
   height: "calc(93vh - 110px)",
   maxHeight: "calc(100vh - 110px)",
-  overflow: "hidden",
+  overflow: "auto",
   borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(10,10,16,0.88)",
-  boxShadow: "0 30px 90px rgba(0,0,0,0.70)",
+  border: "1px solid rgba(137,155,184,0.34)",
+  background:
+    "radial-gradient(circle at 50% 0%, rgba(52,211,153,0.10), transparent 42%), linear-gradient(180deg, rgba(10,18,33,0.98), rgba(8,15,28,0.98))",
+  boxShadow:
+    "0 30px 90px rgba(0,0,0,0.70), inset 0 1px 0 rgba(255,255,255,0.05)",
   padding: 12,
-  color: "white",
+  color: "#f8fafc",
   zIndex: 99998,
   backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)",
 };
 
 const dockHeader = {
@@ -1115,9 +1195,12 @@ const dockHeader = {
 const dockClose = {
   padding: "6px 10px",
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
+  border: "1px solid rgba(120,138,170,0.42)",
+  background:
+    "linear-gradient(180deg, rgba(13,24,42,0.88), rgba(8,15,28,0.88))",
+  color: "#f8fafc",
   cursor: "pointer",
-  fontWeight: 900,
+  fontWeight: 950,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.035), 0 8px 16px rgba(0,0,0,0.16)",
 };

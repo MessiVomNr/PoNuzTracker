@@ -29,8 +29,180 @@ const GEN_TO_POKEAPI_GENERATION = {
 };
 
 const HIDE_SCROLL_CSS = `
-.hide-scroll { scrollbar-width: none; -ms-overflow-style: none; }
-.hide-scroll::-webkit-scrollbar { width: 0px; height: 0px; }
+  .hide-scroll {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hide-scroll::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  .mdx-panel {
+    border: 1px solid var(--pnt-border, rgba(137, 155, 184, 0.28)) !important;
+    background:
+      linear-gradient(180deg, rgba(10, 18, 33, 0.94), rgba(6, 12, 24, 0.92)) !important;
+    border-radius: var(--pnt-radius, 14px);
+    box-shadow:
+      var(--pnt-shadow, 0 18px 48px rgba(0, 0, 0, 0.36)),
+      inset 0 1px 0 rgba(255, 255, 255, 0.045);
+    backdrop-filter: blur(10px);
+  }
+
+  .mdx-button {
+    min-height: 42px;
+    padding: 0 15px;
+    border-radius: var(--pnt-radius-small, 8px);
+    border: 1px solid rgba(100, 140, 215, 0.55) !important;
+    background:
+      linear-gradient(180deg, rgba(14, 30, 56, 0.96), rgba(9, 20, 39, 0.96)) !important;
+    background-color: transparent !important;
+    color: #f8fafc !important;
+    cursor: pointer;
+    font-weight: 950;
+    white-space: nowrap;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 10px 24px rgba(0, 0, 0, 0.18);
+    transition:
+      transform 0.15s ease,
+      background 0.15s ease,
+      border-color 0.15s ease,
+      opacity 0.15s ease;
+  }
+
+  .mdx-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(140, 170, 230, 0.68) !important;
+    background:
+      linear-gradient(180deg, rgba(18, 38, 70, 0.96), rgba(10, 23, 44, 0.96)) !important;
+    background-color: transparent !important;
+    color: #ffffff !important;
+  }
+
+  .mdx-button:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed;
+    transform: none;
+    background:
+      linear-gradient(180deg, rgba(14, 30, 56, 0.7), rgba(9, 20, 39, 0.7)) !important;
+    background-color: transparent !important;
+    color: rgba(248, 250, 252, 0.62) !important;
+  }
+
+  .mdx-button-ghost {
+    background:
+      linear-gradient(180deg, rgba(11, 22, 40, 0.92), rgba(7, 15, 29, 0.92)) !important;
+    background-color: transparent !important;
+    color: #f8fafc !important;
+  }
+
+  .mdx-filter-row {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: 160px minmax(260px, 1fr) auto;
+    gap: 10px;
+    align-items: end;
+  }
+
+  .mdx-select,
+  .mdx-input {
+    width: 100%;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(137, 155, 184, 0.28) !important;
+    background:
+      linear-gradient(180deg, rgba(10, 19, 34, 0.96), rgba(8, 15, 28, 0.96)) !important;
+    background-color: transparent !important;
+    color: #f8fafc !important;
+    outline: none;
+    font-weight: 900;
+    font-size: 14px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  }
+
+  .mdx-select {
+    cursor: pointer;
+  }
+
+  .mdx-select option {
+    background: #08111f;
+    color: #f8fafc;
+    font-weight: 900;
+  }
+
+  .mdx-input::placeholder {
+    color: rgba(235, 241, 250, 0.46);
+  }
+
+  .mdx-select:focus,
+  .mdx-input:focus {
+    border-color: rgba(96, 165, 250, 0.72) !important;
+    box-shadow:
+      0 0 0 3px rgba(96, 165, 250, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+  }
+
+  .mdx-move-list {
+    margin-top: 12px;
+    max-height: 65vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: grid;
+    gap: 8px;
+    padding: 2px;
+    box-sizing: border-box;
+  }
+
+  .mdx-move-row {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+    padding: 12px 14px;
+    border-radius: var(--pnt-radius, 14px);
+    border: 1px solid rgba(137, 155, 184, 0.18) !important;
+    background:
+      linear-gradient(180deg, rgba(13, 24, 42, 0.76), rgba(9, 17, 31, 0.72)) !important;
+    background-color: transparent !important;
+    color: #f8fafc !important;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+    transition:
+      transform 0.15s ease,
+      background 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .mdx-move-row:hover {
+    transform: translateY(-1px);
+    border-color: rgba(160, 178, 210, 0.34) !important;
+    background:
+      linear-gradient(180deg, rgba(16, 31, 56, 0.86), rgba(10, 22, 42, 0.82)) !important;
+    background-color: transparent !important;
+    color: #ffffff !important;
+  }
+
+  .mdx-move-row div {
+    color: inherit;
+  }
+
+  .mdx-move-row div:first-child {
+    color: #f8fafc !important;
+  }
+
+  .mdx-move-row div:last-child {
+    color: rgba(235, 241, 250, 0.62) !important;
+  }
+
+  @media (max-width: 760px) {
+    .mdx-filter-row {
+      grid-template-columns: 1fr;
+    }
+  }
 `;
 
 function useQuery() {
@@ -310,7 +482,7 @@ if (allowedSet && allowedSet.size > 0) {
 
   // Filter
   if (s) {
-    arr = moves.filter((m) =>
+    arr = arr.filter((m) =>
       labelFor(m).toLowerCase().includes(s) ||
       String(m.name || "").includes(s)
     );
@@ -325,36 +497,40 @@ if (allowedSet && allowedSet.size > 0) {
 }, [moves, query, nameDeCache, allowedSet]);
 
 
-  const pageBg = `radial-gradient(circle at 10% 0%, rgba(255,0,150,0.18) 0%, transparent 55%),
-                  radial-gradient(circle at 85% 0%, rgba(0,255,200,0.16) 0%, transparent 55%),
-                  radial-gradient(circle at 50% 20%, rgba(0,120,255,0.14) 0%, transparent 60%),
-                  linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.75)),
-                  url(${dexBg})`;
+  const pageBg = `
+    radial-gradient(circle at 50% 0%, rgba(52, 211, 153, 0.13), transparent 34%),
+    radial-gradient(circle at 0% 25%, rgba(96, 165, 250, 0.12), transparent 38%),
+    linear-gradient(180deg, rgba(5, 10, 24, 0.22), rgba(5, 10, 24, 0.78)),
+    url(${dexBg})
+  `;
 
   return (
     <div
       style={{
+        height: "100vh",
         minHeight: "100vh",
-        padding: 16,
-        color: "white",
+        padding: 18,
+        boxSizing: "border-box",
+        color: "var(--pnt-text, white)",
         backgroundImage: pageBg,
         backgroundSize: "cover",
         backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed",
         overflow: "hidden",
       }}
     >
       <style>{HIDE_SCROLL_CSS}</style>
 
       <div
+        className="mdx-panel"
         style={{
-          maxWidth: 980,
+          width: "min(980px, 96vw)",
+          maxHeight: "calc(100vh - 36px)",
           margin: "0 auto",
-          borderRadius: 18,
-          border: "1px solid rgba(255,255,255,0.14)",
-          background: "rgba(0,0,0,0.50)",
-          backdropFilter: "blur(8px)",
-          padding: 14,
-          boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
+          padding: 16,
+          boxSizing: "border-box",
+          overflow: "hidden",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
@@ -367,115 +543,79 @@ if (allowedSet && allowedSet.size > 0) {
 
           
           <button
+            className="mdx-button"
             onClick={preloadAllGermanNames}
             disabled={deLoading || !moves.length}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.18)",
-              background: "rgba(255,255,255,0.08)",
-              color: "white",
-              fontWeight: 900,
-              cursor: deLoading ? "default" : "pointer",
-              opacity: deLoading ? 0.7 : 1,
-            }}
             title="Lädt deutsche Attacken-Namen (einmalig, wird gecached)"
           >
             {deLoading ? `Deutsch… ${deDone}/${deTotal}` : "Alles auf Deutsch"}
           </button>
 
-<button
-            onClick={() => nav(-1)}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.18)",
-              background: "rgba(255,255,255,0.08)",
-              color: "white",
-              fontWeight: 900,
-              cursor: "pointer",
-            }}
-          >
+          <button className="mdx-button mdx-button-ghost" onClick={() => nav(-1)}>
             Zurück
           </button>
         </div>
 
-        <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <div style={{ opacity: 0.85, fontWeight: 900 }}>Generation</div>
-          <select
-            value={gen}
-            onChange={(e) => setGen(Number(e.target.value))}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.18)",
-              background: "rgba(10,10,16,0.7)",
-              color: "white",
-              fontWeight: 900,
-            }}
-          >
-            {GEN_OPTIONS.map((g) => (
-              <option key={g.value} value={g.value}>
-                {g.label}
-              </option>
-            ))}
-          </select>
+        <div className="mdx-filter-row">
+          <div>
+            <div style={{ opacity: 0.82, fontWeight: 950, fontSize: 13, marginBottom: 6 }}>
+              Generation
+            </div>
 
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Attacke suchen"
-            style={{
-              flex: 1,
-              minWidth: 260,
-              padding: "12px 12px",
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.18)",
-              background: "rgba(10,10,16,0.7)",
-              color: "white",
-              outline: "none",
-              fontWeight: 750,
-            }}
-          />
+            <select
+              className="mdx-select"
+              value={gen}
+              onChange={(e) => setGen(Number(e.target.value))}
+            >
+              {GEN_OPTIONS.map((g) => (
+                <option key={g.value} value={g.value}>
+                  {g.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <button
-            onClick={() => setQuery("")}
-            style={{
-              padding: "12px 12px",
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.18)",
-              background: "rgba(255,255,255,0.08)",
-              color: "white",
-              fontWeight: 900,
-              cursor: "pointer",
-            }}
-          >
+          <div>
+            <div style={{ opacity: 0.82, fontWeight: 950, fontSize: 13, marginBottom: 6 }}>
+              Suche
+            </div>
+
+            <input
+              className="mdx-input"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Attacke suchen"
+            />
+          </div>
+
+          <button className="mdx-button mdx-button-ghost" onClick={() => setQuery("")}>
             Leeren
           </button>
         </div>
 
-        <div style={{ marginTop: 10, opacity: 0.85 }}>
+        <div
+          style={{
+            marginTop: 12,
+            color: "var(--pnt-text-muted)",
+            fontSize: 13,
+            fontWeight: 850,
+          }}
+        >
           {loading
-  ? "Lade Attacken..."
-  : `${(allowedSet?.size || 0)} Attacken geladen`}
+            ? "Lade Attacken..."
+            : `${(allowedSet?.size || 0)} Attacken geladen`}
+          {allowedLoading ? " · Gen-Filter lädt..." : ""}
+          {deError ? ` · ${deError}` : ""}
         </div>
 
-        <div className="hide-scroll" style={{ marginTop: 10, maxHeight: "65vh", overflowY: "auto", overflowX: "hidden", display: "grid", gap: 8 }}>
+        <div className="hide-scroll mdx-move-list">
           {filtered.map((m) => {
             const de = nameDeCache[m.name];
             return (
               <button
                 key={m.name}
+                className="mdx-move-row"
                 onClick={() => nav(`/move/${m.name}?gen=${encodeURIComponent(gen)}`)}
-                style={{
-                  textAlign: "left",
-                  padding: "10px 12px",
-                  borderRadius: 14,
-                  border: "1px solid rgba(255,255,255,0.14)",
-                  background: "rgba(255,255,255,0.06)",
-                  color: "white",
-                  cursor: "pointer",
-                }}
                 title="Attacke öffnen"
               >
                 <div style={{ fontWeight: 950 }}>{de || m.name}</div>

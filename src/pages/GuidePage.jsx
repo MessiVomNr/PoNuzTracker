@@ -175,7 +175,7 @@ function GuidePage() {
   };
 
   return (
-    <div style={pageWrap}>
+    <div className="guide-page" style={pageWrap}>
       <div style={bg} />
       <div style={bgOverlay} />
 
@@ -432,8 +432,56 @@ export default GuidePage;
 ======================= */
 
 const HIDE_SCROLL_CSS = `
-  .hide-scroll { scrollbar-width: none; -ms-overflow-style: none; }
-  .hide-scroll::-webkit-scrollbar { width: 0; height: 0; }
+  .hide-scroll {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hide-scroll::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  .guide-page button {
+    background:
+      linear-gradient(180deg, rgba(14, 30, 56, 0.96), rgba(9, 20, 39, 0.96)) !important;
+    background-color: transparent !important;
+    border: 1px solid rgba(100, 140, 215, 0.55) !important;
+    color: #f8fafc !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 10px 24px rgba(0, 0, 0, 0.18);
+    transition:
+      transform 0.15s ease,
+      background 0.15s ease,
+      border-color 0.15s ease,
+      opacity 0.15s ease;
+  }
+
+  .guide-page button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(140, 170, 230, 0.68) !important;
+    background:
+      linear-gradient(180deg, rgba(18, 38, 70, 0.96), rgba(10, 23, 44, 0.96)) !important;
+    background-color: transparent !important;
+    color: #ffffff !important;
+  }
+
+  .guide-page button:active {
+    transform: translateY(0);
+  }
+
+  .guide-page input::placeholder {
+    color: rgba(235, 241, 250, 0.46);
+  }
+
+  .guide-page input:focus {
+    border-color: rgba(96, 165, 250, 0.72) !important;
+    box-shadow:
+      0 0 0 3px rgba(96, 165, 250, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+  }
 `;
 
 /* =======================
@@ -442,11 +490,13 @@ const HIDE_SCROLL_CSS = `
 
 const pageWrap = {
   position: "relative",
+  height: "100vh",
   minHeight: "100vh",
   padding: "24px 20px",
-  background: "#0b0d10",
-  color: "white",
-  overflowX: "hidden",
+  boxSizing: "border-box",
+  background: "#050a18",
+  color: "var(--pnt-text, white)",
+  overflow: "hidden",
 };
 
 const bg = {
@@ -458,6 +508,7 @@ const bg = {
   backgroundPosition: "center",
   backgroundRepeat: "no-repeat",
   transform: "scale(1.03)",
+  filter: "saturate(0.92) brightness(0.82)",
 };
 
 const bgOverlay = {
@@ -465,7 +516,7 @@ const bgOverlay = {
   inset: 0,
   zIndex: 1,
   background:
-    "radial-gradient(1200px 600px at 20% 10%, rgba(0,0,0,0.35), rgba(0,0,0,0.78)), rgba(0,0,0,0.35)",
+    "radial-gradient(circle at 50% 0%, rgba(52, 211, 153, 0.10), transparent 34%), radial-gradient(circle at 0% 25%, rgba(96, 165, 250, 0.12), transparent 38%), linear-gradient(180deg, rgba(5, 10, 24, 0.54), rgba(5, 10, 24, 0.82))",
 };
 
 const backBtn = {
@@ -473,12 +524,11 @@ const backBtn = {
   top: 14,
   left: 14,
   zIndex: 50,
-  padding: "10px 14px",
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
+  minHeight: 42,
+  padding: "0 15px",
+  borderRadius: "var(--pnt-radius-small, 8px)",
   cursor: "pointer",
+  fontWeight: 950,
   backdropFilter: "blur(10px)",
 };
 
@@ -491,22 +541,24 @@ const topActionsRight = {
   gap: 10,
   alignItems: "center",
   padding: 6,
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(10,10,16,0.45)",
+  borderRadius: "var(--pnt-radius, 14px)",
+  border: "1px solid rgba(137, 155, 184, 0.22)",
+  background:
+    "linear-gradient(180deg, rgba(10, 18, 33, 0.74), rgba(6, 12, 24, 0.72))",
+  boxShadow: "0 18px 48px rgba(0, 0, 0, 0.26)",
   backdropFilter: "blur(10px)",
 };
 
 const pillBtn = (active) => ({
-  padding: "10px 12px",
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: active
-    ? "linear-gradient(135deg, rgba(67,233,123,0.30), rgba(56,249,215,0.16))"
-    : "rgba(255,255,255,0.06)",
-  color: "white",
+  minHeight: 40,
+  padding: "0 13px",
+  borderRadius: "var(--pnt-radius-small, 8px)",
   cursor: "pointer",
-  fontWeight: 900,
+  fontWeight: 950,
+  borderColor: active ? "rgba(96, 165, 250, 0.72)" : "rgba(100, 140, 215, 0.55)",
+  boxShadow: active
+    ? "0 0 0 3px rgba(96, 165, 250, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.04)"
+    : undefined,
 });
 
 const title = {
@@ -515,8 +567,9 @@ const title = {
   textAlign: "center",
   marginTop: 90,
   marginBottom: 24,
-  fontSize: 34,
+  fontSize: "clamp(2rem, 4vw, 2.55rem)",
   letterSpacing: 0.4,
+  color: "#f8fafc",
   textShadow: "0 18px 40px rgba(0,0,0,0.55)",
 };
 
@@ -533,12 +586,14 @@ const mainRow = {
 
 const rulesCard = {
   flex: "0 0 350px",
-  background: "rgba(10,10,16,0.55)",
-  border: "1px solid rgba(255,255,255,0.12)",
-  padding: "14px 14px 16px 14px",
-  borderRadius: 16,
+  border: "1px solid var(--pnt-border, rgba(137, 155, 184, 0.28))",
+  background:
+    "linear-gradient(180deg, rgba(10, 18, 33, 0.92), rgba(6, 12, 24, 0.9))",
+  padding: "16px 16px 18px 16px",
+  borderRadius: "var(--pnt-radius, 14px)",
   backdropFilter: "blur(10px)",
-  boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
+  boxShadow:
+    "var(--pnt-shadow, 0 18px 48px rgba(0, 0, 0, 0.36)), inset 0 1px 0 rgba(255, 255, 255, 0.045)",
   maxHeight: "58vh",
   overflowY: "auto",
 };
@@ -547,42 +602,45 @@ const guideCard = {
   flex: "1",
   minWidth: 420,
   maxWidth: 880,
-  background: "rgba(10,10,16,0.35)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  padding: 16,
-  borderRadius: 16,
-  boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+  border: "1px solid var(--pnt-border, rgba(137, 155, 184, 0.28))",
+  background:
+    "linear-gradient(180deg, rgba(10, 18, 33, 0.92), rgba(6, 12, 24, 0.9))",
+  padding: 18,
+  borderRadius: "var(--pnt-radius, 14px)",
+  boxShadow:
+    "var(--pnt-shadow, 0 18px 48px rgba(0, 0, 0, 0.36)), inset 0 1px 0 rgba(255, 255, 255, 0.045)",
   maxHeight: "70vh",
   overflowY: "auto",
 };
 
 const smallBtn = {
   marginLeft: 10,
-  padding: "4px 8px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
+  minHeight: 30,
+  padding: "0 9px",
+  borderRadius: 8,
   cursor: "pointer",
   fontSize: 12,
+  fontWeight: 900,
 };
 
 const ruleInput = {
   flex: 1,
-  padding: "10px 10px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(0,0,0,0.28)",
-  color: "white",
+  minHeight: 42,
+  padding: "0 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(137, 155, 184, 0.28)",
+  background:
+    "linear-gradient(180deg, rgba(10, 19, 34, 0.94), rgba(8, 15, 28, 0.94))",
+  color: "var(--pnt-text, white)",
   outline: "none",
+  fontWeight: 900,
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035)",
 };
 
 const plusBtn = {
   width: 44,
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "linear-gradient(135deg, rgba(67,233,123,0.30), rgba(56,249,215,0.16))",
-  color: "white",
+  minHeight: 42,
+  borderRadius: 10,
   cursor: "pointer",
   fontWeight: 950,
   fontSize: 20,
@@ -596,7 +654,7 @@ const modalOverlay = {
   inset: 0,
   zIndex: 200,
   background: "rgba(0,0,0,0.62)",
-  backdropFilter: "blur(6px)",
+  backdropFilter: "blur(8px)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -607,17 +665,19 @@ const modalCard = {
   width: "min(860px, 96vw)",
   maxHeight: "min(82vh, 760px)",
   borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(10,10,16,0.86)",
-  boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
+  border: "1px solid var(--pnt-border, rgba(137, 155, 184, 0.28))",
+  background:
+    "linear-gradient(180deg, rgba(10, 18, 33, 0.96), rgba(6, 12, 24, 0.94))",
+  boxShadow:
+    "var(--pnt-shadow, 0 18px 48px rgba(0, 0, 0, 0.36)), inset 0 1px 0 rgba(255, 255, 255, 0.045)",
   overflow: "hidden",
   display: "flex",
   flexDirection: "column",
 };
 
 const modalHeader = {
-  padding: "12px 14px",
-  borderBottom: "1px solid rgba(255,255,255,0.10)",
+  padding: "13px 15px",
+  borderBottom: "1px solid rgba(137, 155, 184, 0.18)",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -626,10 +686,7 @@ const modalHeader = {
 const closeBtn = {
   width: 42,
   height: 42,
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.08)",
-  color: "rgba(255,255,255,0.92)",
+  borderRadius: 12,
   cursor: "pointer",
   display: "flex",
   alignItems: "center",
@@ -638,16 +695,12 @@ const closeBtn = {
   fontWeight: 900,
   lineHeight: 1,
   fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-  boxShadow: "0 10px 24px rgba(0,0,0,0.45)",
 };
 
 const miniBtn = {
-  height: 36,
+  minHeight: 36,
   padding: "0 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
+  borderRadius: 10,
   cursor: "pointer",
   fontWeight: 900,
 };
@@ -659,19 +712,17 @@ const modalBody = {
 
 const modalFooter = {
   padding: "12px 14px",
-  borderTop: "1px solid rgba(255,255,255,0.10)",
+  borderTop: "1px solid rgba(137, 155, 184, 0.18)",
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
+  justifyContent: "flex-end",
   gap: 12,
 };
 
 const footerBtn = {
-  padding: "10px 14px",
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
+  minHeight: 40,
+  padding: "0 14px",
+  borderRadius: 10,
   cursor: "pointer",
   fontWeight: 900,
 };
@@ -683,11 +734,13 @@ const checkItem = {
   gap: 12,
   alignItems: "flex-start",
   padding: "12px 12px",
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(0,0,0,0.22)",
+  borderRadius: "var(--pnt-radius, 14px)",
+  border: "1px solid rgba(137, 155, 184, 0.18)",
+  background:
+    "linear-gradient(180deg, rgba(13, 24, 42, 0.68), rgba(9, 17, 31, 0.66))",
   marginBottom: 10,
   cursor: "pointer",
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035)",
 };
 
 const checkLeft = {
@@ -699,8 +752,11 @@ const checkBox = (done) => ({
   width: 26,
   height: 26,
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.16)",
-  background: done ? "rgba(67,233,123,0.22)" : "rgba(255,255,255,0.06)",
+  border: done ? "1px solid rgba(96, 165, 250, 0.48)" : "1px solid rgba(137, 155, 184, 0.24)",
+  background: done
+    ? "rgba(30, 64, 175, 0.28)"
+    : "rgba(5, 11, 21, 0.34)",
+  color: done ? "#bfdbfe" : "transparent",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",

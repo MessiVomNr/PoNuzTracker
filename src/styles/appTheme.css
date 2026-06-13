@@ -37,6 +37,42 @@
 }
 
 /* =========================================================
+   Global hidden scrollbars
+   Scroll still works, the bars are only visually hidden.
+========================================================= */
+
+html,
+body,
+#root,
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#root::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+#root::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
+#root::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+/* =========================================================
    Global page / panel layout
 ========================================================= */
 
@@ -1141,6 +1177,7 @@ button.pnt-button-danger:hover:not(:disabled) {
 ========================================================= */
 
 .versus-recent-panel {
+  margin-top: 16px;
   padding: 14px;
   border: 1px solid rgba(137, 155, 184, 0.18);
   border-radius: var(--pnt-radius);

@@ -422,10 +422,11 @@ const typeIconRow = {
 const typeIcon = {
   width: 28,
   height: 28,
-  borderRadius: 8,
+  borderRadius: 10,
   padding: 3,
-  background: "rgba(0,0,0,0.55)",
-  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(5, 11, 21, 0.42)",
+  border: "1px solid rgba(137, 155, 184, 0.22)",
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035)",
 };
 
 const hideScrollbar = {
@@ -436,49 +437,241 @@ const hideScrollbar = {
 };
 
 const hideScrollbarCss = `
-  .hide-scrollbar::-webkit-scrollbar { display: none; }
-
-  /* ===== Catchrate Select Dark Mode ===== */
-  .pinfo-select {
-    background: rgba(255,255,255,0.06);
-    color: #fff;
-    border: 1px solid rgba(255,255,255,0.14);
+  .hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
-  .pinfo-select option { background: #15171c; color: #fff; }
 
-  /* ===== Catchrate Slider Fix ===== */
+  .hide-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  .pinfo-select {
+    min-height: 42px;
+    background: linear-gradient(180deg, rgba(10, 19, 34, 0.94), rgba(8, 15, 28, 0.94));
+    color: var(--pnt-text, #fff);
+    border: 1px solid rgba(137, 155, 184, 0.28);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+    outline: none;
+  }
+
+  .pinfo-select:focus {
+    border-color: rgba(52, 211, 153, 0.7);
+    box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  }
+
+  .pinfo-select option {
+    background: #08111f;
+    color: #f8fafc;
+  }
+
   .pinfo-range {
-    width: 100%;
+    width: calc(100% - 4px);
     margin: 0;
     background: transparent;
     -webkit-appearance: none;
     appearance: none;
   }
+
   .pinfo-range::-webkit-slider-runnable-track {
-    height: 8px;
+    height: 9px;
     border-radius: 999px;
-    background: linear-gradient(90deg,#a14cff,#ff4ca0);
+    background: linear-gradient(90deg, rgba(52, 211, 153, 0.95), rgba(96, 165, 250, 0.82));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
   }
+
   .pinfo-range::-moz-range-track {
-    height: 8px;
+    height: 9px;
     border-radius: 999px;
-    background: linear-gradient(90deg,#a14cff,#ff4ca0);
+    background: linear-gradient(90deg, rgba(52, 211, 153, 0.95), rgba(96, 165, 250, 0.82));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
   }
+
   .pinfo-range::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 18px;
-    height: 18px;
+    width: 19px;
+    height: 19px;
     border-radius: 50%;
-    background: white;
+    background: #f8fafc;
+    border: 2px solid rgba(52, 211, 153, 0.8);
     margin-top: -5px;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
   }
+
   .pinfo-range::-moz-range-thumb {
-    width: 18px;
-    height: 18px;
+    width: 19px;
+    height: 19px;
     border-radius: 50%;
-    background: white;
+    background: #f8fafc;
+    border: 2px solid rgba(52, 211, 153, 0.8);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
   }
-  .pinfo-range:focus { outline: none; }
+
+  .pinfo-range:focus {
+    outline: none;
+  }
+
+  .pinfo-soft-button:hover,
+  .pinfo-button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(140, 170, 230, 0.68) !important;
+    background: linear-gradient(180deg, rgba(18, 38, 70, 0.96), rgba(10, 23, 44, 0.96)) !important;
+  }
+
+  .pinfo-soft-button:active,
+  .pinfo-button:active {
+    transform: translateY(0);
+  }
+
+  .pinfo-mini-card:hover {
+    border-color: rgba(160, 178, 210, 0.34) !important;
+    background: rgba(13, 24, 42, 0.76) !important;
+  }
+
+  .pinfo-gen-select-wrap {
+    position: relative;
+    width: min(180px, 100%);
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .pinfo-gen-select {
+    width: 100%;
+    min-height: 40px;
+    padding: 0 38px 0 13px;
+    border-radius: var(--pnt-radius-small, 8px);
+    border: 1px solid rgba(100, 140, 215, 0.55);
+    background:
+      linear-gradient(180deg, rgba(14, 30, 56, 0.92), rgba(9, 20, 39, 0.92));
+    color: #f8fafc;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    font-weight: 950;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 10px 24px rgba(0, 0, 0, 0.18);
+  }
+
+  .pinfo-gen-select:hover {
+    border-color: rgba(140, 170, 230, 0.68);
+    background:
+      linear-gradient(180deg, rgba(18, 38, 70, 0.96), rgba(10, 23, 44, 0.96));
+  }
+
+  .pinfo-gen-select:focus {
+    border-color: rgba(140, 170, 230, 0.78);
+    box-shadow:
+      0 0 0 3px rgba(96, 165, 250, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .pinfo-gen-select option {
+    background: #08111f;
+    color: #f8fafc;
+    font-weight: 900;
+  }
+
+  .pinfo-gen-chevron {
+    position: absolute;
+    right: 13px;
+    pointer-events: none;
+    color: rgba(235, 241, 250, 0.72);
+    font-size: 13px;
+    font-weight: 950;
+  }
+
+  .pinfo-evo-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    border-radius: var(--pnt-radius, 14px);
+    border: 1px solid rgba(137, 155, 184, 0.22) !important;
+    background:
+      linear-gradient(180deg, rgba(13, 24, 42, 0.74), rgba(8, 16, 30, 0.74)) !important;
+    color: var(--pnt-text, #fff);
+    cursor: pointer;
+    text-align: left;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.035),
+      0 8px 18px rgba(0, 0, 0, 0.16);
+    transition:
+      transform 0.15s ease,
+      background 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .pinfo-evo-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(160, 178, 210, 0.38) !important;
+    background:
+      linear-gradient(180deg, rgba(16, 31, 56, 0.84), rgba(10, 22, 42, 0.8)) !important;
+  }
+
+  .pinfo-evo-card-current {
+    border-color: rgba(96, 165, 250, 0.42) !important;
+    background:
+      radial-gradient(circle at 0% 0%, rgba(96, 165, 250, 0.12), transparent 42%),
+      linear-gradient(180deg, rgba(14, 28, 52, 0.82), rgba(9, 18, 34, 0.78)) !important;
+  }
+
+  .pinfo-evo-img-wrap {
+    width: 54px;
+    height: 54px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    border: 1px solid rgba(137, 155, 184, 0.18);
+    background: rgba(5, 11, 21, 0.34);
+  }
+
+  .pinfo-evo-img {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.5));
+  }
+
+  .pinfo-evo-name {
+    display: block;
+    color: #f8fafc;
+    font-weight: 950;
+    font-size: 14px;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pinfo-evo-rule {
+    display: block;
+    margin-top: 4px;
+    color: rgba(235, 241, 250, 0.66);
+    font-size: 12px;
+    font-weight: 750;
+    line-height: 1.25;
+  }
+
+  .pinfo-evo-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    margin-top: 7px;
+    padding: 0 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    background: rgba(30, 64, 175, 0.2);
+    color: #bfdbfe;
+    font-size: 11px;
+    font-weight: 950;
+  }
 `;
 
 function timerBallMult(gen, turnsPassed) {
@@ -1299,35 +1492,80 @@ useEffect(() => {
 
   const pageOuter = {
     minHeight: "100vh",
-    padding: 16,
-    color: "white",
-    backgroundImage: `url(${dexBg})`,
+    height: "100vh",
+    padding: 18,
+    boxSizing: "border-box",
+    color: "var(--pnt-text, white)",
+    backgroundImage: `
+      radial-gradient(circle at 50% 0%, rgba(52, 211, 153, 0.13), transparent 34%),
+      radial-gradient(circle at 0% 25%, rgba(96, 165, 250, 0.12), transparent 38%),
+      linear-gradient(180deg, rgba(5, 10, 24, 0.22), rgba(5, 10, 24, 0.78)),
+      url(${dexBg})
+    `,
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
     backgroundAttachment: "fixed",
     position: "relative",
-    height: "100vh",
     overflow: "hidden",
   };
 
   const page = {
-    maxWidth: 1400,
+    width: "min(1400px, 96vw)",
     margin: "0 auto",
   };
 
   const card = {
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(0, 0, 0, 0.55)",
-    borderRadius: 14,
-    padding: 14,
+    border: "1px solid var(--pnt-border, rgba(137, 155, 184, 0.28))",
+    background:
+      "linear-gradient(180deg, rgba(10, 18, 33, 0.92), rgba(6, 12, 24, 0.9))",
+    borderRadius: "var(--pnt-radius, 14px)",
+    padding: 16,
+    boxShadow:
+      "var(--pnt-shadow, 0 18px 48px rgba(0, 0, 0, 0.36)), inset 0 1px 0 rgba(255, 255, 255, 0.045)",
+    backdropFilter: "blur(10px)",
   };
 
   const hideBox = {
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(0,0,0,0.35)",
-    borderRadius: 14,
+    border: "1px solid rgba(137, 155, 184, 0.18)",
+    background:
+      "linear-gradient(180deg, rgba(13, 24, 42, 0.68), rgba(9, 17, 31, 0.66))",
+    borderRadius: "var(--pnt-radius, 14px)",
     padding: 12,
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035)",
+  };
+
+  const buttonBase = {
+    minHeight: 42,
+    padding: "0 15px",
+    borderRadius: "var(--pnt-radius-small, 8px)",
+    border: "1px solid rgba(100, 140, 215, 0.55)",
+    background:
+      "linear-gradient(180deg, rgba(14, 30, 56, 0.92), rgba(9, 20, 39, 0.92))",
+    color: "#f8fafc",
+    cursor: "pointer",
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+    boxShadow:
+      "inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 24px rgba(0, 0, 0, 0.18)",
+    transition:
+      "transform 0.15s ease, background 0.15s ease, border-color 0.15s ease",
+  };
+
+  const softButton = {
+    ...buttonBase,
+    minHeight: 36,
+    padding: "0 12px",
+    background: "rgba(8, 16, 30, 0.82)",
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035)",
+  };
+
+  const miniCard = {
+    border: "1px solid rgba(137, 155, 184, 0.18)",
+    background:
+      "linear-gradient(180deg, rgba(13, 24, 42, 0.68), rgba(9, 17, 31, 0.66))",
+    borderRadius: "var(--pnt-radius, 14px)",
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035)",
   };
 
   return (
@@ -1353,7 +1591,7 @@ useEffect(() => {
         style={{
           position: "fixed",
           inset: 0,
-          background: "rgba(0,0,0,0.55)",
+          background: "linear-gradient(180deg, rgba(5, 10, 24, 0.62), rgba(5, 10, 24, 0.78))",
           zIndex: -1,
         }}
       />
@@ -1362,51 +1600,16 @@ useEffect(() => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h2>Pokémon Info</h2>
 
-          <div style={{ display: "flex", gap: 10 }}>
-            <button
-              onClick={() => nav("/pokedex")}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 10,
-                border: "1px solid rgba(255,255,255,0.14)",
-                background: "rgba(0,0,0,0.25)",
-                color: "white",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button className="pinfo-button" onClick={() => nav("/pokedex")} style={buttonBase}>
               Pokédex
             </button>
 
-            <button
-              onClick={() => nav(-1)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 10,
-                border: "1px solid rgba(255,255,255,0.14)",
-                background: "rgba(0,0,0,0.25)",
-                color: "white",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
+            <button className="pinfo-button" onClick={() => nav(-1)} style={buttonBase}>
               Zurück
             </button>
 
-            {/* ✅ FIX: nav statt navigate + id sauber */}
-            <button
-              onClick={() => nav(`/compare/${id}`)}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid rgba(255,255,255,0.14)",
-                background: "rgba(0,0,0,0.25)",
-                color: "white",
-                cursor: "pointer",
-                fontWeight: 900,
-                whiteSpace: "nowrap",
-              }}
-            >
+            <button className="pinfo-button" onClick={() => nav(`/compare/${id}`)} style={buttonBase}>
               Vergleichen
             </button>
           </div>
@@ -1425,10 +1628,12 @@ useEffect(() => {
               marginTop: 12,
               padding: 22,
               borderRadius: 18,
-              background: "rgba(0,0,0,0.68)",
-              border: "1px solid rgba(255,255,255,0.14)",
-              boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
-              backdropFilter: "blur(6px)",
+              background:
+                "linear-gradient(180deg, rgba(10, 18, 33, 0.94), rgba(6, 12, 24, 0.92))",
+              border: "1px solid var(--pnt-border, rgba(137, 155, 184, 0.28))",
+              boxShadow:
+                "var(--pnt-shadow, 0 18px 48px rgba(0, 0, 0, 0.36)), inset 0 1px 0 rgba(255, 255, 255, 0.045)",
+              backdropFilter: "blur(10px)",
               width: "min(1400px, 96vw)",
               marginLeft: "auto",
               marginRight: "auto",
@@ -1505,11 +1710,10 @@ useEffect(() => {
                               return (
                                 <div
                                   key={`${url || a?.ability?.name || "ab"}-${idx2}`}
+                                  className="pinfo-mini-card"
                                   style={{
-                                    border: "1px solid rgba(255,255,255,0.10)",
-                                    background: "rgba(0,0,0,0.28)",
-                                    borderRadius: 12,
-                                    padding: "10px 10px",
+                                    ...miniCard,
+                                    padding: "11px 12px",
                                   }}
                                 >
                                   <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
@@ -1556,15 +1760,8 @@ useEffect(() => {
                       </div>
 
                       <button
-                        style={{
-                          padding: "6px 10px",
-                          borderRadius: 10,
-                          border: "1px solid rgba(255,255,255,0.14)",
-                          background: "rgba(255,255,255,0.06)",
-                          color: "white",
-                          cursor: "pointer",
-                          fontWeight: 900,
-                        }}
+                        className="pinfo-soft-button"
+                        style={softButton}
                         onClick={() => setShowCatchCalc(true)}
                       >
                         Rechner öffnen
@@ -1572,33 +1769,28 @@ useEffect(() => {
                     </div>
 
                     {/* Gen (persisted) */}
-                    <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                      <div style={{ opacity: 0.9, fontWeight: 800 }}>Gen:</div>
-                      <select
-                        value={selectedGen}
-                        onChange={(e) => {
-                          const g = Number(e.target.value);
-                          setSelectedGen(g);
-                          writeInfoGen(g);
-                        }}
-                        style={{
-                          padding: "6px 10px",
-                          borderRadius: 10,
-                          border: "1px solid rgba(255,255,255,0.14)",
-                          background: "rgba(20,20,20,0.95)",
-                          color: "white",
-                          cursor: "pointer",
-                          outline: "none",
-                          appearance: "none",
-                          fontWeight: 900,
-                        }}
-                      >
-                        {availableGens.map((g) => (
-                          <option key={g} value={g} style={{ background: "#1a1a1a", color: "white" }}>
-                            Gen {g}
-                          </option>
-                        ))}
-                      </select>
+                    <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                      <div style={{ opacity: 0.82, fontWeight: 950, fontSize: 13 }}>Generation</div>
+
+                      <label className="pinfo-gen-select-wrap">
+                        <select
+                          className="pinfo-gen-select"
+                          value={selectedGen}
+                          onChange={(e) => {
+                            const g = Number(e.target.value);
+                            setSelectedGen(g);
+                            writeInfoGen(g);
+                          }}
+                        >
+                          {availableGens.map((g) => (
+                            <option key={g} value={g}>
+                              Gen {g}
+                            </option>
+                          ))}
+                        </select>
+
+                        <span className="pinfo-gen-chevron">▼</span>
+                      </label>
                     </div>
 
                     {/* Level Simulation */}
@@ -1613,25 +1805,30 @@ useEffect(() => {
                         disabled={!useSimulation}
                         style={{
                           width: 74,
-                          padding: 6,
-                          borderRadius: 8,
-                          background: "rgba(0,0,0,0.3)",
-                          border: "1px solid rgba(255,255,255,0.15)",
-                          color: "white",
+                          minHeight: 36,
+                          padding: "0 10px",
+                          borderRadius: 10,
+                          background:
+                            "linear-gradient(180deg, rgba(10, 19, 34, 0.94), rgba(8, 15, 28, 0.94))",
+                          border: "1px solid rgba(137, 155, 184, 0.28)",
+                          color: "var(--pnt-text, white)",
+                          outline: "none",
                           opacity: useSimulation ? 1 : 0.5,
                           fontWeight: 900,
                         }}
                       />
                       <button
+                        className="pinfo-soft-button"
                         onClick={() => setUseSimulation((v) => !v)}
                         style={{
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid rgba(255,255,255,0.14)",
-                          background: useSimulation ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.06)",
-                          color: "white",
-                          cursor: "pointer",
-                          fontWeight: 900,
+                          ...softButton,
+                          borderColor: useSimulation
+                            ? "rgba(52, 211, 153, 0.56)"
+                            : softButton.border,
+                          background: useSimulation
+                            ? "linear-gradient(135deg, rgba(52, 211, 153, 0.22), rgba(34, 197, 94, 0.12))"
+                            : softButton.background,
+                          color: useSimulation ? "#dcfce7" : softButton.color,
                         }}
                         title="Umschalten zwischen Basisdaten und Level-Simulation"
                       >
@@ -1646,11 +1843,10 @@ useEffect(() => {
                   {Object.entries(activeStats).map(([k, v]) => (
                     <div
                       key={k}
+                      className="pinfo-mini-card"
                       style={{
-                        border: "1px solid rgba(255,255,255,0.10)",
-                        background: "rgba(0,0,0,0.35)",
-                        borderRadius: 14,
-                        padding: 10,
+                        ...miniCard,
+                        padding: 12,
                       }}
                     >
                       <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>{k}</div>
@@ -1768,10 +1964,8 @@ useEffect(() => {
                 {/* Moves */}
                 <div
                   style={{
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    background: "rgba(0,0,0,0.35)",
-                    borderRadius: 14,
-                    padding: 12,
+                    ...hideBox,
+                    padding: 14,
                   }}
                 >
                   <div style={{ fontWeight: 950, marginBottom: 8 }}>Level-Up Moves</div>
@@ -1833,18 +2027,22 @@ useEffect(() => {
                 {visibleEvoList.length > 0 && (
                   <div
                     style={{
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      background: "rgba(0,0,0,0.35)",
-                      borderRadius: 14,
-                      padding: 12,
+                      ...hideBox,
+                      padding: 14,
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                      <div style={{ fontWeight: 950, fontSize: 14 }}>Entwicklung</div>
+                      <div>
+                        <div style={{ fontWeight: 950, fontSize: 15 }}>Entwicklung</div>
+                        <div style={{ marginTop: 3, color: "var(--pnt-text-muted)", fontSize: 12, fontWeight: 750 }}>
+                          Entwicklungsreihe nach gewählter Generation
+                        </div>
+                      </div>
+
                       <div
+                        className="pnt-pill pnt-pill-muted"
                         style={{
-                          fontSize: 12,
-                          opacity: 0.75,
+                          maxWidth: 140,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
@@ -1854,55 +2052,72 @@ useEffect(() => {
                       </div>
                     </div>
 
-                    <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
+                    <div
+                      style={{
+                        height: 1,
+                        background:
+                          "linear-gradient(90deg, transparent, rgba(137, 155, 184, 0.22), transparent)",
+                        margin: "12px 0",
+                      }}
+                    />
 
-                    <div className="hide-scrollbar" style={{ ...hideScrollbar, overflowY: "auto", maxHeight: "28vh", paddingRight: 6 }}>
-                      {visibleEvoList.map((e) => (
-                        <div
-                          key={e.id || e.fallbackName}
-                          onClick={() => e.id && nav(`/pokemon/${e.id}`)}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            padding: "10px 10px",
-                            borderRadius: 14,
-                            marginBottom: 10,
-                            border: "1px solid rgba(255,255,255,0.16)",
-                            background: "rgba(255,255,255,0.07)",
-                            cursor: e.id ? "pointer" : "default",
-                          }}
-                          title={e.id ? "Öffnen" : ""}
-                        >
-                          <img
-                            src={artworkFromDexId(e.id)}
-                            alt={e.fallbackName}
+                    <div
+                      className="hide-scrollbar"
+                      style={{
+                        ...hideScrollbar,
+                        overflowY: "auto",
+                        overflowX: "hidden",
+                        maxHeight: "28vh",
+                        padding: "2px 8px 2px 2px",
+                        display: "grid",
+                        gap: 10,
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      {visibleEvoList.map((e) => {
+                        const isCurrent = Number(e.id) === Number(id);
+
+                        return (
+                          <button
+                            key={e.id || e.fallbackName}
+                            type="button"
+                            className={`pinfo-evo-card${isCurrent ? " pinfo-evo-card-current" : ""}`}
+                            onClick={() => e.id && nav(`/pokemon/${e.id}`)}
+                            title={e.id ? "Öffnen" : ""}
+                            disabled={!e.id}
                             style={{
-                              width: 46,
-                              height: 46,
-                              objectFit: "contain",
-                              filter: "drop-shadow(0 10px 18px rgba(0,0,0,0.5))",
+                              cursor: e.id ? "pointer" : "default",
+                              opacity: e.id ? 1 : 0.7,
                             }}
-                          />
+                          >
+                            <span className="pinfo-evo-img-wrap">
+                              <img
+                                src={artworkFromDexId(e.id)}
+                                alt={e.fallbackName}
+                                className="pinfo-evo-img"
+                              />
+                            </span>
 
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 950, fontSize: 14, lineHeight: 1.1 }}>
-                              {evoNameDeById[e.id] || e.fallbackName}
-                            </div>
+                            <span style={{ minWidth: 0 }}>
+                              <span className="pinfo-evo-name">
+                                {evoNameDeById[e.id] || e.fallbackName}
+                              </span>
 
-                            {Array.isArray(e.details) && e.details.length > 0 ? (
-                              e.details.map((d, i) => (
-                                <div key={i} style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>
-                                  {/* ✅ nutzt item/move caches + party_type etc. */}
-                                  {evoRequirementDe(d)}
-                                </div>
-                              ))
-                            ) : (
-                              <div style={{ fontSize: 12, opacity: 0.65, marginTop: 4 }}>Basisform</div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                              {Array.isArray(e.details) && e.details.length > 0 ? (
+                                e.details.map((d, i) => (
+                                  <span key={i} className="pinfo-evo-rule">
+                                    {evoRequirementDe(d)}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="pinfo-evo-rule">Basisform</span>
+                              )}
+
+                              {isCurrent ? <span className="pinfo-evo-badge">Aktuell</span> : null}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1930,11 +2145,13 @@ useEffect(() => {
                   style={{
                     width: "min(520px, 94vw)",
                     borderRadius: 18,
-                    border: "1px solid rgba(255,255,255,0.14)",
-                    background: "rgba(10,10,16,0.88)",
-                    boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
-                    padding: 14,
-                    color: "white",
+                    border: "1px solid var(--pnt-border, rgba(137, 155, 184, 0.28))",
+                    background:
+                      "linear-gradient(180deg, rgba(10, 18, 33, 0.96), rgba(6, 12, 24, 0.94))",
+                    boxShadow:
+                      "var(--pnt-shadow, 0 18px 48px rgba(0, 0, 0, 0.36)), inset 0 1px 0 rgba(255, 255, 255, 0.045)",
+                    padding: 16,
+                    color: "var(--pnt-text, white)",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
@@ -1942,14 +2159,11 @@ useEffect(() => {
                       Catchrate Rechner – {getLocalizedName(species?.names, "de") || cap(pokemon?.name)}
                     </div>
                     <button
+                      className="pinfo-soft-button"
                       style={{
-                        padding: "8px 10px",
-                        borderRadius: 12,
-                        border: "1px solid rgba(255,255,255,0.14)",
-                        background: "rgba(255,255,255,0.06)",
-                        color: "white",
-                        cursor: "pointer",
-                        fontWeight: 900,
+                        ...softButton,
+                        minWidth: 42,
+                        padding: 0,
                       }}
                       onClick={() => setShowCatchCalc(false)}
                       title="Schließen"

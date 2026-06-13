@@ -951,11 +951,18 @@ export default function Pokedex() {
 
   // Styles
   const page = {
+    minHeight: "100vh",
     height: "100vh",
     overflow: "hidden",
-    padding: 16,
-    color: "white",
-    backgroundImage: `url(${dexBg})`,
+    padding: 18,
+    boxSizing: "border-box",
+    color: "var(--pnt-text, white)",
+    backgroundImage: `
+      radial-gradient(circle at 50% 0%, rgba(52, 211, 153, 0.13), transparent 34%),
+      radial-gradient(circle at 0% 25%, rgba(96, 165, 250, 0.12), transparent 38%),
+      linear-gradient(180deg, rgba(5, 10, 24, 0.22), rgba(5, 10, 24, 0.78)),
+      url(${dexBg})
+    `,
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
@@ -963,48 +970,69 @@ export default function Pokedex() {
   };
 
   const overlay = {
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(0, 0, 0, 0.44)",
-    borderRadius: 16,
-    padding: 14,
-    boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
-    backdropFilter: "blur(6px)",
+    border: "1px solid var(--pnt-border, rgba(137, 155, 184, 0.28))",
+    background:
+      "linear-gradient(180deg, rgba(10, 18, 33, 0.92), rgba(6, 12, 24, 0.9))",
+    borderRadius: "var(--pnt-radius, 14px)",
+    padding: 16,
+    boxShadow:
+      "var(--pnt-shadow, 0 18px 48px rgba(0, 0, 0, 0.36)), inset 0 1px 0 rgba(255, 255, 255, 0.045)",
+    backdropFilter: "blur(10px)",
   };
 
   const btn = {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.25)",
-    color: "white",
+    minHeight: 42,
+    padding: "0 15px",
+    borderRadius: "var(--pnt-radius-small, 8px)",
+    border: "1px solid rgba(100, 140, 215, 0.55)",
+    background:
+      "linear-gradient(180deg, rgba(14, 30, 56, 0.92), rgba(9, 20, 39, 0.92))",
+    color: "#f8fafc",
     cursor: "pointer",
     fontWeight: 900,
     whiteSpace: "nowrap",
+    boxShadow:
+      "inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 24px rgba(0, 0, 0, 0.18)",
+    transition:
+      "transform 0.15s ease, background 0.15s ease, border-color 0.15s ease",
   };
 
   const input = {
     width: "100%",
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.16)",
-    background: "rgba(0,0,0,0.25)",
-    color: "white",
+    minHeight: 48,
+    boxSizing: "border-box",
+    padding: "11px 13px",
+    borderRadius: 10,
+    border: "1px solid rgba(137, 155, 184, 0.28)",
+    background:
+      "linear-gradient(180deg, rgba(10, 19, 34, 0.94), rgba(8, 15, 28, 0.94))",
+    color: "var(--pnt-text, white)",
     outline: "none",
     fontWeight: 900,
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035)",
   };
 
   const chip = (active) => ({
+    minHeight: 34,
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "7px 11px",
+    padding: "0 12px",
     borderRadius: 999,
-    border: active ? "1px solid rgba(255,255,255,0.40)" : "1px solid rgba(255,255,255,0.14)",
-    background: active ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.18)",
+    border: active
+      ? "1px solid rgba(52, 211, 153, 0.56)"
+      : "1px solid rgba(137, 155, 184, 0.24)",
+    background: active
+      ? "linear-gradient(135deg, rgba(52, 211, 153, 0.22), rgba(34, 197, 94, 0.12))"
+      : "rgba(5, 11, 21, 0.34)",
+    color: active ? "#dcfce7" : "rgba(235, 241, 250, 0.78)",
     cursor: "pointer",
     userSelect: "none",
     fontWeight: 950,
-    opacity: active ? 1 : 0.85,
+    opacity: active ? 1 : 0.88,
+    boxShadow: active ? "0 10px 24px rgba(0, 0, 0, 0.22)" : "none",
+    transition:
+      "transform 0.15s ease, background 0.15s ease, border-color 0.15s ease",
   });
 
   const badge = (active) => ({
@@ -1020,23 +1048,32 @@ export default function Pokedex() {
   const smallRow = (active) => ({
     display: "flex",
     alignItems: "center",
-    gap: 10,
-    padding: "10px 12px",
-    borderRadius: 14,
-    border: active ? "1px solid rgba(255,255,255,0.38)" : "1px solid rgba(255,255,255,0.12)",
-    background: active ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.20)",
-    boxShadow: active ? "0 0 0 1px rgba(255,255,255,0.08), 0 16px 40px rgba(0,0,0,0.45)" : "none",
+    gap: 12,
+    padding: "12px 14px",
+    borderRadius: "var(--pnt-radius, 12px)",
+    border: active
+      ? "1px solid rgba(86, 220, 170, 0.46)"
+      : "1px solid rgba(137, 155, 184, 0.18)",
+    background: active
+      ? "radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.13), transparent 42%), rgba(5, 11, 21, 0.42)"
+      : "linear-gradient(180deg, rgba(13, 24, 42, 0.68), rgba(9, 17, 31, 0.66))",
+    boxShadow: active
+      ? "0 0 0 1px rgba(255,255,255,0.08), 0 16px 40px rgba(0,0,0,0.45)"
+      : "inset 0 1px 0 rgba(255,255,255,0.035)",
     cursor: "pointer",
-    opacity: active ? 1 : 0.86,
-    transition: "120ms ease",
+    opacity: active ? 1 : 0.92,
+    transition:
+      "transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease",
   });
 
   const centerCard = {
     borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.20)",
-    background: "rgba(0,0,0,0.32)",
-    padding: 14,
-    boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
+    border: "1px solid rgba(86, 220, 170, 0.28)",
+    background:
+      "radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.12), transparent 42%), linear-gradient(180deg, rgba(13, 24, 42, 0.78), rgba(9, 17, 31, 0.78))",
+    padding: 16,
+    boxShadow:
+      "0 18px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.045)",
   };
 
   // Type pills
@@ -1349,10 +1386,45 @@ export default function Pokedex() {
   return (
     <div style={page}>
       <style>{`
-        .dex-scroll { scrollbar-width: none; -ms-overflow-style: none; }
-        .dex-scroll::-webkit-scrollbar { display: none; }
+        .dex-scroll {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
 
-        /* CTA Buttons – clean, nicht "AI neon" */
+        .dex-scroll::-webkit-scrollbar {
+          width: 0;
+          height: 0;
+          display: none;
+        }
+
+        .dex-scroll > div {
+          margin-bottom: 10px;
+        }
+
+        .dex-scroll > div:hover {
+          transform: translateY(-1px);
+          border-color: rgba(160, 178, 210, 0.34) !important;
+          opacity: 1 !important;
+        }
+
+        input::placeholder {
+          color: rgba(235, 241, 250, 0.46);
+        }
+
+        input:focus {
+          border-color: rgba(52, 211, 153, 0.7) !important;
+          box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+        }
+
+        button:hover {
+          transform: translateY(-1px);
+        }
+
+        button:active {
+          transform: translateY(0);
+        }
+
+        /* CTA Buttons - clean, nicht "AI neon" */
         .dexCtaRow { display:flex; gap:10px; align-items:stretch; margin-top: 12px; flex-wrap: wrap; }
         .dexCtaBtn {
           appearance:none;

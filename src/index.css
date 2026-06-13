@@ -103,8 +103,17 @@ body.dark-mode select {
   border: 1px solid #555;
 }
 
-/* Buttons */
-button {
+/* Buttons - legacy fallback, aber moderne Seiten nicht überschreiben */
+button:not(
+  .home-mode-main-button,
+  .home-mode-small-button,
+  .mode-tile,
+  .game-card,
+  .guess-card,
+  .pg-btn,
+  .vs-btn,
+  .glass-btn
+) {
   padding: 10px 16px;
   font-size: 1rem;
   margin: 5px;
@@ -116,23 +125,59 @@ button {
   transition: all 0.2s ease;
 }
 
-body.light-mode button {
-  background-color: #079e4b;
-  color: #202020;
+body.light-mode button:not(
+  .home-mode-main-button,
+  .home-mode-small-button,
+  .mode-tile,
+  .game-card,
+  .guess-card,
+  .pg-btn,
+  .vs-btn,
+  .glass-btn
+) {
+  background-color: rgba(255,255,255,0.10);
+  color: #ffffff;
 }
 
-body.dark-mode button {
-  background-color: #079e4b;
-  color: #202020;
+body.dark-mode button:not(
+  .home-mode-main-button,
+  .home-mode-small-button,
+  .mode-tile,
+  .game-card,
+  .guess-card,
+  .pg-btn,
+  .vs-btn,
+  .glass-btn
+) {
+  background-color: rgba(255,255,255,0.10);
+  color: #ffffff;
 }
 
-button:hover {
+button:not(
+  .home-mode-main-button,
+  .home-mode-small-button,
+  .mode-tile,
+  .game-card,
+  .guess-card,
+  .pg-btn,
+  .vs-btn,
+  .glass-btn
+):hover {
   transform: scale(1.03);
-  background-color: #ffd700;
+  background-color: rgba(255,255,255,0.16);
 }
 
-body.dark-mode button:hover {
-  background-color: #ffcc00;
+body.dark-mode button:not(
+  .home-mode-main-button,
+  .home-mode-small-button,
+  .mode-tile,
+  .game-card,
+  .guess-card,
+  .pg-btn,
+  .vs-btn,
+  .glass-btn
+):hover {
+  background-color: rgba(255,255,255,0.16);
 }
 
 /* Statusfarben */

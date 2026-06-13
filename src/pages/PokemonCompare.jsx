@@ -698,9 +698,15 @@ export default function PokemonCompare() {
   const page = {
     height: "100vh",
     overflow: "hidden",
-    padding: 16,
-    color: "white",
-    backgroundImage: `url(${dexBg})`,
+    padding: 18,
+    boxSizing: "border-box",
+    color: "var(--pnt-text, white)",
+    backgroundImage: `
+      radial-gradient(circle at 50% 0%, rgba(52, 211, 153, 0.13), transparent 34%),
+      radial-gradient(circle at 0% 25%, rgba(96, 165, 250, 0.12), transparent 38%),
+      linear-gradient(180deg, rgba(5, 10, 24, 0.22), rgba(5, 10, 24, 0.78)),
+      url(${dexBg})
+    `,
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
@@ -708,60 +714,76 @@ export default function PokemonCompare() {
   };
 
   const scrollWrap = {
-    height: "calc(100vh - 32px)",
+    height: "calc(100vh - 36px)",
     overflowY: "auto",
-    paddingRight: 2,
+    overflowX: "hidden",
+    padding: "0 4px 22px",
+    boxSizing: "border-box",
   };
 
   const panel = {
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(0,0,0,0.42)",
-    borderRadius: 16,
-    padding: 14,
-    boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
-    backdropFilter: "blur(6px)",
+    border: "1px solid var(--pnt-border, rgba(137, 155, 184, 0.28))",
+    background:
+      "linear-gradient(180deg, rgba(10, 18, 33, 0.94), rgba(6, 12, 24, 0.92))",
+    borderRadius: "var(--pnt-radius, 14px)",
+    padding: 18,
+    boxShadow:
+      "var(--pnt-shadow, 0 18px 48px rgba(0, 0, 0, 0.36)), inset 0 1px 0 rgba(255, 255, 255, 0.045)",
+    backdropFilter: "blur(10px)",
   };
 
   const btn = {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.25)",
-    color: "white",
+    minHeight: 42,
+    padding: "0 15px",
+    borderRadius: "var(--pnt-radius-small, 8px)",
+    border: "1px solid rgba(100, 140, 215, 0.55)",
+    background:
+      "linear-gradient(180deg, rgba(14, 30, 56, 0.92), rgba(9, 20, 39, 0.92))",
+    color: "#f8fafc",
     cursor: "pointer",
     fontWeight: 950,
     whiteSpace: "nowrap",
+    boxShadow:
+      "inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 24px rgba(0, 0, 0, 0.18)",
+    transition:
+      "transform 0.15s ease, background 0.15s ease, border-color 0.15s ease",
   };
 
-  // ✅ Input: fixed height, boxSizing, font sizes -> no overlap / no weird “floating” text
   const input = {
     width: "100%",
-    height: 42,
+    height: 44,
     boxSizing: "border-box",
     padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.16)",
-    background: "rgba(0,0,0,0.25)",
-    color: "white",
+    borderRadius: 10,
+    border: "1px solid rgba(137, 155, 184, 0.28)",
+    background:
+      "linear-gradient(180deg, rgba(10, 19, 34, 0.94), rgba(8, 15, 28, 0.94))",
+    color: "var(--pnt-text, white)",
     outline: "none",
     fontWeight: 950,
     fontSize: 14,
     lineHeight: "20px",
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035)",
   };
 
   const sideCard = {
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: 14,
-    padding: 12,
-    background: "rgba(0,0,0,0.22)",
+    border: "1px solid rgba(137, 155, 184, 0.18)",
+    borderRadius: "var(--pnt-radius, 14px)",
+    padding: 14,
+    background:
+      "linear-gradient(180deg, rgba(13, 24, 42, 0.68), rgba(9, 17, 31, 0.66))",
     minWidth: 0,
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035)",
   };
 
   const statsCard = {
-    border: "1px solid rgba(255,255,255,0.10)",
-    borderRadius: 14,
-    padding: 12,
-    background: "rgba(0,0,0,0.18)",
+    border: "1px solid rgba(137, 155, 184, 0.18)",
+    borderRadius: "var(--pnt-radius, 14px)",
+    padding: 14,
+    background:
+      "linear-gradient(180deg, rgba(13, 24, 42, 0.68), rgba(9, 17, 31, 0.66))",
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035)",
+    minWidth: 0,
   };
 
   const subTitle = { fontWeight: 1000, marginBottom: 8 };
@@ -772,10 +794,15 @@ export default function PokemonCompare() {
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    padding: "8px 10px",
-    borderRadius: 12,
-    border: isSE ? "1px solid rgba(98, 255, 158, 0.35)" : "1px solid rgba(255,255,255,0.10)",
-    background: isSE ? "rgba(60, 170, 120, 0.14)" : "rgba(0,0,0,0.14)",
+    padding: "9px 10px",
+    borderRadius: "var(--pnt-radius-small, 10px)",
+    border: isSE
+      ? "1px solid rgba(96, 165, 250, 0.34)"
+      : "1px solid rgba(137, 155, 184, 0.16)",
+    background: isSE
+      ? "radial-gradient(circle at 0% 0%, rgba(96, 165, 250, 0.12), transparent 42%), rgba(5, 11, 21, 0.34)"
+      : "rgba(5, 11, 21, 0.3)",
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
   });
 
   function renderMoveLine(m, defenderTypes) {
@@ -922,48 +949,125 @@ export default function PokemonCompare() {
   return (
     <div style={page}>
       <style>{`
-        .cmp-scroll { scrollbar-width: none; -ms-overflow-style: none; }
-        .cmp-scroll::-webkit-scrollbar { display: none; }
-
-        /* ✅ Responsive controls: prevents overlap on smaller widths */
-        .cmp-topgrid { display:grid; grid-template-columns: minmax(180px, 240px) minmax(180px, 1fr) minmax(180px, 1fr); gap:12px; align-items:end; }
-        @media (max-width: 980px){
-          .cmp-topgrid { grid-template-columns: 1fr 1fr; }
-        }
-        @media (max-width: 640px){
-          .cmp-topgrid { grid-template-columns: 1fr; }
+        .cmp-scroll {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
         }
 
-        /* ✅ Darker select dropdown look (the opened list is browser-controlled, but this helps) */
-        select.cmp-select {
-          color: #fff;
-          background: rgba(0,0,0,0.35);
+        .cmp-scroll::-webkit-scrollbar {
+          width: 0;
+          height: 0;
+          display: none;
         }
-          select.cmp-select{
-  color:#fff;
-  background: rgba(0,0,0,0.35);
-  border: 1px solid rgba(255,255,255,0.16);
-  border-radius: 12px;
-}
 
-select.cmp-select:focus{
-  outline: none;
-  border-color: rgba(255,255,255,0.28);
-  box-shadow: 0 0 0 2px rgba(255,255,255,0.06), 0 16px 40px rgba(0,0,0,0.35);
-}
+        .cmp-topgrid {
+          display: grid;
+          grid-template-columns: minmax(180px, 240px) minmax(180px, 1fr) minmax(180px, 1fr);
+          gap: 12px;
+          align-items: end;
+        }
 
-/* wichtig: Dropdown-Liste selbst (Options) */
-select.cmp-select option{
-  background: #0f1216;
-  color: #fff;
-}
+        .cmp-main-grid {
+          margin-top: 14px;
+          display: grid;
+          grid-template-columns: 260px minmax(0, 1fr) minmax(0, 1fr) 260px;
+          gap: 12px;
+          align-items: start;
+        }
 
-/* Highlight im geöffneten Dropdown (Chrome/Win klappt damit gut) */
-select.cmp-select option:checked{
-  background: #18202a;
-  color: #fff;
-}
+        .cmp-moves-grid {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
 
+        .cmp-select {
+          appearance: auto;
+          cursor: pointer;
+          color: var(--pnt-text, #fff);
+          background:
+            linear-gradient(180deg, rgba(10, 19, 34, 0.94), rgba(8, 15, 28, 0.94)) !important;
+          border: 1px solid rgba(137, 155, 184, 0.28) !important;
+          border-radius: 10px !important;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+        }
+
+        .cmp-select:focus,
+        .cmp-input:focus {
+          outline: none;
+          border-color: rgba(96, 165, 250, 0.72) !important;
+          box-shadow:
+            0 0 0 3px rgba(96, 165, 250, 0.14),
+            inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+        }
+
+        .cmp-select option {
+          background: #08111f;
+          color: #f8fafc;
+          font-weight: 900;
+        }
+
+        .cmp-button:hover:not(:disabled),
+        .cmp-suggestion-button:hover:not(:disabled) {
+          transform: translateY(-1px);
+          border-color: rgba(140, 170, 230, 0.68) !important;
+          background:
+            linear-gradient(180deg, rgba(18, 38, 70, 0.96), rgba(10, 23, 44, 0.96)) !important;
+        }
+
+        .cmp-button:disabled {
+          opacity: 0.48;
+          cursor: not-allowed;
+          transform: none;
+        }
+
+        .cmp-suggestion-button {
+          width: 100%;
+        }
+
+        .cmp-card-hover {
+          transition:
+            transform 0.15s ease,
+            border-color 0.15s ease,
+            background 0.15s ease;
+        }
+
+        .cmp-card-hover:hover {
+          transform: translateY(-1px);
+          border-color: rgba(160, 178, 210, 0.34) !important;
+          background:
+            linear-gradient(180deg, rgba(16, 31, 56, 0.82), rgba(10, 22, 42, 0.78)) !important;
+        }
+
+        input::placeholder {
+          color: rgba(235, 241, 250, 0.46);
+        }
+
+        @media (max-width: 1180px) {
+          .cmp-main-grid {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+
+        @media (max-width: 980px) {
+          .cmp-topgrid,
+          .cmp-moves-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 760px) {
+          .cmp-main-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .cmp-topgrid {
+            grid-template-columns: 1fr;
+          }
+        }
       `}</style>
 
       <div style={scrollWrap} className="cmp-scroll">
@@ -975,16 +1079,16 @@ select.cmp-select option:checked{
             </div>
 
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <button style={btn} onClick={() => nav(-1)}>
+              <button className="cmp-button" style={btn} onClick={() => nav(-1)}>
                 Zurück
               </button>
-              <button style={btn} onClick={() => nav("/pokedex")}>
+              <button className="cmp-button" style={btn} onClick={() => nav("/pokedex")}>
                 Pokédex
               </button>
-              <button style={btn} onClick={() => openInfo(leftDex)}>
+              <button className="cmp-button" style={btn} onClick={() => openInfo(leftDex)}>
                 Linke Info
               </button>
-              <button style={btn} onClick={() => openInfo(rightDex)}>
+              <button className="cmp-button" style={btn} onClick={() => openInfo(rightDex)}>
                 Rechte Info
               </button>
             </div>
@@ -1047,17 +1151,9 @@ select.cmp-select option:checked{
             </div>
 
             {/* Main: left stats | left card | right card | right stats */}
-            <div
-              style={{
-                marginTop: 14,
-                display: "grid",
-                gridTemplateColumns: "260px 1fr 1fr 260px",
-                gap: 12,
-                alignItems: "start",
-              }}
-            >
+            <div className="cmp-main-grid">
               {/* Left Stats */}
-              <div style={statsCard}>
+              <div className="cmp-card-hover" style={statsCard}>
                 <div style={subTitle}>
                   {leftLevelEdited ? `Stats (Lv ${L})` : "Basiswerte"}
                   <span style={{ marginLeft: 8, opacity: 0.65, fontSize: 12, fontWeight: 900 }}>
@@ -1086,7 +1182,7 @@ select.cmp-select option:checked{
               <div style={sideCard}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
                   <div style={{ fontWeight: 1000, opacity: 0.9 }}>Links</div>
-                  <button style={{ ...btn, padding: "8px 10px" }} onClick={clearLeft} disabled={!leftDex}>
+                  <button className="cmp-button" style={{ ...btn, minHeight: 38, padding: "0 12px" }} onClick={clearLeft} disabled={!leftDex}>
                     Entfernen
                   </button>
                 </div>
@@ -1135,7 +1231,8 @@ select.cmp-select option:checked{
                           {leftSuggestions.map((s) => (
                             <button
                               key={s.id}
-                              style={{ ...btn, textAlign: "left", padding: "8px 10px" }}
+                            className="cmp-suggestion-button"
+                            style={{ ...btn, minHeight: 38, justifyContent: "flex-start", textAlign: "left", padding: "0 12px" }}
                               onClick={() => {
                                 setLeftDex(s.id);
                                 setLeftQuery(s.name);
@@ -1163,7 +1260,8 @@ select.cmp-select option:checked{
                         {leftSuggestions.map((s) => (
                           <button
                             key={s.id}
-                            style={{ ...btn, textAlign: "left", padding: "8px 10px" }}
+                            className="cmp-suggestion-button"
+                            style={{ ...btn, minHeight: 38, justifyContent: "flex-start", textAlign: "left", padding: "0 12px" }}
                             onClick={() => {
                               setLeftDex(s.id);
                               setLeftQuery(s.name);
@@ -1183,7 +1281,7 @@ select.cmp-select option:checked{
               <div style={sideCard}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
                   <div style={{ fontWeight: 1000, opacity: 0.9 }}>Rechts</div>
-                  <button style={{ ...btn, padding: "8px 10px" }} onClick={clearRight} disabled={!rightDex}>
+                  <button className="cmp-button" style={{ ...btn, minHeight: 38, padding: "0 12px" }} onClick={clearRight} disabled={!rightDex}>
                     Entfernen
                   </button>
                 </div>
@@ -1232,7 +1330,8 @@ select.cmp-select option:checked{
                           {rightSuggestions.map((s) => (
                             <button
                               key={s.id}
-                              style={{ ...btn, textAlign: "left", padding: "8px 10px" }}
+                            className="cmp-suggestion-button"
+                            style={{ ...btn, minHeight: 38, justifyContent: "flex-start", textAlign: "left", padding: "0 12px" }}
                               onClick={() => {
                                 setRightDex(s.id);
                                 setRightQuery(s.name);
@@ -1260,7 +1359,8 @@ select.cmp-select option:checked{
                         {rightSuggestions.map((s) => (
                           <button
                             key={s.id}
-                            style={{ ...btn, textAlign: "left", padding: "8px 10px" }}
+                            className="cmp-suggestion-button"
+                            style={{ ...btn, minHeight: 38, justifyContent: "flex-start", textAlign: "left", padding: "0 12px" }}
                             onClick={() => {
                               setRightDex(s.id);
                               setRightQuery(s.name);
@@ -1278,7 +1378,7 @@ select.cmp-select option:checked{
               </div>
 
               {/* Right Stats */}
-              <div style={statsCard}>
+              <div className="cmp-card-hover" style={statsCard}>
                 <div style={subTitle}>
                   {rightLevelEdited ? `Stats (Lv ${R})` : "Basiswerte"}
                   <span style={{ marginLeft: 8, opacity: 0.65, fontSize: 12, fontWeight: 900 }}>
@@ -1401,8 +1501,8 @@ select.cmp-select option:checked{
                   </div>
                 ) : null}
 
-                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div style={statsCard}>
+                <div className="cmp-moves-grid">
+              <div className="cmp-card-hover" style={statsCard}>
                     <div style={{ fontWeight: 1100, marginBottom: 8 }}>Deine Level-Up-Moves bis Lv {L} (Gen {gen})</div>
                     {err ? <div style={{ opacity: 0.85, marginBottom: 10 }}>⚠ {err}</div> : null}
 
@@ -1415,7 +1515,7 @@ select.cmp-select option:checked{
                     )}
                   </div>
 
-                  <div style={statsCard}>
+              <div className="cmp-card-hover" style={statsCard}>
                     <div style={{ fontWeight: 1100, marginBottom: 8 }}>Gegner Level-Up-Moves bis Lv {R} (Gen {gen})</div>
                     {rightDamagingMoves.length ? (
                       <div style={{ display: "grid", gap: 8 }}>
