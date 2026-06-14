@@ -24,7 +24,6 @@ function formatExpiresIn(ts, ttlDays) {
   return `in ${d} d`;
 }
 
-// ✅ Robust: nimmt mehrere mögliche Felder + trim
 function getRoomTitle(r) {
   const candidates = [
     r?.title,
@@ -38,6 +37,7 @@ function getRoomTitle(r) {
     const t = String(c ?? "").trim();
     if (t) return t;
   }
+
   return "Online-Run";
 }
 
@@ -51,13 +51,9 @@ export default function RecentRoomsPanel({ ttlDays = 7, onReconnect }) {
   useEffect(() => {
     reload();
 
-    // ✅ Wenn du zurück in den Tab kommst, neu laden (typisch: nach /table wieder zurück)
     const onFocus = () => reload();
 
-    // ✅ Wenn localStorage sich ändert (anderer Tab oder manchmal auch durch deine App-Logik)
-    const onStorage = (e) => {
-      // falls du einen speziellen key hast, könntest du hier einschränken
-      // z.B. if (e.key !== "recentDuoRooms") return;
+    const onStorage = () => {
       reload();
     };
 
@@ -78,72 +74,71 @@ export default function RecentRoomsPanel({ ttlDays = 7, onReconnect }) {
   if (!sorted.length) return null;
 
   return (
-    <div style={{ marginTop: 14, padding: 12, border: "1px solid #333", borderRadius: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <h3 style={{ margin: 0 }}>Zuletzt verwendete Online-Runs</h3>
+    <div style={wrap}>
+      <div style={topRow}>
+        <button type="button" onClick={reload} title="Liste neu laden" style={smallButton}>
+          Aktualisieren
+        </button>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={reload} title="Liste neu laden">
-            Aktualisieren
-          </button>
-          <button
-            onClick={() => {
-              clearAllRecentRooms();
-              setRooms([]);
-            }}
-            title="Löscht nur die lokale Liste"
-          >
-            Liste leeren
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            clearAllRecentRooms();
+            setRooms([]);
+          }}
+          title="Löscht nur die lokale Liste"
+          style={smallButton}
+        >
+          Liste leeren
+        </button>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+      <div style={list}>
         {sorted.map((r) => {
           const title = getRoomTitle(r);
 
           return (
-            <div
-              key={r.roomId}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 10,
-                padding: 10,
-                border: "1px solid #222",
-                borderRadius: 10,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <div style={{ minWidth: 260 }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-                  <strong>{title}</strong>
-                  <span style={{ opacity: 0.85, fontSize: 13 }}>
-                    ({r.edition || "?"} / {r.linkMode || "?"})
+            <div key={r.roomId} style={roomCard}>
+              <div style={roomInfo}>
+                <div style={titleRow}>
+                  <strong style={roomTitle}>{title}</strong>
+
+                  <span style={roomMeta}>
+                    {r.edition || "?"} / {r.linkMode || "?"}
                   </span>
                 </div>
 
-                <div style={{ opacity: 0.85, fontSize: 13, marginTop: 3 }}>
+                <div style={detailLine}>
                   <strong>Room:</strong> {r.roomId}
                 </div>
 
                 {!!(r.lastPlayers && r.lastPlayers.length) && (
-                  <div style={{ opacity: 0.85, fontSize: 13, marginTop: 3 }}>
+                  <div style={detailLine}>
                     <strong>Spieler:</strong> {r.lastPlayers.join(", ")}
                   </div>
                 )}
 
-                <div style={{ opacity: 0.75, fontSize: 12, marginTop: 4 }}>
+                <div style={timeLine}>
                   Letzter Zugriff: {formatTimeAgo(r.lastSeen)} · Läuft ab: {formatExpiresIn(r.lastSeen, ttlDays)}
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => onReconnect?.(r)} title="Wieder verbinden">
+              <div style={actions}>
+                <button
+                  type="button"
+                  onClick={() => onReconnect?.(r)}
+                  title="Wieder verbinden"
+                  style={primaryButton}
+                >
                   Reconnect
                 </button>
-                <button onClick={() => setRooms(removeRecentRoom(r.roomId))} title="Nur lokal entfernen">
+
+                <button
+                  type="button"
+                  onClick={() => setRooms(removeRecentRoom(r.roomId))}
+                  title="Nur lokal entfernen"
+                  style={smallButton}
+                >
                   Löschen
                 </button>
               </div>
@@ -154,3 +149,97 @@ export default function RecentRoomsPanel({ ttlDays = 7, onReconnect }) {
     </div>
   );
 }
+
+const wrap = {
+  display: "grid",
+  gap: 8,
+  marginTop: -10,
+};
+
+const topRow = {
+  display: "flex",
+  gap: 10,
+  alignItems: "center",
+  flexWrap: "wrap",
+};
+
+const list = {
+  display: "grid",
+  gap: 8,
+};
+
+const roomCard = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  gap: 12,
+  padding: "12px 14px",
+  border: "1px solid rgba(120, 150, 210, 0.24)",
+  borderRadius: 15,
+  alignItems: "center",
+  background: "linear-gradient(135deg, rgba(8, 16, 34, 0.92), rgba(6, 12, 28, 0.72))",
+  boxShadow: "0 12px 28px rgba(0, 0, 0, 0.16)",
+};
+
+const roomInfo = {
+  minWidth: 0,
+};
+
+const titleRow = {
+  display: "flex",
+  gap: 8,
+  alignItems: "baseline",
+  flexWrap: "wrap",
+  marginBottom: 4,
+};
+
+const roomTitle = {
+  fontSize: 16,
+  fontWeight: 950,
+  lineHeight: 1.1,
+};
+
+const roomMeta = {
+  opacity: 0.72,
+  fontSize: 12,
+  fontWeight: 800,
+  lineHeight: 1.1,
+};
+
+const detailLine = {
+  opacity: 0.86,
+  fontSize: 13,
+  marginTop: 2,
+  lineHeight: 1.25,
+};
+
+const timeLine = {
+  opacity: 0.68,
+  fontSize: 12,
+  marginTop: 5,
+  lineHeight: 1.25,
+};
+
+const actions = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "nowrap",
+  alignItems: "center",
+  justifyContent: "flex-end",
+};
+
+const smallButton = {
+  border: "1px solid rgba(140, 170, 230, 0.38)",
+  borderRadius: 10,
+  padding: "9px 13px",
+  background: "rgba(16, 29, 55, 0.9)",
+  color: "#f4f7ff",
+  fontWeight: 900,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const primaryButton = {
+  ...smallButton,
+  border: "1px solid rgba(69, 255, 166, 0.38)",
+  background: "linear-gradient(135deg, rgba(21, 67, 68, 0.98), rgba(13, 42, 55, 0.98))",
+};

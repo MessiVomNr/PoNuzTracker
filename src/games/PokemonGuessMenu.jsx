@@ -108,7 +108,7 @@ export default function PokemonGuessMenu() {
                 Solo spielen
               </span>
               <span className="games-hub-card-text">
-                Einzelspieler-Modus mit Stufen, Tipps und Score.
+                Einzelspieler-Modus mit Stufen, Tipps, Score, Endless und Highscore.
               </span>
             </span>
 

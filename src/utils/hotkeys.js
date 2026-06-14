@@ -33,6 +33,13 @@ export const DEFAULT_HOTKEYS = {
     goTeam: "1",
     goGuide: "2",
   },
+
+  games: {
+    higherLowerHigher: "ArrowUp",
+    higherLowerLower: "ArrowDown",
+    higherLowerEqual: "ArrowRight",
+    nextPokemon: "Enter",
+  },
 };
 
 /* =========================================================
@@ -215,6 +222,7 @@ export function loadHotkeys() {
       general: { ...DEFAULT_HOTKEYS.general, ...(parsed.general || {}) },
       draft: { ...DEFAULT_HOTKEYS.draft, ...(parsed.draft || {}) },
       soullink: { ...DEFAULT_HOTKEYS.soullink, ...(parsed.soullink || {}) },
+      games: { ...DEFAULT_HOTKEYS.games, ...(parsed.games || {}) },
     };
   } catch {
     return structuredClone(DEFAULT_HOTKEYS);
@@ -279,9 +287,21 @@ export function labelHotkey(scope, key) {
       goTeam: "Soullink: Team",
       goGuide: "Soullink: Guide",
     },
+    games: {
+      higherLowerHigher: "Higher/Lower: Höher",
+      higherLowerLower: "Higher/Lower: Niedriger",
+      higherLowerEqual: "Higher/Lower: Gleich",
+      nextPokemon: "Games: Weiter / nächstes Pokémon",
+    },
   };
 
   return map?.[scope]?.[key] || `${scope}.${key}`;
+}
+
+function scopesCanConflict(a, b) {
+  if (a === b) return true;
+  if (a === "general" || b === "general") return true;
+  return false;
 }
 
 export function findConflict(hotkeys, scope, key, value) {
@@ -289,11 +309,14 @@ export function findConflict(hotkeys, scope, key, value) {
   if (!v) return null;
 
   for (const s of Object.keys(hotkeys || {})) {
+    if (!scopesCanConflict(scope, s)) continue;
+
     for (const k of Object.keys(hotkeys?.[s] || {})) {
       if (s === scope && k === key) continue;
       const other = normalizeKeyCombo(hotkeys?.[s]?.[k]);
       if (other && other === v) return { scope: s, key: k };
     }
   }
+
   return null;
 }

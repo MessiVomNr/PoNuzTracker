@@ -15,6 +15,26 @@ function CharizardSilhouetteIcon() {
   );
 }
 
+function HigherLowerIcon() {
+  return (
+    <span className="games-hub-card-icon games-hub-card-icon-muted" aria-hidden="true">
+      <span
+        style={{
+          display: "grid",
+          placeItems: "center",
+          width: "100%",
+          height: "100%",
+          fontSize: 34,
+          fontWeight: 950,
+          lineHeight: 1,
+        }}
+      >
+        ⇅
+      </span>
+    </span>
+  );
+}
+
 function ControllerIcon() {
   return (
     <span className="games-hub-card-icon games-hub-card-icon-muted" aria-hidden="true">
@@ -60,6 +80,25 @@ export default function GamesHub() {
               </span>
               <span className="games-hub-card-text">
                 Errate Pokémon mit Silhouette, Pixelbild, Typen, Stats und mehr.
+              </span>
+            </span>
+
+            <span className="games-hub-card-arrow">›</span>
+          </button>
+
+          <button
+            type="button"
+            className="games-hub-card games-hub-card-primary"
+            onClick={() => navigate("/games/higher-lower")}
+          >
+            <HigherLowerIcon />
+
+            <span className="games-hub-card-content">
+              <span className="games-hub-card-title">
+                Higher oder Lower
+              </span>
+              <span className="games-hub-card-text">
+                Vergleiche Pokémon-Stats, BST oder jede Runde einen zufälligen Wert.
               </span>
             </span>
 

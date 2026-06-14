@@ -38,6 +38,51 @@ const PREVIEW_PIKACHU_STATS = {
 };
 
 const SOLO_GAME_STATE_KEY = "pokemon_guess_solo_state_v1";
+const SOLO_HIGH_SCORE_KEY = "pokemon_guess_solo_highscores_v1";
+const NEXT_POKEMON_KEYS = ["Enter", " "];
+
+const DEFAULT_SOLO_HIGH_SCORES = {
+  normal: {
+    score: 0,
+    rounds: 0,
+    savedAt: null,
+  },
+  endless: {
+    score: 0,
+    rounds: 0,
+    savedAt: null,
+  },
+};
+
+function readSoloHighScores() {
+  try {
+    const raw = localStorage.getItem(SOLO_HIGH_SCORE_KEY);
+    if (!raw) return DEFAULT_SOLO_HIGH_SCORES;
+
+    const saved = JSON.parse(raw);
+
+    return {
+      normal: {
+        ...DEFAULT_SOLO_HIGH_SCORES.normal,
+        ...(saved.normal || {}),
+      },
+      endless: {
+        ...DEFAULT_SOLO_HIGH_SCORES.endless,
+        ...(saved.endless || {}),
+      },
+    };
+  } catch {
+    return DEFAULT_SOLO_HIGH_SCORES;
+  }
+}
+
+function writeSoloHighScores(nextHighScores) {
+  try {
+    localStorage.setItem(SOLO_HIGH_SCORE_KEY, JSON.stringify(nextHighScores));
+  } catch {
+    // ignore
+  }
+}
 
 function mergeGuessSettings(savedSettings) {
   const safeSettings = savedSettings || {};
@@ -92,6 +137,41 @@ function clearSavedSoloGame() {
   }
 }
 
+function getPlayModeDescription(playMode) {
+  if (playMode === GUESS_PLAY_MODES.SILHOUETTE) {
+    return "Nur die schwarze Form erkennen.";
+  }
+
+  if (playMode === GUESS_PLAY_MODES.PIXEL) {
+    return "Das Bild ist verpixelt und wird leichter.";
+  }
+
+  if (playMode === GUESS_PLAY_MODES.DISTORTED) {
+    return "Das Pokémon wird verzerrt dargestellt.";
+  }
+
+  if (playMode === GUESS_PLAY_MODES.STATS) {
+    return "Du siehst nur die Basiswerte.";
+  }
+
+  return "Du spielst mit mehreren Hinweisen.";
+}
+
+function getSelectedGensSummary(selectedGens) {
+  const safeGens = Array.isArray(selectedGens)
+    ? [...selectedGens].sort((a, b) => a - b)
+    : [];
+
+  if (safeGens.length === GENERATION_OPTIONS.length) {
+    return "Alle";
+  }
+
+  if (safeGens.length === 1) {
+    return `Gen ${safeGens[0]}`;
+  }
+
+  return "Spezifisch";
+}
 
 export default function PokemonGuessSolo() {
   const navigate = useNavigate();
@@ -105,10 +185,20 @@ export default function PokemonGuessSolo() {
   const [round, setRound] = useState(null);
   const [finished, setFinished] = useState(false);
   const [guessInput, setGuessInput] = useState("");
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [loadingText, setLoadingText] = useState("");
   const [loadError, setLoadError] = useState("");
   const [paused, setPaused] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [highScores, setHighScores] = useState(readSoloHighScores);
+  const [lastResult, setLastResult] = useState(null);
+  const [openSections, setOpenSections] = useState({
+    fineSettings: false,
+    gameRules: false,
+    generations: false,
+    tipOrder: false,
+  });
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
 
   useEffect(() => {
     const saved = readSavedSoloGame();
@@ -126,6 +216,7 @@ export default function PokemonGuessSolo() {
       setLoadingText("");
       setLoadError("");
       setPaused(Boolean(saved.paused));
+      setLastResult(saved.lastResult || null);
     }
 
     setHydrated(true);
@@ -149,6 +240,7 @@ export default function PokemonGuessSolo() {
         round,
         finished,
         paused,
+        lastResult,
         savedAt: Date.now(),
       };
 
@@ -167,6 +259,7 @@ export default function PokemonGuessSolo() {
     round,
     finished,
     paused,
+    lastResult,
   ]);
 
   const effectiveRevealMode = getEffectiveRevealMode(settings);
@@ -196,16 +289,55 @@ export default function PokemonGuessSolo() {
     return getPokemonNameSuggestions(guessInput, pokemonPool);
   }, [guessInput, pokemonPool]);
 
+  useEffect(() => {
+    if (!guessInput.trim() || suggestions.length === 0) {
+      setSelectedSuggestionIndex(-1);
+      return;
+    }
+
+    setSelectedSuggestionIndex((current) => {
+      if (current >= suggestions.length) {
+        return suggestions.length - 1;
+      }
+
+      return current;
+    });
+  }, [guessInput, suggestions.length]);
+
   const canRevealMore =
     round &&
     !round.answered &&
     round.clueIndex < round.clues.length - 1 &&
     effectiveRevealMode !== GUESS_REVEAL_MODES.DIRECT;
 
-  const possiblePoints = getScoreForClue(
-    cluesUsedForScore,
-    round?.clues?.length || 1
+  const activeHighScoreKey = settings.endless ? "endless" : "normal";
+  const activeHighScore = highScores[activeHighScoreKey] || {
+    score: 0,
+    rounds: 0,
+  };
+  const activeHighScoreLabel = settings.endless
+    ? "Endless-Rekord"
+    : "Normal-Rekord";
+
+  const pointsPerCorrect = Math.max(
+    1,
+    Number(settings.pointsPerCorrect) || DEFAULT_GUESS_SETTINGS.pointsPerCorrect
   );
+  const minimumPointsPerCorrect = Math.max(
+    1,
+    Math.round(pointsPerCorrect * 0.15)
+  );
+
+  const possiblePoints = settings.endless
+    ? 1
+    : getScoreForClue(
+        cluesUsedForScore,
+        round?.clues?.length || 1,
+        pointsPerCorrect,
+        minimumPointsPerCorrect
+      );
+
+  const wrongPenaltyPoints = Math.max(1, Math.round(possiblePoints / 2));
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -219,6 +351,44 @@ export default function PokemonGuessSolo() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [gameStarted, finished]);
+
+    useEffect(() => {
+    function handleNextPokemonKey(event) {
+      if (!gameStarted || finished || paused || loadingText || !round?.answered) {
+        return;
+      }
+
+      if (!NEXT_POKEMON_KEYS.includes(event.key)) {
+        return;
+      }
+
+      const tagName = event.target?.tagName?.toLowerCase();
+
+      if (tagName === "input" || tagName === "textarea" || tagName === "select") {
+        return;
+      }
+
+      event.preventDefault();
+      goNextRound();
+    }
+
+    window.addEventListener("keydown", handleNextPokemonKey);
+    return () => window.removeEventListener("keydown", handleNextPokemonKey);
+  }, [
+    gameStarted,
+    finished,
+    paused,
+    loadingText,
+    round?.answered,
+    round?.id,
+    round?.correct,
+    settings.endless,
+    roundNumber,
+    settings.totalRounds,
+    score,
+    usedDexIds,
+    pokemonPool,
+  ]);
 
   useEffect(() => {
     if (!gameStarted || finished || paused || !round || round.answered) return;
@@ -263,6 +433,13 @@ export default function PokemonGuessSolo() {
         ...current[group],
         [key]: value,
       },
+    }));
+  }
+
+  function toggleSection(sectionKey) {
+    setOpenSections((current) => ({
+      ...current,
+      [sectionKey]: !current[sectionKey],
     }));
   }
 
@@ -407,9 +584,11 @@ export default function PokemonGuessSolo() {
       setScore(0);
       setFinished(false);
       setGuessInput("");
+      setSelectedSuggestionIndex(-1);
       setRound(firstRound);
       setGameStarted(true);
       setPaused(false);
+      setLastResult(null);
     } catch (error) {
       console.error(error);
       setLoadError(
@@ -430,7 +609,9 @@ export default function PokemonGuessSolo() {
     setRoundNumber(1);
     setScore(0);
     setGuessInput("");
+    setSelectedSuggestionIndex(-1);
     setLoadError("");
+    setLastResult(null);
   }
 
   function backToLobby() {
@@ -438,7 +619,7 @@ export default function PokemonGuessSolo() {
     navigate("/games/pokemon-guess");
   }
 
-  function submitGuess(event) {
+  async function submitGuess(event) {
     event.preventDefault();
 
     if (!round || round.answered || finished || loadingText || paused) return;
@@ -448,10 +629,42 @@ export default function PokemonGuessSolo() {
 
     const isCorrect = doesGuessMatch(round.target, cleanGuess);
 
+    if (settings.endless) {
+      const gainedScore = isCorrect ? 1 : 0;
+      const nextScore = score + gainedScore;
+
+      if (isCorrect) {
+        setScore(nextScore);
+        saveEndlessHighScore(nextScore, roundNumber);
+      } else {
+        saveEndlessHighScore(score, Math.max(0, roundNumber - 1));
+        setScore(0);
+      }
+
+      setRound((current) => {
+        if (!current) return current;
+
+        return {
+          ...current,
+          answered: true,
+          correct: isCorrect,
+          selectedName: cleanGuess,
+          wrongGuesses: isCorrect ? current.wrongGuesses : current.wrongGuesses + 1,
+          gainedScore,
+          streakBeforeReset: isCorrect ? nextScore : score,
+        };
+      });
+
+      setGuessInput("");
+      return;
+    }
+
     if (isCorrect) {
       const gainedScore = getScoreForClue(
         cluesUsedForScore,
-        round.clues.length
+        round.clues.length,
+        pointsPerCorrect,
+        minimumPointsPerCorrect
       );
 
       setScore((current) => current + gainedScore);
@@ -464,6 +677,10 @@ export default function PokemonGuessSolo() {
       }));
       setGuessInput("");
       return;
+    }
+
+    if (settings.wrongPenaltyEnabled) {
+      setScore((current) => Math.max(0, current - wrongPenaltyPoints));
     }
 
     setRound((current) => {
@@ -505,9 +722,103 @@ export default function PokemonGuessSolo() {
     }));
   }
 
+    function saveEndlessHighScore(nextScore, completedRounds = roundNumber) {
+    setHighScores((current) => {
+      const previousScore = Number(current.endless?.score) || 0;
+
+      if (nextScore <= previousScore) {
+        return current;
+      }
+
+      const nextHighScores = {
+        ...current,
+        endless: {
+          score: nextScore,
+          rounds: completedRounds,
+          playMode: settings.playMode,
+          selectedGens: settings.selectedGens,
+          savedAt: Date.now(),
+        },
+      };
+
+      writeSoloHighScores(nextHighScores);
+      return nextHighScores;
+    });
+  }
+
+  async function goNextEndlessRound() {
+    setLoadingText("Nächstes Pokémon wird vorbereitet...");
+
+    try {
+      const shouldResetUsed =
+        pokemonPool.length > 0 && usedDexIds.length >= pokemonPool.length;
+      const blockedDexIds = shouldResetUsed ? [] : usedDexIds;
+      const nextRound = await buildRound(pokemonPool, blockedDexIds);
+
+      setRoundNumber((current) => current + 1);
+      setUsedDexIds((current) =>
+        shouldResetUsed
+          ? [nextRound.target.dexId]
+          : [...current, nextRound.target.dexId]
+      );
+      setGuessInput("");
+      setSelectedSuggestionIndex(-1);
+      setRound(nextRound);
+      setPaused(false);
+    } catch (error) {
+      console.error(error);
+      setLoadError("Das nächste Pokémon konnte nicht geladen werden.");
+    } finally {
+      setLoadingText("");
+    }
+  }
+
+  function finishGame(finalScore = score, completedRounds = usedDexIds.length) {
+    const scoreKey = settings.endless ? "endless" : "normal";
+    const previousHighScore = highScores[scoreKey] || DEFAULT_SOLO_HIGH_SCORES[scoreKey];
+    const previousScore = Number(previousHighScore.score) || 0;
+    const safeScore = Number(finalScore) || 0;
+    const safeRounds = Math.max(0, Number(completedRounds) || 0);
+    const isNewHighScore = safeScore > previousScore;
+
+    const nextResult = {
+      score: safeScore,
+      rounds: safeRounds,
+      scoreKey,
+      previousScore,
+      highScore: isNewHighScore ? safeScore : previousScore,
+      isNewHighScore,
+      savedAt: Date.now(),
+    };
+
+    if (isNewHighScore) {
+      const nextHighScores = {
+        ...highScores,
+        [scoreKey]: {
+          score: safeScore,
+          rounds: safeRounds,
+          playMode: settings.playMode,
+          selectedGens: settings.selectedGens,
+          savedAt: Date.now(),
+        },
+      };
+
+      setHighScores(nextHighScores);
+      writeSoloHighScores(nextHighScores);
+    }
+
+    setLastResult(nextResult);
+    setFinished(true);
+  }
+
   async function goNextRound() {
-    if (roundNumber >= settings.totalRounds) {
-      setFinished(true);
+    if (settings.endless) {
+      await goNextEndlessRound();
+      return;
+    }
+
+    if (!settings.endless && roundNumber >= settings.totalRounds) {
+      finishGame(score, usedDexIds.length);
       return;
     }
 
@@ -519,11 +830,18 @@ export default function PokemonGuessSolo() {
       setRoundNumber((current) => current + 1);
       setUsedDexIds((current) => [...current, nextRound.target.dexId]);
       setGuessInput("");
+      setSelectedSuggestionIndex(-1);
       setRound(nextRound);
       setPaused(false);
     } catch (error) {
       console.error(error);
-      setLoadError("Die nächste Runde konnte nicht geladen werden.");
+
+      if (settings.endless) {
+        finishGame(score, usedDexIds.length);
+        setLoadError("Alle ausgewählten Pokémon wurden gespielt. Ergebnis wird angezeigt.");
+      } else {
+        setLoadError("Die nächste Runde konnte nicht geladen werden.");
+      }
     } finally {
       setLoadingText("");
     }
@@ -563,96 +881,67 @@ export default function PokemonGuessSolo() {
                 <div>
                   <h2>Modus wählen</h2>
                   <p>
-                    Jeder Modus verändert, welche Hinweise du bekommst und wie
-                    schwer die Runde wird.
+                    Wähle zuerst den Spielmodus. Die Detailoptionen findest du
+                    weiter unten übersichtlich in Ausklappbereichen.
                   </p>
                 </div>
               </div>
 
-              <div className="solo-mode-card-grid">
-                {Object.entries(GUESS_PLAY_MODE_LABELS).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={
-                      settings.playMode === value
-                        ? "solo-mode-card solo-mode-card-active"
-                        : "solo-mode-card"
-                    }
-                    onClick={() => setPlayMode(value)}
-                  >
-                    <span className="solo-mode-card-badge">
-                      {label.slice(0, 2).toUpperCase()}
-                    </span>
+              <button
+                type="button"
+                className="solo-mode-picker-button"
+                onClick={() => setModeMenuOpen(true)}
+              >
+                <span className="solo-mode-picker-badge">
+                  {GUESS_PLAY_MODE_LABELS[settings.playMode].slice(0, 2).toUpperCase()}
+                </span>
 
-                    <span className="solo-mode-card-content">
-                      <strong>{label}</strong>
-                      <small>
-                        {value === GUESS_PLAY_MODES.SILHOUETTE &&
-                          "Nur die schwarze Form erkennen."}
-                        {value === GUESS_PLAY_MODES.PIXEL &&
-                          "Das Bild ist verpixelt und wird leichter."}
-                        {value === GUESS_PLAY_MODES.DISTORTED &&
-                          "Das Pokémon wird verzerrt dargestellt."}
-                        {value === GUESS_PLAY_MODES.STATS &&
-                          "Du siehst nur die Basiswerte."}
-                        {value === GUESS_PLAY_MODES.TIPS &&
-                          "Du spielst mit mehreren Hinweisen."}
-                      </small>
-                    </span>
-                  </button>
-                ))}
-              </div>
+                <span className="solo-mode-picker-content">
+                  <small>Aktueller Modus</small>
+                  <strong>{GUESS_PLAY_MODE_LABELS[settings.playMode]}</strong>
+                  <em>{getPlayModeDescription(settings.playMode)}</em>
+                </span>
 
-              <ModeOptions
-                settings={settings}
-                updateSetting={updateSetting}
-                updateVisualSettings={updateVisualSettings}
-                effectiveRevealMode={effectiveRevealMode}
-              />
+                <span className="solo-mode-picker-arrow">›</span>
+              </button>
 
-              <div className="solo-settings-row">
-                <label>
-                  <span>Runden</span>
-                  <input
-                    className="solo-number-input"
-                    type="number"
-                    min="1"
-                    max="50"
-                    value={settings.totalRounds}
-                    onChange={(event) =>
-                      updateSetting(
-                        "totalRounds",
-                        Math.max(1, Number(event.target.value) || 1)
-                      )
-                    }
-                  />
-                </label>
+              {modeMenuOpen && (
+                <ModePickerModal
+                  activeMode={settings.playMode}
+                  onClose={() => setModeMenuOpen(false)}
+                  onPick={(playMode) => {
+                    setPlayMode(playMode);
+                    setModeMenuOpen(false);
+                  }}
+                />
+              )}
+              <label
+                className={
+                  settings.endless
+                    ? "solo-endless-card solo-endless-card-active"
+                    : "solo-endless-card"
+                }
+              >
+                <span className="solo-endless-card-content">
+                  <strong>Endless-Modus</strong>
+                  <small>
+                    1 Versuch pro Pokémon. Richtig gibt 1 Punkt, falsch springt
+                    direkt zum nächsten Pokémon.
+                  </small>
+                </span>
 
-                {effectiveRevealMode === GUESS_REVEAL_MODES.TIME && (
-                  <label>
-                    <span>Sekunden pro Stufe</span>
-                    <input
-                      className="solo-number-input"
-                      type="number"
-                      min="2"
-                      max="60"
-                      value={settings.secondsPerClue}
-                      onChange={(event) =>
-                        updateSetting(
-                          "secondsPerClue",
-                          Math.max(2, Number(event.target.value) || 8)
-                        )
-                      }
-                    />
-                  </label>
-                )}
-              </div>
+                <span className="solo-endless-card-score">
+                  Rekord: {highScores.endless.score}
+                </span>
 
-              <div className="solo-points-note">
-                Früh lösen gibt bis zu <strong>300 Punkte</strong>. Je mehr
-                Hinweise du brauchst, desto weniger Punkte bekommst du.
-              </div>
+                <input
+                  type="checkbox"
+                  checked={settings.endless}
+                  onChange={(event) =>
+                    updateSetting("endless", event.target.checked)
+                  }
+                />
+              </label>
             </section>
 
             <aside className="solo-clean-card solo-preview-card">
@@ -660,10 +949,6 @@ export default function PokemonGuessSolo() {
                 <span>02</span>
                 <div>
                   <h2>Vorschau</h2>
-                  <p>
-                    Beispiel mit Pikachu. So sieht der aktuell gewählte Modus
-                    später im Spiel aus.
-                  </p>
                 </div>
               </div>
 
@@ -672,127 +957,230 @@ export default function PokemonGuessSolo() {
               </div>
             </aside>
 
-            <section className="solo-clean-card solo-wide-card">
-              <div className="solo-clean-section-head solo-clean-section-head-row">
+            <section className="solo-clean-card solo-wide-card solo-options-card-compact">
+              <div className="solo-clean-section-head solo-options-head-compact">
                 <span>03</span>
-
                 <div>
-                  <h2>Generationen</h2>
+                  <h2>Spieloptionen</h2>
                   <p>
-                    Wähle einzelne Generationen oder direkt alle. Pro Spiel
-                    kommt jedes Pokémon maximal einmal.
+                    Öffne nur die Bereiche, die du wirklich anpassen möchtest.
                   </p>
                 </div>
+              </div>
 
-                <button
-                  type="button"
-                  className="solo-secondary-button"
-                  onClick={selectAllGenerations}
+              <div className="solo-accordion-group">
+                <AccordionSection
+                  title="Fein-Einstellungen"
+                  description="Bild, Hinweise und Aufdecken."
+                  open={openSections.fineSettings}
+                  onToggle={() => toggleSection("fineSettings")}
                 >
-                  Alle auswählen
-                </button>
-              </div>
+                  <ModeOptions
+                    settings={settings}
+                    updateSetting={updateSetting}
+                    updateVisualSettings={updateVisualSettings}
+                    effectiveRevealMode={effectiveRevealMode}
+                    isEndless={settings.endless}
+                  />
+                </AccordionSection>
 
-              <div className="solo-gen-grid">
-                {GENERATION_OPTIONS.map((gen) => {
-                  const isActive = settings.selectedGens.includes(gen);
-
-                  return (
-                    <div
-                      key={gen}
-                      className={
-                        isActive
-                          ? "solo-gen-card solo-gen-card-active"
-                          : "solo-gen-card"
-                      }
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => toggleGeneration(gen)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          toggleGeneration(gen);
+                {!settings.endless && (
+                <AccordionSection
+                  title="Spielregeln"
+                  description="Runden, Endless und Rekorde."
+                  open={openSections.gameRules}
+                  onToggle={() => toggleSection("gameRules")}
+                >
+                  <div className="solo-settings-row solo-rules-settings-row">
+                    <label>
+                      <span>Runden</span>
+                      <input
+                        className="solo-number-input"
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={settings.totalRounds}
+                        disabled={settings.endless}
+                        onChange={(event) =>
+                          updateSetting(
+                            "totalRounds",
+                            Math.max(1, Number(event.target.value) || 1)
+                          )
                         }
-                      }}
-                    >
-                      <div className="solo-gen-card-top">
-                        <span className="solo-gen-mini-switch">
-                          <input
-                            type="checkbox"
-                            checked={isActive}
-                            readOnly
-                            tabIndex={-1}
-                          />
-                        </span>
+                      />
+                    </label>
 
-                        <span className="solo-gen-title">Gen {gen}</span>
-                      </div>
+                    <label>
+                      <span>Max Punkte pro richtig</span>
+                      <input
+                        className="solo-number-input"
+                        type="number"
+                        min="1"
+                        max="9999"
+                        value={settings.pointsPerCorrect}
+                        onChange={(event) =>
+                          updateSetting(
+                            "pointsPerCorrect",
+                            Math.max(1, Number(event.target.value) || 1)
+                          )
+                        }
+                      />
+                    </label>
 
-                      <button
-                        type="button"
-                        className="solo-gen-only-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          selectOnlyGeneration(gen);
-                        }}
-                      >
-                        Nur
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+                    <label className="solo-rule-toggle-card">
+                      <span>Minus bei Fehler</span>
+                      <input
+                        type="checkbox"
+                        checked={settings.wrongPenaltyEnabled}
+                        onChange={(event) =>
+                          updateSetting("wrongPenaltyEnabled", event.target.checked)
+                        }
+                      />
+                    </label>
 
-            {settings.playMode === GUESS_PLAY_MODES.TIPS && (
-              <section className="solo-clean-card solo-wide-card">
-                <div className="solo-clean-section-head">
-                  <span>04</span>
-                  <div>
-                    <h2>Tipp-Reihenfolge</h2>
-                    <p>
-                      Nur im Tipps-Modus. Die Hinweise oben kommen zuerst.
-                    </p>
+                    {effectiveRevealMode === GUESS_REVEAL_MODES.TIME && (
+                      <label>
+                        <span>Sekunden pro Stufe</span>
+                        <input
+                          className="solo-number-input"
+                          type="number"
+                          min="2"
+                          max="60"
+                          value={settings.secondsPerClue}
+                          onChange={(event) =>
+                            updateSetting(
+                              "secondsPerClue",
+                              Math.max(2, Number(event.target.value) || 8)
+                            )
+                          }
+                        />
+                      </label>
+                    )}
                   </div>
-                </div>
+                </AccordionSection>
+                )}
 
-                <div className="solo-tip-order-list">
-                  {settings.tipOrder.map((clueType, index) => (
-                    <div key={clueType} className="solo-tip-order-item">
-                      <span>
-                        {index + 1}. {GUESS_CLUE_LABELS[clueType]}
+                <AccordionSection
+                  title="Generationen"
+                  description="Gen-Filter."
+                  open={openSections.generations}
+                  onToggle={() => toggleSection("generations")}
+                  rightSlot={
+                    <div className="solo-gen-accordion-actions">
+                      <span className="solo-gen-summary-pill">
+                        {getSelectedGensSummary(settings.selectedGens)}
                       </span>
 
-                      <div>
-                        <button type="button" onClick={() => moveTip(index, -1)}>
-                          ↑
-                        </button>
-                        <button type="button" onClick={() => moveTip(index, 1)}>
-                          ↓
-                        </button>
-                        <button type="button" onClick={() => removeTip(index)}>
-                          Entfernen
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="solo-add-tip-list">
-                  {getAvailableTipTypes()
-                    .filter((clueType) => !settings.tipOrder.includes(clueType))
-                    .map((clueType) => (
                       <button
-                        key={clueType}
                         type="button"
-                        onClick={() => addTip(clueType)}
+                        className="solo-secondary-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          selectAllGenerations();
+                        }}
                       >
-                        + {GUESS_CLUE_LABELS[clueType]}
+                        Alle
                       </button>
-                    ))}
-                </div>
-              </section>
-            )}
+                    </div>
+                  }
+                >
+                  <div className="solo-gen-grid">
+                    {GENERATION_OPTIONS.map((gen) => {
+                      const isActive = settings.selectedGens.includes(gen);
+
+                      return (
+                        <div
+                          key={gen}
+                          className={
+                            isActive
+                              ? "solo-gen-card solo-gen-card-active"
+                              : "solo-gen-card"
+                          }
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => toggleGeneration(gen)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleGeneration(gen);
+                            }
+                          }}
+                        >
+                          <div className="solo-gen-card-top">
+                            <span className="solo-gen-mini-switch">
+                              <input
+                                type="checkbox"
+                                checked={isActive}
+                                readOnly
+                                tabIndex={-1}
+                              />
+                            </span>
+
+                            <span className="solo-gen-title">Gen {gen}</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            className="solo-gen-only-button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              selectOnlyGeneration(gen);
+                            }}
+                          >
+                            Nur
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </AccordionSection>
+
+                {settings.playMode === GUESS_PLAY_MODES.TIPS && (
+                  <AccordionSection
+                    title="Tipp-Reihenfolge"
+                    description="Nur im Tipps-Modus. Die Hinweise oben kommen zuerst."
+                    open={openSections.tipOrder}
+                    onToggle={() => toggleSection("tipOrder")}
+                  >
+                    <div className="solo-tip-order-list">
+                      {settings.tipOrder.map((clueType, index) => (
+                        <div key={clueType} className="solo-tip-order-item">
+                          <span>
+                            {index + 1}. {GUESS_CLUE_LABELS[clueType]}
+                          </span>
+
+                          <div>
+                            <button type="button" onClick={() => moveTip(index, -1)}>
+                              ↑
+                            </button>
+                            <button type="button" onClick={() => moveTip(index, 1)}>
+                              ↓
+                            </button>
+                            <button type="button" onClick={() => removeTip(index)}>
+                              Entfernen
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="solo-add-tip-list">
+                      {getAvailableTipTypes()
+                        .filter((clueType) => !settings.tipOrder.includes(clueType))
+                        .map((clueType) => (
+                          <button
+                            key={clueType}
+                            type="button"
+                            onClick={() => addTip(clueType)}
+                          >
+                            + {GUESS_CLUE_LABELS[clueType]}
+                          </button>
+                        ))}
+                    </div>
+                  </AccordionSection>
+                )}
+              </div>
+            </section>
           </div>
 
           {loadingText && (
@@ -841,16 +1229,18 @@ export default function PokemonGuessSolo() {
           <div>
             <p className="guess-kicker">Pokémon Guess</p>
             <h1>Wer ist dieses Pokémon?</h1>
-            <p className="games-subtitle">
-              Schreibe den deutschen Namen. Mit <strong>ESC</strong> pausierst du.
-            </p>
           </div>
 
           <div className="guess-score-box">
             <span>
-              Runde {roundNumber}/{settings.totalRounds}
+              {settings.endless
+                ? "Endless"
+                : `Runde ${roundNumber}/${settings.totalRounds}`}
             </span>
-            <strong>{score} Punkte</strong>
+            <strong>{score === 1 ? "1 Punkt" : `${score} Punkte`}</strong>
+            <small>
+              {activeHighScoreLabel}: {activeHighScore.score}
+            </small>
           </div>
         </div>
 
@@ -864,41 +1254,171 @@ export default function PokemonGuessSolo() {
               Dein Ergebnis: <strong>{score}</strong> Punkte
             </p>
 
+            {lastResult?.isNewHighScore ? (
+              <p>
+                Neuer {activeHighScoreLabel}:{" "}
+                <strong>{lastResult.highScore}</strong> Punkte!
+              </p>
+            ) : (
+              <p>
+                {activeHighScoreLabel}:{" "}
+                <strong>{activeHighScore.score}</strong> Punkte
+              </p>
+            )}
+
+            {lastResult?.rounds > 0 && (
+              <p>
+                Gespielte Runden: <strong>{lastResult.rounds}</strong>
+              </p>
+            )}
+
             <button className="guess-next-button" type="button" onClick={backToSettings}>
               Zurück zu den Einstellungen
             </button>
           </div>
         ) : (
           <>
-            <div className="guess-clue-card">
-              <div className="guess-clue-label">
-                <span>
-                  Hinweise {visibleClues.length}/{round.clues.length}
-                </span>
-                {!round.answered && <strong>{possiblePoints} Punkte möglich</strong>}
+            <div
+              className={
+                round.answered
+                  ? "guess-round-layout guess-round-layout-resolved"
+                  : "guess-round-layout"
+              }
+            >
+              <div className="guess-clue-card">
+                <div className="guess-clue-label">
+                  <span>
+                    Hinweise {visibleClues.length}/{round.clues.length}
+                  </span>
+                  {!round.answered && <strong>{possiblePoints} Punkte möglich</strong>}
+                </div>
+
+                <ClueStack clues={visibleClues} target={round.target} revealed={false} />
               </div>
 
-              <ClueStack clues={visibleClues} target={round.target} revealed={round.answered} />
+              {round.answered && (
+                <div className="guess-result-box guess-resolution-box">
+                  <img
+                    className="guess-result-pokemon-image"
+                    src={round.target.imageUrl}
+                    alt={round.target.name}
+                    draggable="false"
+                  />
+
+                  {round.correct ? (
+                    <>
+                      <h2>Richtig!</h2>
+                      <p>
+                        Es war <strong>{round.target.name}</strong>.
+                      </p>
+                      <p>+{round.gainedScore} Punkte</p>
+                    </>
+                  ) : (
+                    <>
+                      <h2>Falsch!</h2>
+                      <p>
+                        Es war <strong>{round.target.name}</strong>.
+                      </p>
+
+                      {round.selectedName && (
+                        <p className="guess-result-small-text">
+                          Dein Guess: <strong>{round.selectedName}</strong>
+                        </p>
+                      )}
+                    </>
+                  )}
+
+                  <button
+                    className="guess-next-button"
+                    type="button"
+                    onClick={goNextRound}
+                    disabled={Boolean(loadingText)}
+                  >
+                    {!settings.endless && roundNumber >= settings.totalRounds
+                      ? "Ergebnis anzeigen"
+                      : "Nächstes Pokémon"}
+                  </button>
+
+                  <p className="guess-next-shortcut-hint">
+                    Enter oder Leertaste für nächstes Pokémon
+                  </p>
+                </div>
+              )}
             </div>
 
             {!round.answered && (
               <>
                 <form className="guess-input-row" onSubmit={submitGuess}>
-                  <input
-                    className="guess-name-input"
-                    value={guessInput}
-                    onChange={(event) => setGuessInput(event.target.value)}
-                    placeholder="Pokémon-Name eingeben..."
-                    list="pokemon-guess-suggestions"
-                    autoFocus
-                    disabled={Boolean(loadingText) || paused}
-                  />
+                  <div className="guess-input-suggestion-wrap">
+                    <input
+                      className="guess-name-input"
+                      value={guessInput}
+                      onChange={(event) => {
+                        setGuessInput(event.target.value);
+                        setSelectedSuggestionIndex(-1);
+                      }}
+                      onKeyDown={(event) => {
+                        if (!guessInput.trim() || suggestions.length === 0) {
+                          return;
+                        }
 
-                  <datalist id="pokemon-guess-suggestions">
-                    {suggestions.map((pokemon) => (
-                      <option key={pokemon.dexId} value={pokemon.name} />
-                    ))}
-                  </datalist>
+                        if (event.key === "ArrowDown") {
+                          event.preventDefault();
+                          setSelectedSuggestionIndex((current) =>
+                            current < suggestions.length - 1 ? current + 1 : 0
+                          );
+                          return;
+                        }
+
+                        if (event.key === "ArrowUp") {
+                          event.preventDefault();
+                          setSelectedSuggestionIndex((current) =>
+                            current > 0 ? current - 1 : suggestions.length - 1
+                          );
+                          return;
+                        }
+
+                        if (event.key === "Enter" && selectedSuggestionIndex >= 0) {
+                          event.preventDefault();
+                          setGuessInput(suggestions[selectedSuggestionIndex].name);
+                          setSelectedSuggestionIndex(-1);
+                          return;
+                        }
+
+                        if (event.key === "Escape") {
+                          setSelectedSuggestionIndex(-1);
+                        }
+                      }}
+                      placeholder="Pokémon-Name eingeben..."
+                      autoFocus
+                      autoComplete="off"
+                      disabled={Boolean(loadingText) || paused}
+                    />
+
+                    {guessInput.trim() && suggestions.length > 0 && (
+                      <div className="guess-suggestion-menu">
+                        {suggestions.map((pokemon, index) => (
+                          <button
+                            key={pokemon.dexId}
+                            type="button"
+                            className={
+                              selectedSuggestionIndex === index
+                                ? "guess-suggestion-option guess-suggestion-option-active"
+                                : "guess-suggestion-option"
+                            }
+                            onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              setGuessInput(pokemon.name);
+                              setSelectedSuggestionIndex(-1);
+                            }}
+                          >
+                            {pokemon.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   <button
                     className="guess-submit-button"
@@ -941,38 +1461,6 @@ export default function PokemonGuessSolo() {
                 </div>
               </>
             )}
-
-            {round.answered && (
-              <div className="guess-result-box">
-                {round.correct ? (
-                  <>
-                    <h2>Richtig!</h2>
-                    <p>
-                      Es war <strong>{round.target.name}</strong>.
-                    </p>
-                    <p>+{round.gainedScore} Punkte</p>
-                  </>
-                ) : (
-                  <>
-                    <h2>Aufgelöst!</h2>
-                    <p>
-                      Es war <strong>{round.target.name}</strong>.
-                    </p>
-                  </>
-                )}
-
-                <button
-                  className="guess-next-button"
-                  type="button"
-                  onClick={goNextRound}
-                  disabled={Boolean(loadingText)}
-                >
-                  {roundNumber >= settings.totalRounds
-                    ? "Ergebnis anzeigen"
-                    : "Nächste Runde"}
-                </button>
-              </div>
-            )}
           </>
         )}
 
@@ -999,11 +1487,112 @@ export default function PokemonGuessSolo() {
   );
 }
 
-function ModeOptions({ settings, updateSetting, updateVisualSettings, effectiveRevealMode }) {
+function ModePickerModal({ activeMode, onPick, onClose }) {
+  return (
+    <div
+      className="solo-mode-modal-backdrop"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="solo-mode-modal"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="solo-mode-modal-head">
+          <div>
+            <h2>Modus wählen</h2>
+            <p>Wähle, wie das Pokémon versteckt oder beschrieben wird.</p>
+          </div>
+
+          <button
+            type="button"
+            className="solo-mode-modal-close"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="solo-mode-modal-grid">
+          {Object.entries(GUESS_PLAY_MODE_LABELS).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={
+                activeMode === value
+                  ? "solo-mode-modal-card solo-mode-modal-card-active"
+                  : "solo-mode-modal-card"
+              }
+              onClick={() => onPick(value)}
+            >
+              <span>{label.slice(0, 2).toUpperCase()}</span>
+
+              <div>
+                <strong>{label}</strong>
+                <small>{getPlayModeDescription(value)}</small>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AccordionSection({
+  title,
+  description,
+  open,
+  onToggle,
+  children,
+  rightSlot = null,
+}) {
+  return (
+    <div className={open ? "solo-accordion solo-accordion-open" : "solo-accordion"}>
+      <div className="solo-accordion-trigger">
+        <button
+          type="button"
+          className="solo-accordion-main-button"
+          onClick={onToggle}
+        >
+          <div className="solo-accordion-trigger-left">
+            <div className="solo-accordion-title-row">
+              <strong>{title}</strong>
+              <span className="solo-accordion-arrow">{open ? "−" : "+"}</span>
+            </div>
+
+            {description ? (
+              <p className="solo-accordion-description">{description}</p>
+            ) : null}
+          </div>
+        </button>
+
+        {rightSlot ? (
+          <div className="solo-accordion-trigger-right">
+            {rightSlot}
+          </div>
+        ) : null}
+      </div>
+
+      {open && <div className="solo-accordion-body">{children}</div>}
+    </div>
+  );
+}
+
+function ModeOptions({
+  settings,
+  updateSetting,
+  updateVisualSettings,
+  effectiveRevealMode,
+  isEndless,
+}) {
   const showReveal =
-    settings.playMode === GUESS_PLAY_MODES.TIPS ||
-    settings.playMode === GUESS_PLAY_MODES.PIXEL ||
-    settings.playMode === GUESS_PLAY_MODES.DISTORTED;
+    !isEndless &&
+    (
+      settings.playMode === GUESS_PLAY_MODES.TIPS ||
+      settings.playMode === GUESS_PLAY_MODES.PIXEL ||
+      settings.playMode === GUESS_PLAY_MODES.DISTORTED
+    );
 
   return (
     <div className="solo-mode-options">
@@ -1107,21 +1696,45 @@ function ModeOptions({ settings, updateSetting, updateVisualSettings, effectiveR
 }
 
 function SliderRow({ label, value, min, max, onChange }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const values = Array.from(
+    { length: Math.max(1, max - min + 1) },
+    (_, index) => min + index
+  );
+
   return (
-    <label className="solo-slider-row">
-      <div>
+    <div className="solo-level-picker">
+      <button
+        type="button"
+        className="solo-level-picker-button"
+        onClick={() => setMenuOpen((current) => !current)}
+      >
         <span>{label}</span>
         <strong>{value}/{max}</strong>
-      </div>
+      </button>
 
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
+      {menuOpen && (
+        <div className="solo-level-picker-menu">
+          {values.map((optionValue) => (
+            <button
+              key={optionValue}
+              type="button"
+              className={
+                optionValue === value
+                  ? "solo-level-picker-option solo-level-picker-option-active"
+                  : "solo-level-picker-option"
+              }
+              onClick={() => {
+                onChange(optionValue);
+                setMenuOpen(false);
+              }}
+            >
+              Stufe {optionValue}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

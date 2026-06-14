@@ -28,6 +28,7 @@ import TeamCompare from "./pages/TeamCompare.jsx";
 import GamesHub from "./games/GamesHub";
 import PokemonGuessMenu from "./games/PokemonGuessMenu";
 import PokemonGuessSolo from "./games/PokemonGuessSolo";
+import PokemonHigherLower from "./games/PokemonHigherLower";
 import OnlineGuessMenu from "./online/OnlineGuessMenu";
 import OnlineGuessLobby from "./online/OnlineGuessLobby";
 import OnlineGuessGame from "./online/OnlineGuessGame";
@@ -69,12 +70,15 @@ function AppContent() {
       <GlobalEscapeMenu />
       <Routes>
         <Route path="/" element={<HomeMode />} />
+
         <Route path="/games" element={<GamesHub />} />
         <Route path="/games/pokemon-guess" element={<PokemonGuessMenu />} />
         <Route path="/games/pokemon-guess/solo" element={<PokemonGuessSolo />} />
+        <Route path="/games/higher-lower" element={<PokemonHigherLower />} />
         <Route path="/games/pokemon-guess/online" element={<OnlineGuessMenu />} />
         <Route path="/games/pokemon-guess/online/:roomCode" element={<OnlineGuessLobby />} />
         <Route path="/games/pokemon-guess/online/:roomCode/game" element={<OnlineGuessGame />} />
+
         <Route path="/solo" element={<SaveGameManager />} />
         <Route path="/table" element={<EncounterTable />} />
         <Route path="/team" element={<TeamManager />} />

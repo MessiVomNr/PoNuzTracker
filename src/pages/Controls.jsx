@@ -209,6 +209,7 @@ export default function Controls() {
   const general = hk.general || DEFAULT_HOTKEYS.general;
   const draft = hk.draft || DEFAULT_HOTKEYS.draft;
   const soullink = hk.soullink || DEFAULT_HOTKEYS.soullink;
+  const games = hk.games || DEFAULT_HOTKEYS.games;
 
   function setHotkeyChecked(scope, key, value) {
     const v = normalizeKeyCombo(value);
@@ -270,8 +271,8 @@ export default function Controls() {
           <button style={tab === "draft" ? tabBtnActive : tabBtn} onClick={() => setTab("draft")}>
             Draft
           </button>
-          <button style={tab === "soullink" ? tabBtnActive : tabBtn} onClick={() => setTab("soullink")}>
-            Soullink
+          <button style={tab === "games" ? tabBtnActive : tabBtn} onClick={() => setTab("games")}>
+            Games
           </button>
         </div>
       </div>
@@ -426,6 +427,36 @@ export default function Controls() {
           />
         </div>
       )}
+      
+      {tab === "games" && (
+        <div style={{ ...card, marginTop: 12, display: "grid", gap: 12 }}>
+          <Row
+            title={labelHotkey("games", "higherLowerHigher")}
+            value={games.higherLowerHigher}
+            conflict={conflicts["games.higherLowerHigher"]}
+            onChange={(v) => setHotkeyChecked("games", "higherLowerHigher", v)}
+          />
+          <Row
+            title={labelHotkey("games", "higherLowerLower")}
+            value={games.higherLowerLower}
+            conflict={conflicts["games.higherLowerLower"]}
+            onChange={(v) => setHotkeyChecked("games", "higherLowerLower", v)}
+          />
+          <Row
+            title={labelHotkey("games", "higherLowerEqual")}
+            value={games.higherLowerEqual}
+            conflict={conflicts["games.higherLowerEqual"]}
+            onChange={(v) => setHotkeyChecked("games", "higherLowerEqual", v)}
+          />
+          <Row
+            title={labelHotkey("games", "nextPokemon")}
+            value={games.nextPokemon}
+            conflict={conflicts["games.nextPokemon"]}
+            onChange={(v) => setHotkeyChecked("games", "nextPokemon", v)}
+          />
+        </div>
+      )}
+
       </div>
     </div>
   );

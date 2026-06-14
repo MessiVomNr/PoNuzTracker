@@ -3021,6 +3021,172 @@ button.game-card-disabled:hover {
   cursor: wait !important;
 }
 
+/* Pokemon Guess Solo accordion cleanup */
+.solo-inline-note {
+  margin-top: 16px !important;
+  padding: 13px 14px !important;
+  border: 1px solid rgba(74, 222, 128, 0.2) !important;
+  border-radius: 9px !important;
+  background: rgba(20, 83, 45, 0.18) !important;
+  color: rgba(220, 252, 231, 0.84) !important;
+  font-size: 0.92rem !important;
+  font-weight: 650 !important;
+  line-height: 1.45 !important;
+}
+
+.solo-accordion-group {
+  display: grid !important;
+  gap: 12px !important;
+}
+
+.solo-accordion {
+  overflow: hidden !important;
+  border: 1px solid rgba(137, 155, 184, 0.2) !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(180deg, rgba(10, 19, 34, 0.72), rgba(8, 15, 28, 0.72)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 8px 18px rgba(0, 0, 0, 0.14) !important;
+}
+
+.solo-accordion-open {
+  border-color: rgba(86, 220, 170, 0.34) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(11, 25, 36, 0.82), rgba(8, 15, 28, 0.82)) !important;
+}
+
+.solo-accordion-trigger {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 14px !important;
+  padding: 0 !important;
+}
+
+.solo-accordion-main-button {
+  width: 100% !important;
+  min-width: 0 !important;
+  display: grid !important;
+  padding: 16px 18px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #f8fafc !important;
+  text-align: left !important;
+  cursor: pointer !important;
+}
+
+.solo-accordion-main-button:hover {
+  background: rgba(255, 255, 255, 0.025) !important;
+}
+
+.solo-accordion-trigger-left {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 5px !important;
+}
+
+.solo-accordion-title-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.solo-accordion-title-row strong {
+  color: #ffffff !important;
+  font-size: 1rem !important;
+  font-weight: 950 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.solo-accordion-arrow {
+  width: 30px !important;
+  height: 30px !important;
+  display: grid !important;
+  place-items: center !important;
+  flex: 0 0 auto !important;
+  border: 1px solid rgba(165, 180, 205, 0.24) !important;
+  border-radius: 50% !important;
+  color: rgba(220, 252, 231, 0.94) !important;
+  background: rgba(5, 11, 21, 0.42) !important;
+  font-size: 1.05rem !important;
+  font-weight: 950 !important;
+  line-height: 1 !important;
+}
+
+.solo-accordion-open .solo-accordion-arrow {
+  color: #052e16 !important;
+  border-color: rgba(134, 239, 172, 0.7) !important;
+  background: linear-gradient(135deg, #34d399, #22c55e) !important;
+}
+
+.solo-accordion-description {
+  margin: 0 !important;
+  color: rgba(235, 241, 250, 0.66) !important;
+  font-size: 0.9rem !important;
+  font-weight: 600 !important;
+  line-height: 1.42 !important;
+}
+
+.solo-accordion-trigger-right {
+  padding-right: 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+}
+
+.solo-accordion-body {
+  padding: 0 18px 18px !important;
+  display: grid !important;
+  gap: 14px !important;
+  animation: soloAccordionIn 0.16s ease both !important;
+}
+
+@keyframes soloAccordionIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.solo-accordion-body .solo-mode-options {
+  margin-top: 0 !important;
+}
+
+.solo-accordion-body .solo-settings-row {
+  margin-top: 0 !important;
+}
+
+.solo-accordion-body .solo-points-note {
+  margin-top: 0 !important;
+}
+
+.solo-accordion-body .solo-gen-grid {
+  margin-top: 0 !important;
+}
+
+.solo-accordion-body .solo-tip-order-list {
+  margin-top: 0 !important;
+}
+
+.solo-number-input:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+.guess-score-box small {
+  color: rgba(203, 213, 225, 0.78) !important;
+  font-size: 0.78rem !important;
+  font-weight: 850 !important;
+}
+
 @media (max-width: 1040px) {
   .solo-clean-layout {
     grid-template-columns: 1fr !important;
@@ -3042,6 +3208,19 @@ button.game-card-disabled:hover {
 @media (max-width: 760px) {
   .solo-mode-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .solo-accordion-trigger {
+    grid-template-columns: 1fr !important;
+  }
+
+  .solo-accordion-trigger-right {
+    padding: 0 18px 16px !important;
+    justify-content: stretch !important;
+  }
+
+  .solo-accordion-trigger-right .solo-secondary-button {
+    width: 100% !important;
   }
 
   .solo-reveal-choice-grid {
@@ -3097,6 +3276,394 @@ button.game-card-disabled:hover {
 
   .solo-preview-stage {
     min-height: 250px !important;
+  }
+}
+
+/* Pokemon Guess Solo compact redesign */
+.solo-clean-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 0.45fr) !important;
+  gap: 18px !important;
+  margin-top: 20px !important;
+}
+
+.solo-clean-card {
+  padding: 18px !important;
+}
+
+.solo-clean-section-head {
+  margin-bottom: 14px !important;
+}
+
+.solo-options-card-compact {
+  padding: 16px !important;
+}
+
+.solo-options-head-compact {
+  margin-bottom: 12px !important;
+}
+
+.solo-options-head-compact p {
+  margin-top: 4px !important;
+}
+
+.solo-mode-picker-button {
+  width: 100% !important;
+  min-height: 92px !important;
+  display: grid !important;
+  grid-template-columns: 52px minmax(0, 1fr) 24px !important;
+  align-items: center !important;
+  gap: 16px !important;
+  padding: 16px 18px !important;
+  border: 1px solid rgba(86, 220, 170, 0.42) !important;
+  border-radius: 10px !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.18), transparent 42%),
+    linear-gradient(180deg, rgba(10, 28, 35, 0.9), rgba(8, 15, 28, 0.9)) !important;
+  color: #f8fafc !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 12px 26px rgba(0, 0, 0, 0.18) !important;
+}
+
+.solo-mode-picker-button:hover {
+  transform: translateY(-1px) !important;
+  border-color: rgba(134, 239, 172, 0.68) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.24), transparent 42%),
+    linear-gradient(180deg, rgba(12, 38, 44, 0.94), rgba(8, 18, 30, 0.94)) !important;
+}
+
+.solo-mode-picker-badge {
+  width: 48px !important;
+  height: 48px !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 50% !important;
+  color: #052e16 !important;
+  background: linear-gradient(135deg, #34d399, #22c55e) !important;
+  border: 1px solid rgba(134, 239, 172, 0.72) !important;
+  font-size: 0.88rem !important;
+  font-weight: 950 !important;
+}
+
+.solo-mode-picker-content {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 3px !important;
+}
+
+.solo-mode-picker-content small {
+  color: rgba(187, 247, 208, 0.78) !important;
+  font-size: 0.76rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+}
+
+.solo-mode-picker-content strong {
+  color: #ffffff !important;
+  font-size: 1.28rem !important;
+  font-weight: 950 !important;
+}
+
+.solo-mode-picker-content em {
+  color: rgba(235, 241, 250, 0.72) !important;
+  font-size: 0.92rem !important;
+  font-style: normal !important;
+  font-weight: 650 !important;
+  line-height: 1.35 !important;
+}
+
+.solo-mode-picker-arrow {
+  justify-self: end !important;
+  color: rgba(134, 239, 172, 0.9) !important;
+  font-size: 2rem !important;
+  line-height: 1 !important;
+}
+
+.solo-mode-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2000 !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 20px !important;
+  background: rgba(2, 6, 23, 0.72) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.solo-mode-modal {
+  width: min(760px, 100%) !important;
+  max-height: 84vh !important;
+  overflow-y: auto !important;
+  scrollbar-width: none !important;
+  padding: 22px !important;
+  border: 1px solid rgba(137, 155, 184, 0.34) !important;
+  border-radius: 14px !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.12), transparent 38%),
+    linear-gradient(180deg, rgba(10, 18, 33, 0.98), rgba(8, 15, 28, 0.98)) !important;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55) !important;
+}
+
+.solo-mode-modal::-webkit-scrollbar {
+  display: none !important;
+}
+
+.solo-mode-modal-head {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  gap: 16px !important;
+  margin-bottom: 18px !important;
+}
+
+.solo-mode-modal-head h2 {
+  margin: 0 !important;
+  color: #ffffff !important;
+  font-size: 1.5rem !important;
+  font-weight: 950 !important;
+}
+
+.solo-mode-modal-head p {
+  margin: 6px 0 0 !important;
+  color: rgba(235, 241, 250, 0.7) !important;
+  font-weight: 650 !important;
+}
+
+.solo-mode-modal-close {
+  width: 40px !important;
+  height: 40px !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 1px solid rgba(137, 155, 184, 0.28) !important;
+  border-radius: 50% !important;
+  background: rgba(8, 16, 30, 0.84) !important;
+  color: #f8fafc !important;
+  cursor: pointer !important;
+  font-size: 1.5rem !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+}
+
+.solo-mode-modal-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+}
+
+.solo-mode-modal-card {
+  min-height: 94px !important;
+  display: grid !important;
+  grid-template-columns: 44px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 14px !important;
+  padding: 14px !important;
+  border: 1px solid rgba(137, 155, 184, 0.24) !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(180deg, rgba(10, 19, 34, 0.86), rgba(8, 15, 28, 0.86)) !important;
+  color: #f8fafc !important;
+  text-align: left !important;
+  cursor: pointer !important;
+}
+
+.solo-mode-modal-card:hover {
+  transform: translateY(-1px) !important;
+  border-color: rgba(100, 140, 215, 0.62) !important;
+}
+
+.solo-mode-modal-card-active {
+  border-color: rgba(86, 220, 170, 0.64) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.2), transparent 44%),
+    linear-gradient(180deg, rgba(12, 42, 36, 0.9), rgba(8, 22, 30, 0.9)) !important;
+}
+
+.solo-mode-modal-card > span {
+  width: 40px !important;
+  height: 40px !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 50% !important;
+  color: rgba(235, 241, 250, 0.92) !important;
+  background: rgba(5, 11, 21, 0.42) !important;
+  border: 1px solid rgba(165, 180, 205, 0.24) !important;
+  font-size: 0.82rem !important;
+  font-weight: 950 !important;
+}
+
+.solo-mode-modal-card-active > span {
+  color: #052e16 !important;
+  background: linear-gradient(135deg, #34d399, #22c55e) !important;
+  border-color: rgba(134, 239, 172, 0.7) !important;
+}
+
+.solo-mode-modal-card div {
+  display: grid !important;
+  gap: 5px !important;
+}
+
+.solo-mode-modal-card strong {
+  color: #ffffff !important;
+  font-size: 1.05rem !important;
+  font-weight: 950 !important;
+}
+
+.solo-mode-modal-card small {
+  color: rgba(235, 241, 250, 0.68) !important;
+  font-size: 0.88rem !important;
+  font-weight: 650 !important;
+  line-height: 1.35 !important;
+}
+
+.solo-preview-stage {
+  min-height: 230px !important;
+  padding: 12px !important;
+}
+
+.solo-preview-stage .guess-image,
+.solo-preview-stage .guess-canvas-image {
+  width: min(220px, 54vw) !important;
+  height: min(220px, 54vw) !important;
+}
+
+.solo-preview-stage .guess-text-clue {
+  font-size: 1rem !important;
+}
+
+.solo-preview-stage .guess-stat-bar-row {
+  padding: 8px 10px !important;
+}
+
+.solo-preview-stage .guess-stats-bars {
+  gap: 8px !important;
+}
+
+.solo-accordion-group {
+  gap: 8px !important;
+}
+
+.solo-accordion {
+  border-radius: 8px !important;
+}
+
+.solo-accordion-main-button {
+  padding: 12px 14px !important;
+}
+
+.solo-accordion-title-row strong {
+  font-size: 0.96rem !important;
+}
+
+.solo-accordion-arrow {
+  width: 24px !important;
+  height: 24px !important;
+  font-size: 0.95rem !important;
+}
+
+.solo-accordion-description {
+  display: none !important;
+}
+
+.solo-accordion-trigger-right {
+  padding-right: 12px !important;
+}
+
+.solo-accordion-trigger-right .solo-secondary-button {
+  min-height: 34px !important;
+  padding: 0 12px !important;
+  font-size: 0.88rem !important;
+}
+
+.solo-accordion-body {
+  padding: 0 14px 14px !important;
+  gap: 10px !important;
+}
+
+.solo-slider-row,
+.solo-toggle-row,
+.solo-reveal-block {
+  padding: 11px 12px !important;
+  border-radius: 8px !important;
+}
+
+.solo-toggle-row {
+  min-height: 48px !important;
+}
+
+.solo-reveal-choice-grid {
+  gap: 7px !important;
+}
+
+.solo-choice-button {
+  min-height: 38px !important;
+  padding: 8px !important;
+  font-size: 0.9rem !important;
+}
+
+.solo-settings-row {
+  margin-top: 0 !important;
+  gap: 10px !important;
+}
+
+.solo-number-input {
+  min-height: 42px !important;
+}
+
+.solo-points-note,
+.solo-simple-mode-info {
+  padding: 10px 12px !important;
+  font-size: 0.9rem !important;
+}
+
+.solo-gen-grid {
+  grid-template-columns: repeat(9, minmax(68px, 1fr)) !important;
+  gap: 8px !important;
+}
+
+.solo-gen-card {
+  min-height: 70px !important;
+  gap: 7px !important;
+  padding: 8px !important;
+}
+
+.solo-gen-title {
+  font-size: 0.82rem !important;
+}
+
+.solo-gen-only-button {
+  min-width: 58px !important;
+  min-height: 30px !important;
+  padding: 0 9px !important;
+  font-size: 0.82rem !important;
+}
+
+@media (max-width: 1040px) {
+  .solo-clean-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .solo-preview-stage {
+    min-height: 220px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .solo-mode-modal-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .solo-mode-picker-button {
+    grid-template-columns: 48px minmax(0, 1fr) 20px !important;
+    min-height: 86px !important;
+    padding: 14px !important;
+  }
+
+  .solo-gen-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
 
@@ -3893,4 +4460,717 @@ button.game-card-disabled:hover {
   .online-lobby-code-strip strong {
     font-size: 1.45rem !important;
   }
+}
+
+/* =========================================================
+   Pokemon Guess Solo V2 compact cleanup
+========================================================= */
+
+.solo-options-card-compact {
+  padding: 14px !important;
+}
+
+.solo-options-head-compact {
+  margin-bottom: 10px !important;
+}
+
+.solo-options-head-compact p {
+  display: none !important;
+}
+
+.solo-clean-card-main {
+  min-height: auto !important;
+}
+
+.solo-mode-picker-button {
+  min-height: 78px !important;
+}
+
+.solo-endless-card {
+  margin-top: 12px !important;
+  min-height: 68px !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto 54px !important;
+  align-items: center !important;
+  gap: 14px !important;
+  padding: 13px 15px !important;
+  border: 1px solid rgba(137, 155, 184, 0.24) !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(180deg, rgba(10, 19, 34, 0.78), rgba(8, 15, 28, 0.78)) !important;
+  cursor: pointer !important;
+}
+
+.solo-endless-card-active {
+  border-color: rgba(86, 220, 170, 0.58) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.18), transparent 42%),
+    linear-gradient(180deg, rgba(12, 42, 36, 0.9), rgba(8, 22, 30, 0.9)) !important;
+}
+
+.solo-endless-card-content {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 4px !important;
+}
+
+.solo-endless-card-content strong {
+  color: #ffffff !important;
+  font-size: 1rem !important;
+  font-weight: 950 !important;
+}
+
+.solo-endless-card-content small {
+  color: rgba(235, 241, 250, 0.68) !important;
+  font-size: 0.86rem !important;
+  font-weight: 650 !important;
+  line-height: 1.3 !important;
+}
+
+.solo-endless-card-score {
+  padding: 7px 10px !important;
+  border: 1px solid rgba(74, 222, 128, 0.22) !important;
+  border-radius: 999px !important;
+  color: rgba(220, 252, 231, 0.92) !important;
+  background: rgba(20, 83, 45, 0.24) !important;
+  font-size: 0.82rem !important;
+  font-weight: 900 !important;
+  white-space: nowrap !important;
+}
+
+.solo-endless-card input[type="checkbox"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  width: 52px !important;
+  height: 30px !important;
+  margin: 0 !important;
+  border-radius: 999px !important;
+  position: relative !important;
+  background: rgba(8, 16, 30, 0.96) !important;
+  border: 1px solid rgba(137, 155, 184, 0.34) !important;
+  box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.36) !important;
+  cursor: pointer !important;
+}
+
+.solo-endless-card input[type="checkbox"]::before {
+  content: "" !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 4px !important;
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 999px !important;
+  transform: translateY(-50%) !important;
+  background: #cbd5e1 !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.32) !important;
+  transition: left 0.16s ease, background 0.16s ease !important;
+}
+
+.solo-endless-card input[type="checkbox"]:checked {
+  background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+  border-color: rgba(134, 239, 172, 0.62) !important;
+}
+
+.solo-endless-card input[type="checkbox"]:checked::before {
+  left: 25px !important;
+  background: #f8fafc !important;
+}
+
+.solo-accordion-group {
+  gap: 7px !important;
+}
+
+.solo-accordion {
+  border-radius: 9px !important;
+}
+
+.solo-accordion-open {
+  border-color: rgba(86, 220, 170, 0.26) !important;
+}
+
+.solo-accordion-main-button {
+  padding: 11px 14px !important;
+}
+
+.solo-accordion-body {
+  padding: 0 14px 12px !important;
+}
+
+.solo-level-picker {
+  position: relative !important;
+  z-index: 5 !important;
+}
+
+.solo-level-picker-button {
+  width: 100% !important;
+  min-height: 50px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 14px !important;
+  padding: 0 14px !important;
+  border: 1px solid rgba(137, 155, 184, 0.22) !important;
+  border-radius: 8px !important;
+  background: rgba(5, 11, 21, 0.34) !important;
+  color: rgba(235, 241, 250, 0.9) !important;
+  cursor: pointer !important;
+  font-weight: 900 !important;
+}
+
+.solo-level-picker-button:hover {
+  border-color: rgba(86, 220, 170, 0.46) !important;
+  background: rgba(10, 24, 32, 0.82) !important;
+}
+
+.solo-level-picker-button strong {
+  min-width: 58px !important;
+  padding: 7px 10px !important;
+  border-radius: 999px !important;
+  color: #052e16 !important;
+  background: linear-gradient(135deg, #34d399, #22c55e) !important;
+  text-align: center !important;
+}
+
+.solo-level-picker-menu {
+  position: absolute !important;
+  top: calc(100% + 8px) !important;
+  right: 0 !important;
+  z-index: 20 !important;
+  width: min(280px, 100%) !important;
+  display: grid !important;
+  gap: 6px !important;
+  padding: 8px !important;
+  border: 1px solid rgba(137, 155, 184, 0.28) !important;
+  border-radius: 10px !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.12), transparent 42%),
+    rgba(8, 15, 28, 0.98) !important;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.44) !important;
+}
+
+.solo-level-picker-option {
+  min-height: 38px !important;
+  border: 1px solid rgba(137, 155, 184, 0.18) !important;
+  border-radius: 7px !important;
+  background: rgba(10, 19, 34, 0.82) !important;
+  color: rgba(235, 241, 250, 0.84) !important;
+  cursor: pointer !important;
+  font-weight: 850 !important;
+}
+
+.solo-level-picker-option:hover {
+  border-color: rgba(100, 140, 215, 0.58) !important;
+  background: rgba(13, 24, 43, 0.94) !important;
+}
+
+.solo-level-picker-option-active {
+  color: #052e16 !important;
+  border-color: rgba(134, 239, 172, 0.65) !important;
+  background: linear-gradient(135deg, #34d399, #22c55e) !important;
+}
+
+.solo-gen-accordion-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+}
+
+.solo-gen-summary-pill {
+  min-height: 34px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  padding: 0 12px !important;
+  border: 1px solid rgba(74, 222, 128, 0.22) !important;
+  border-radius: 999px !important;
+  color: rgba(220, 252, 231, 0.92) !important;
+  background: rgba(20, 83, 45, 0.24) !important;
+  font-size: 0.84rem !important;
+  font-weight: 950 !important;
+  white-space: nowrap !important;
+}
+
+.solo-settings-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.solo-settings-row label {
+  min-height: 76px !important;
+  padding: 12px !important;
+  border: 1px solid rgba(137, 155, 184, 0.2) !important;
+  border-radius: 9px !important;
+  background: rgba(5, 11, 21, 0.34) !important;
+}
+
+.solo-settings-row .solo-number-input {
+  min-height: 38px !important;
+}
+
+.solo-reveal-block {
+  padding: 10px !important;
+}
+
+.solo-reveal-choice-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.solo-choice-button {
+  min-height: 34px !important;
+}
+
+.solo-preview-stage {
+  min-height: 190px !important;
+}
+
+.solo-preview-stage .guess-image,
+.solo-preview-stage .guess-canvas-image {
+  width: min(180px, 48vw) !important;
+  height: min(180px, 48vw) !important;
+}
+
+@media (max-width: 760px) {
+  .solo-endless-card {
+    grid-template-columns: minmax(0, 1fr) 52px !important;
+  }
+
+  .solo-endless-card-score {
+    grid-column: 1 / -1 !important;
+    justify-self: start !important;
+  }
+
+  .solo-gen-accordion-actions {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+
+  .solo-settings-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .solo-reveal-choice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* =========================================================
+   Pokemon Guess Solo rules + popup overflow fix
+========================================================= */
+
+.solo-options-card-compact,
+.solo-accordion,
+.solo-accordion-open,
+.solo-accordion-body,
+.solo-mode-options {
+  overflow: visible !important;
+}
+
+.solo-accordion {
+  position: relative !important;
+}
+
+.solo-accordion-open {
+  z-index: 30 !important;
+}
+
+.solo-level-picker {
+  position: relative !important;
+  z-index: 60 !important;
+}
+
+.solo-level-picker-menu {
+  z-index: 999 !important;
+  max-height: 260px !important;
+  overflow-y: auto !important;
+  scrollbar-width: none !important;
+}
+
+.solo-level-picker-menu::-webkit-scrollbar {
+  display: none !important;
+}
+
+.solo-rules-settings-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.solo-rules-settings-row label {
+  min-height: 76px !important;
+}
+
+.solo-rule-toggle-card {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 14px !important;
+}
+
+.solo-rule-toggle-card input[type="checkbox"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  width: 52px !important;
+  height: 30px !important;
+  margin: 0 !important;
+  border-radius: 999px !important;
+  position: relative !important;
+  background: rgba(8, 16, 30, 0.96) !important;
+  border: 1px solid rgba(137, 155, 184, 0.34) !important;
+  box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.36) !important;
+  cursor: pointer !important;
+}
+
+.solo-rule-toggle-card input[type="checkbox"]::before {
+  content: "" !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 4px !important;
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 999px !important;
+  transform: translateY(-50%) !important;
+  background: #cbd5e1 !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.32) !important;
+  transition: left 0.16s ease, background 0.16s ease !important;
+}
+
+.solo-rule-toggle-card input[type="checkbox"]:checked {
+  background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+  border-color: rgba(134, 239, 172, 0.62) !important;
+}
+
+.solo-rule-toggle-card input[type="checkbox"]:checked::before {
+  left: 25px !important;
+  background: #f8fafc !important;
+}
+
+@media (max-width: 760px) {
+  .solo-rules-settings-row {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* =========================================================
+   Pokemon Guess Solo level picker final fix
+========================================================= */
+
+.solo-level-picker {
+  position: relative !important;
+  z-index: auto !important;
+  display: grid !important;
+  gap: 8px !important;
+}
+
+.solo-level-picker-menu {
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+  z-index: auto !important;
+  width: 100% !important;
+  max-height: none !important;
+  overflow: visible !important;
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  padding: 8px !important;
+  border: 1px solid rgba(137, 155, 184, 0.22) !important;
+  border-radius: 9px !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.1), transparent 42%),
+    rgba(5, 11, 21, 0.34) !important;
+  box-shadow: none !important;
+}
+
+.solo-level-picker-option {
+  min-height: 38px !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 8px !important;
+  border: 1px solid rgba(137, 155, 184, 0.2) !important;
+  border-radius: 7px !important;
+  background: rgba(8, 16, 30, 0.82) !important;
+  color: rgba(235, 241, 250, 0.86) !important;
+  cursor: pointer !important;
+  font-size: 0.9rem !important;
+  font-weight: 900 !important;
+  white-space: nowrap !important;
+}
+
+.solo-level-picker-option:hover {
+  transform: translateY(-1px) !important;
+  border-color: rgba(100, 140, 215, 0.58) !important;
+  background: rgba(13, 24, 43, 0.94) !important;
+}
+
+.solo-level-picker-option-active {
+  color: #052e16 !important;
+  border-color: rgba(134, 239, 172, 0.65) !important;
+  background: linear-gradient(135deg, #34d399, #22c55e) !important;
+}
+
+@media (max-width: 760px) {
+  .solo-level-picker-menu {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+/* =========================================================
+   Pokemon Guess resolution screen
+========================================================= */
+
+.guess-resolution-box {
+  display: grid !important;
+  justify-items: center !important;
+  gap: 10px !important;
+}
+
+.guess-result-pokemon-image {
+  width: min(220px, 58vw) !important;
+  height: min(220px, 58vw) !important;
+  object-fit: contain !important;
+  image-rendering: auto !important;
+  user-select: none !important;
+  filter: drop-shadow(0 18px 28px rgba(0, 0, 0, 0.42)) !important;
+}
+
+.guess-result-small-text {
+  color: rgba(203, 213, 225, 0.88) !important;
+  font-size: 0.95rem !important;
+}
+
+.guess-next-shortcut-hint {
+  margin: 0 !important;
+  color: rgba(203, 213, 225, 0.62) !important;
+  font-size: 0.85rem !important;
+  font-weight: 750 !important;
+}
+
+/* =========================================================
+   Pokemon Guess compact game screen + custom suggestions
+========================================================= */
+
+.guess-round-layout {
+  margin-top: 18px !important;
+}
+
+.guess-round-layout-resolved {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.72fr) !important;
+  gap: 16px !important;
+  align-items: stretch !important;
+}
+
+.guess-round-layout-resolved .guess-clue-card,
+.guess-round-layout-resolved .guess-resolution-box {
+  margin-top: 0 !important;
+  min-height: 360px !important;
+}
+
+.guess-round-layout-resolved .guess-clue-card {
+  padding: 18px !important;
+}
+
+.guess-round-layout-resolved .guess-clue-stack {
+  margin-top: 24px !important;
+}
+
+.guess-round-layout-resolved .guess-image,
+.guess-round-layout-resolved .guess-canvas-image {
+  width: min(260px, 34vw) !important;
+  height: min(260px, 34vw) !important;
+}
+
+.guess-resolution-box {
+  display: grid !important;
+  place-items: center !important;
+  align-content: center !important;
+  gap: 8px !important;
+  padding: 18px !important;
+}
+
+.guess-resolution-box h2 {
+  margin: 4px 0 0 !important;
+  font-size: 1.55rem !important;
+}
+
+.guess-resolution-box p {
+  margin: 2px 0 !important;
+}
+
+.guess-result-pokemon-image {
+  width: min(190px, 28vw) !important;
+  height: min(190px, 28vw) !important;
+  object-fit: contain !important;
+  filter: drop-shadow(0 18px 26px rgba(0, 0, 0, 0.42)) !important;
+}
+
+.guess-result-small-text {
+  color: rgba(203, 213, 225, 0.88) !important;
+  font-size: 0.95rem !important;
+}
+
+.guess-next-shortcut-hint {
+  margin: 0 !important;
+  color: rgba(203, 213, 225, 0.62) !important;
+  font-size: 0.82rem !important;
+  font-weight: 750 !important;
+}
+
+/* More angular button style */
+.guess-submit-button,
+.guess-next-button,
+.guess-secondary-button,
+.games-back-button,
+.solo-choice-button,
+.solo-secondary-button,
+.solo-gen-only-button,
+.solo-start-button,
+.solo-level-picker-button,
+.solo-level-picker-option {
+  border-radius: 8px !important;
+}
+
+.guess-next-button,
+.guess-submit-button {
+  min-height: 42px !important;
+  padding: 0 18px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 10px 22px rgba(22, 163, 74, 0.18) !important;
+}
+
+.guess-secondary-button {
+  min-height: 40px !important;
+  padding: 0 16px !important;
+  background:
+    linear-gradient(180deg, rgba(14, 30, 56, 0.9), rgba(9, 20, 39, 0.9)) !important;
+}
+
+/* Custom Pokemon suggestions */
+.guess-input-suggestion-wrap {
+  position: relative !important;
+  min-width: 0 !important;
+}
+
+.guess-input-row {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: start !important;
+}
+
+.guess-suggestion-menu {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: calc(100% + 8px) !important;
+  z-index: 100 !important;
+  display: grid !important;
+  gap: 6px !important;
+  max-height: 285px !important;
+  overflow-y: auto !important;
+  scrollbar-width: none !important;
+  padding: 8px !important;
+  border: 1px solid rgba(137, 155, 184, 0.28) !important;
+  border-radius: 10px !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(10, 18, 33, 0.98), rgba(8, 15, 28, 0.98)) !important;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42) !important;
+}
+
+.guess-suggestion-menu::-webkit-scrollbar {
+  display: none !important;
+}
+
+.guess-suggestion-option {
+  min-height: 38px !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 12px !important;
+  border: 1px solid rgba(137, 155, 184, 0.16) !important;
+  border-radius: 7px !important;
+  background: rgba(8, 16, 30, 0.78) !important;
+  color: rgba(235, 241, 250, 0.9) !important;
+  cursor: pointer !important;
+  text-align: left !important;
+  font-weight: 850 !important;
+}
+
+.guess-suggestion-option:hover {
+  transform: translateY(-1px) !important;
+  border-color: rgba(86, 220, 170, 0.46) !important;
+  background:
+    linear-gradient(180deg, rgba(12, 42, 36, 0.82), rgba(8, 22, 30, 0.82)) !important;
+  color: #ffffff !important;
+}
+
+.guess-name-input {
+  min-height: 46px !important;
+  border-radius: 8px !important;
+}
+
+@media (max-width: 900px) {
+  .guess-round-layout-resolved {
+    grid-template-columns: 1fr !important;
+  }
+
+  .guess-round-layout-resolved .guess-clue-card,
+  .guess-round-layout-resolved .guess-resolution-box {
+    min-height: auto !important;
+  }
+
+  .guess-round-layout-resolved .guess-image,
+  .guess-round-layout-resolved .guess-canvas-image,
+  .guess-result-pokemon-image {
+    width: min(210px, 54vw) !important;
+    height: min(210px, 54vw) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .guess-input-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .guess-submit-button {
+    width: 100% !important;
+    min-height: 44px !important;
+  }
+}
+
+/* =========================================================
+   Pokemon Guess keyboard suggestion active state
+========================================================= */
+
+.guess-suggestion-option-active {
+  border-color: rgba(86, 220, 170, 0.58) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.2), transparent 44%),
+    linear-gradient(180deg, rgba(12, 42, 36, 0.92), rgba(8, 22, 30, 0.92)) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+}
+
+.guess-suggestion-option-active::before {
+  content: "›" !important;
+  margin-right: 8px !important;
+  color: #86efac !important;
+  font-size: 1.15rem !important;
+  line-height: 1 !important;
+}
+
+/* =========================================================
+   Pokemon Guess score box background only cleanup
+========================================================= */
+
+.guess-panel .guess-score-box {
+  width: fit-content !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  flex: 0 0 auto !important;
+  padding: 8px 12px !important;
+  border-radius: 9px !important;
+  gap: 2px !important;
+  box-sizing: border-box !important;
+  justify-self: end !important;
+}
+
+.guess-panel .guess-score-box small {
+  white-space: nowrap !important;
 }

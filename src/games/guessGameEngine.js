@@ -78,6 +78,9 @@ export const DEFAULT_GUESS_SETTINGS = {
   playMode: GUESS_PLAY_MODES.PIXEL,
   revealMode: GUESS_REVEAL_MODES.WRONG_GUESS,
   totalRounds: 10,
+  endless: true,
+  pointsPerCorrect: 300,
+  wrongPenaltyEnabled: false,
   secondsPerClue: 8,
   selectedGens: [1, 2, 3],
 
@@ -320,9 +323,14 @@ export function getVisibleClues(round, revealMode) {
   return round.clues.slice(0, round.clueIndex + 1);
 }
 
-export function getScoreForClue(visibleClueCount, totalClues = visibleClueCount) {
-  const maxScore = 300;
-  const minScore = 40;
+export function getScoreForClue(
+  visibleClueCount,
+  totalClues = visibleClueCount,
+  maxScoreValue = 300,
+  minScoreValue = 40
+) {
+  const maxScore = Math.max(1, Number(maxScoreValue) || 300);
+  const minScore = Math.max(1, Math.min(maxScore, Number(minScoreValue) || 40));
 
   const cluesTotal = Math.max(1, totalClues);
   const cluesUsed = Math.max(1, visibleClueCount);
