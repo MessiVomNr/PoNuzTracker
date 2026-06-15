@@ -2098,6 +2098,66 @@ export default function TeamCompare() {
         0 0 0 3px rgba(248, 113, 113, 0.14),
         0 12px 24px rgba(0, 0, 0, 0.28) !important;
     }
+
+    @media (max-width: 760px) {
+      .team-compare-page {
+        min-height: 100dvh !important;
+        height: auto !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+      }
+
+      .tc-shell {
+        width: min(100%, calc(100vw - 16px)) !important;
+        padding: 10px 0 28px !important;
+      }
+
+      .tc-team-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+      }
+
+      .tc-main-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+      }
+
+      .tc-pokemon-info-grid {
+        grid-template-columns: 78px minmax(0, 1fr) !important;
+        gap: 10px !important;
+      }
+
+      .tc-pokemon-info-grid > div:first-child {
+        min-height: 78px !important;
+        padding: 8px !important;
+        border-radius: 14px !important;
+      }
+
+      .tc-pokemon-info-grid > div:first-child img {
+        width: 68px !important;
+        height: 68px !important;
+      }
+
+      .tc-pokemon-info-grid > div:nth-child(2) {
+        min-width: 0 !important;
+      }
+
+      .tc-pokemon-info-grid > div:nth-child(2) > div:first-child {
+        font-size: 1rem !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+      }
+    }
+
+    @media (max-width: 390px) {
+      .tc-team-grid {
+        grid-template-columns: 1fr !important;
+      }
+
+      .tc-pokemon-info-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
   `;
 
   async function buildFormListFromBaseDexId(baseDexId) {
@@ -2340,9 +2400,10 @@ export default function TeamCompare() {
      Styles
   ========================= */
   const pageStyle = {
-    minHeight: "100vh",
+    minHeight: "100dvh",
     position: "relative",
-    overflow: "hidden",
+    overflowX: "hidden",
+    overflowY: "auto",
     color: "var(--pnt-text, #f8fafc)",
     background: "#050a18",
   };
@@ -2492,7 +2553,7 @@ export default function TeamCompare() {
       <div style={{ position: "relative", zIndex: 3 }}>
         <style>{HIDE_SCROLL_CSS}</style>
 
-        <div style={shell}>
+        <div className="tc-shell" style={shell}>
           <div style={headerRow}>
             <div>
               <div style={{ fontSize: 22, fontWeight: 1100, letterSpacing: 0.2 }}>Team Compare</div>
@@ -2569,7 +2630,7 @@ export default function TeamCompare() {
           <div style={{ ...card, padding: 12, marginBottom: 12 }}>
             <div style={{ fontWeight: 1000, marginBottom: 10 }}>Dein Team</div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
+            <div className="tc-team-grid" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
               {team.map((s, idx) => {
                 const active = idx === activeSlot;
                 const spr = spriteForDexId(s.dexId);
@@ -2667,7 +2728,7 @@ export default function TeamCompare() {
           </div>
 
           {/* MAIN */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.15fr", gap: 12 }}>
+          <div className="tc-main-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1.15fr", gap: 12 }}>
             {/* ME */}
             <div style={card}>
               <div
@@ -2697,7 +2758,7 @@ export default function TeamCompare() {
                   <div style={{ opacity: 0.75 }}>Wähle oben ein Pokémon (Bearbeiten).</div>
                 ) : (
                   <>
-                    <div style={{ display: "grid", gridTemplateColumns: "112px 1fr", gap: 12, alignItems: "start" }}>
+                    <div className="tc-pokemon-info-grid" style={{ display: "grid", gridTemplateColumns: "112px 1fr", gap: 12, alignItems: "start" }}>
                       <div
                         style={{
                           borderRadius: 18,

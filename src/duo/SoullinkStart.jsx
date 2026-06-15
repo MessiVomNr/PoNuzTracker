@@ -101,6 +101,131 @@ const SOULLINK_START_CSS = `
       0 0 18px rgba(80, 170, 255, 0.14),
       inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
   }
+
+  @media (max-width: 760px), (max-width: 980px) and (max-height: 560px) and (orientation: landscape) {
+    .soullink-start-page {
+      min-height: 100dvh !important;
+      align-items: flex-start !important;
+      justify-content: center !important;
+      padding: 10px 8px 28px !important;
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+    }
+
+    .soullink-start-card {
+      width: min(100%, calc(100vw - 16px)) !important;
+      padding: 18px 14px !important;
+      border-radius: 20px !important;
+      overflow: hidden !important;
+    }
+
+    .soullink-start-header {
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 12px !important;
+      margin-bottom: 12px !important;
+    }
+
+    .soullink-start-title {
+      max-width: 100% !important;
+      font-size: clamp(2.7rem, 15vw, 4rem) !important;
+      line-height: 0.78 !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .soullink-back-button {
+      width: 100% !important;
+      min-height: 42px !important;
+      padding: 9px 12px !important;
+      justify-content: center !important;
+      text-align: center !important;
+    }
+
+    .soullink-name-block {
+      margin-top: 6px !important;
+    }
+
+    .soullink-panel-stack {
+      gap: 12px !important;
+    }
+
+    .soullink-panel {
+      padding: 12px !important;
+      border-radius: 16px !important;
+      min-width: 0 !important;
+      overflow: hidden !important;
+    }
+
+    .soullink-panel input,
+    .soullink-panel button,
+    .soullink-name-block input {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-height: 43px !important;
+    }
+
+    .soullink-panel button {
+      text-align: center !important;
+      justify-content: center !important;
+      padding: 10px 12px !important;
+    }
+
+    .soullink-recent-panel {
+      overflow: hidden !important;
+    }
+
+    .soullink-recent-panel,
+    .soullink-recent-panel * {
+      min-width: 0 !important;
+      max-width: 100% !important;
+      overflow-wrap: anywhere !important;
+      word-break: normal !important;
+    }
+  }
+
+  @media (max-width: 980px) and (max-height: 560px) and (orientation: landscape) {
+    .soullink-start-page {
+      padding: 8px 8px 22px !important;
+    }
+
+    .soullink-start-card {
+      width: min(820px, calc(100vw - 16px)) !important;
+      padding: 14px !important;
+    }
+
+    .soullink-start-header {
+      grid-template-columns: minmax(0, 1fr) auto !important;
+      align-items: start !important;
+    }
+
+    .soullink-start-title {
+      font-size: clamp(2.3rem, 7vw, 3.4rem) !important;
+    }
+
+    .soullink-back-button {
+      width: auto !important;
+      min-width: 150px !important;
+    }
+
+    .soullink-panel-stack {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      align-items: start !important;
+    }
+
+    .soullink-recent-panel {
+      grid-column: 1 / -1 !important;
+    }
+  }
+
+  @media (max-width: 390px) {
+    .soullink-start-card {
+      padding: 16px 12px !important;
+    }
+
+    .soullink-start-title {
+      font-size: clamp(2.35rem, 14vw, 3.2rem) !important;
+    }
+  }
 `;
 
 export default function SoullinkStart() {
@@ -157,20 +282,20 @@ export default function SoullinkStart() {
       <div style={bg} />
       <div style={overlay} />
 
-      <div style={card}>
-        <header style={header}>
+      <div className="soullink-start-card" style={card}>
+        <header className="soullink-start-header" style={header}>
           <div>
             <div style={kicker}>Soullink Lobby</div>
             <h1 style={title}>Soullink</h1>
           </div>
 
-          <button style={btnGhost} onClick={() => nav("/")}>
+          <button className="soullink-back-button" style={btnGhost} onClick={() => nav("/")}>
             Zur Startseite
           </button>
         </header>
 
         {/* ✅ Name (oben zentral, kürzer) */}
-        <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
+        <div className="soullink-name-block" style={{ marginTop: 14, display: "grid", gap: 8 }}>
           <div style={label}>Dein Name</div>
           <input
             value={name}
@@ -180,9 +305,9 @@ export default function SoullinkStart() {
           />
         </div>
 
-        <div style={{ marginTop: 16, display: "grid", gap: 14 }}>
+        <div className="soullink-panel-stack" style={{ marginTop: 16, display: "grid", gap: 14 }}>
           {/* Beitreten */}
-          <div style={panel}>
+          <div className="soullink-panel soullink-join-panel" style={panel}>
             <div style={{ fontWeight: 950, marginBottom: 8 }}>Lobby beitreten</div>
 
             <input
@@ -203,7 +328,7 @@ export default function SoullinkStart() {
           </div>
 
           {/* Erstellen */}
-          <div style={panel}>
+          <div className="soullink-panel soullink-create-panel" style={panel}>
             <div style={{ fontWeight: 950, marginBottom: 8 }}>Lobby erstellen</div>
 
             <button
@@ -222,7 +347,7 @@ export default function SoullinkStart() {
           </div>
 
           {/* ✅ Recent Lobbys direkt hier */}
-          <div style={panel}>
+          <div className="soullink-panel soullink-recent-panel" style={panel}>
             <div style={{ fontWeight: 950, marginBottom: 8 }}>Zuletzt verwendete Lobbys</div>
 
             <RecentRoomsPanel

@@ -137,6 +137,9 @@ const LS_KEYS = {
 
 const DEX_NAV_STATE_KEY = "pokedex_nav_state_v1";
 
+const MOBILE_DEX_QUERY =
+  "(max-width: 760px), (max-width: 980px) and (max-height: 560px) and (orientation: landscape)";
+
 function readCsvSet(key, fallbackArr) {
   const raw = (localStorage.getItem(key) || "").trim();
   if (!raw) return new Set(fallbackArr);
@@ -349,19 +352,59 @@ function flattenEvoChain(chainNode) {
 export default function Pokedex() {
   const nav = useNavigate();
 
-  // ✅ Lock background scroll
-  useEffect(() => {
-    const prevHtml = document.documentElement.style.overflow;
-    const prevBody = document.body.style.overflow;
+  const [isMobileDex, setIsMobileDex] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(MOBILE_DEX_QUERY).matches;
+  });
 
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mediaQuery = window.matchMedia(MOBILE_DEX_QUERY);
+    const updateIsMobile = () => setIsMobileDex(mediaQuery.matches);
+
+    updateIsMobile();
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", updateIsMobile);
+      return () => mediaQuery.removeEventListener("change", updateIsMobile);
+    }
+
+    mediaQuery.addListener(updateIsMobile);
+    return () => mediaQuery.removeListener(updateIsMobile);
+  }, []);
+
+  // Desktop behält das alte Rad-/Keyboard-Dex-Verhalten.
+  // Mobile und Handy-Querformat dürfen normal durch die komplette Seite scrollen.
+  useEffect(() => {
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflowY = document.documentElement.style.overflowY;
+    const prevBodyOverflowY = document.body.style.overflowY;
+    const prevHtmlHeight = document.documentElement.style.height;
+    const prevBodyHeight = document.body.style.height;
+
+    if (isMobileDex) {
+      document.documentElement.style.height = "auto";
+      document.body.style.height = "auto";
+      document.documentElement.style.overflow = "auto";
+      document.body.style.overflow = "auto";
+      document.documentElement.style.overflowY = "auto";
+      document.body.style.overflowY = "auto";
+    } else {
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
+    }
 
     return () => {
-      document.documentElement.style.overflow = prevHtml;
-      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflowY = prevHtmlOverflowY;
+      document.body.style.overflowY = prevBodyOverflowY;
+      document.documentElement.style.height = prevHtmlHeight;
+      document.body.style.height = prevBodyHeight;
     };
-  }, []);
+  }, [isMobileDex]);
 
   // UI: Filter fold/unfold
   const [filtersOpen, setFiltersOpen] = useState(() => {
@@ -984,10 +1027,11 @@ export default function Pokedex() {
 
   // Styles
   const page = {
-    minHeight: "100vh",
-    height: "100vh",
-    overflow: "hidden",
-    padding: 18,
+    minHeight: isMobileDex ? "100dvh" : "100vh",
+    height: isMobileDex ? "auto" : "100vh",
+    overflowX: "hidden",
+    overflowY: isMobileDex ? "auto" : "hidden",
+    padding: isMobileDex ? "10px 8px 28px" : 18,
     boxSizing: "border-box",
     color: "var(--pnt-text, white)",
     backgroundImage: `
@@ -999,7 +1043,7 @@ export default function Pokedex() {
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
-    backgroundAttachment: "fixed",
+    backgroundAttachment: isMobileDex ? "scroll" : "fixed",
   };
 
   const overlay = {
@@ -1235,6 +1279,94 @@ export default function Pokedex() {
     );
   }
 
+  function getFormBadgeText(kind) {
+    const safeKind = String(kind || "");
+
+    if (safeKind.includes("mega")) return "MEGA";
+    if (safeKind.includes("gigas")) return "GIGAS";
+    if (safeKind.includes("special")) return "FORM";
+
+    return "";
+  }
+
+  function renderMobileDexList() {
+    return (
+      <div className="dexMobileList">
+        {list.map((p, index) => {
+          const name = getDisplayName(p, apiNameCache);
+          const isActive = index === idx;
+          const formBadge = getFormBadgeText(p.kind);
+
+          return (
+            <div
+              key={`mobile-${p.kind}-${p.dexId}-${index}`}
+              className={isActive ? "dexMobileRow dexMobileRowActive" : "dexMobileRow"}
+              onClick={() => setIdx(index)}
+            >
+              <img
+                className="dexMobileSprite"
+                src={officialArtworkUrl(p.dexId)}
+                alt={name}
+                loading="lazy"
+              />
+
+              <div className="dexMobileMain">
+                <div className="dexMobileTopLine">
+                  <div className="dexMobileNameBlock">
+                    <div className="dexMobileName" title={name}>
+                      {name}
+                    </div>
+
+                    <div className="dexMobileMeta">
+                      #{p.dexId}
+                      {p.gen ? <> · Gen {p.gen}</> : null}
+                      {formBadge ? <> · {formBadge}</> : null}
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleFav(p.dexId);
+                    }}
+                  >
+                    <SmallFav active={isFav(p.dexId)} onClick={() => {}} />
+                  </div>
+                </div>
+
+                {renderTypes(p.dexId, isActive)}
+
+                <div className="dexMobileActions">
+                  <button
+                    type="button"
+                    className="dexCtaBtn dexCtaPrimary"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openPokemon(p.dexId);
+                    }}
+                  >
+                    Details
+                  </button>
+
+                  <button
+                    type="button"
+                    className="dexCtaBtn"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openCompare(p.dexId);
+                    }}
+                  >
+                    Vergleichen
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   function renderEvoAndStats(dexId) {
   const evo = evoCache[dexId]?.chainDexIds || [];
   const st = statsCache[dexId];
@@ -1417,7 +1549,7 @@ export default function Pokedex() {
 
 
   return (
-    <div style={page}>
+    <div className="pokedex-page-shell" style={page}>
       <style>{`
         .dex-scroll {
           scrollbar-width: none;
@@ -1510,11 +1642,294 @@ export default function Pokedex() {
           border-color: rgba(255,255,255,0.18);
           background: rgba(255,255,255,0.05);
         }
+                  @media (max-width: 760px), (max-width: 980px) and (max-height: 560px) and (orientation: landscape) {
+          .pokedex-page-shell {
+            height: auto !important;
+            min-height: 100dvh !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+          }
+
+          .pokedex-inner {
+            width: min(100%, calc(100vw - 16px)) !important;
+            padding-top: 8px !important;
+          }
+
+          .pokedex-header-row {
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+
+          .pokedex-header-row h2 {
+            font-size: 1.45rem !important;
+          }
+
+          .pokedex-header-actions {
+            justify-content: stretch !important;
+          }
+
+          .pokedex-header-actions button {
+            flex: 1 1 0 !important;
+          }
+
+          .pokedex-overlay-card {
+            padding: 12px !important;
+            border-radius: 14px !important;
+          }
+
+          .dex-search-row {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+
+          .dex-search-row button {
+            width: 100% !important;
+          }
+
+          .dex-scroll {
+            max-height: none !important;
+            overflow: visible !important;
+            padding-right: 0 !important;
+          }
+
+          .dexMobileList {
+            display: grid;
+            gap: 10px;
+          }
+
+          .dexMobileRow {
+            display: grid;
+            grid-template-columns: 82px minmax(0, 1fr);
+            gap: 12px;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid rgba(137, 155, 184, 0.18);
+            border-radius: 16px;
+            background:
+              linear-gradient(180deg, rgba(13, 24, 42, 0.74), rgba(9, 17, 31, 0.72));
+            box-shadow:
+              inset 0 1px 0 rgba(255, 255, 255, 0.035),
+              0 10px 26px rgba(0, 0, 0, 0.24);
+          }
+
+          .dexMobileRowActive {
+            border-color: rgba(86, 220, 170, 0.42);
+            background:
+              radial-gradient(circle at 0% 0%, rgba(52, 211, 153, 0.13), transparent 42%),
+              linear-gradient(180deg, rgba(13, 32, 42, 0.84), rgba(9, 17, 31, 0.78));
+          }
+
+          .dexMobileSprite {
+            width: 76px;
+            height: 76px;
+            object-fit: contain;
+            filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.34));
+          }
+
+          .dexMobileMain {
+            min-width: 0;
+            display: grid;
+            gap: 8px;
+          }
+
+          .dexMobileTopLine {
+            min-width: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+          }
+
+          .dexMobileNameBlock {
+            min-width: 0;
+          }
+
+          .dexMobileName {
+            min-width: 0;
+            color: #f8fafc;
+            font-size: 1.05rem;
+            font-weight: 1000;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+          .dexMobileMeta {
+            margin-top: 2px;
+            color: rgba(235, 241, 250, 0.68);
+            font-size: 0.78rem;
+            font-weight: 900;
+          }
+
+          .dexMobileActions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+          }
+
+          .dexMobileActions .dexCtaBtn {
+            min-height: 36px;
+            justify-content: center;
+            padding: 8px 10px;
+            border-radius: 10px;
+            font-size: 0.82rem;
+          }
+
+          .dexMobileActions .dexCtaIcon,
+          .dexMobileActions .dexCtaSub {
+            display: none;
+          }
+
+          .dexMobileRow [style*="margin-top: 8px"] {
+            gap: 6px !important;
+          }
+
+          .dexMobileRow [style*="margin-top: 8px"] > div {
+            padding: 5px 9px !important;
+            font-size: 0.72rem !important;
+          }
+        }
+
+        @media (max-width: 980px) and (max-height: 560px) and (orientation: landscape) {
+          .pokedex-page-shell {
+            height: auto !important;
+            min-height: 100dvh !important;
+            padding: 8px !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+          }
+
+          .pokedex-inner {
+            width: min(100%, calc(100vw - 16px)) !important;
+            padding-top: 4px !important;
+          }
+
+          .pokedex-header-row {
+            grid-template-columns: minmax(0, 1fr) auto !important;
+            gap: 8px !important;
+          }
+
+          .pokedex-header-row h2 {
+            font-size: 1.25rem !important;
+          }
+
+          .pokedex-header-actions {
+            justify-content: flex-end !important;
+            gap: 8px !important;
+          }
+
+          .pokedex-header-actions button {
+            flex: 0 0 auto !important;
+            min-height: 36px !important;
+            padding: 0 12px !important;
+            font-size: 0.82rem !important;
+          }
+
+          .pokedex-overlay-card {
+            margin-top: 8px !important;
+            padding: 10px !important;
+            border-radius: 13px !important;
+          }
+
+          .dex-search-row {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) 108px !important;
+            gap: 8px !important;
+          }
+
+          .dex-search-row input {
+            min-height: 40px !important;
+            font-size: 0.84rem !important;
+          }
+
+          .dex-search-row button {
+            width: 100% !important;
+            min-height: 40px !important;
+            padding: 0 10px !important;
+            font-size: 0.82rem !important;
+          }
+
+          .dex-scroll {
+            max-height: none !important;
+            overflow: visible !important;
+            padding-right: 0 !important;
+          }
+
+          .dexMobileList {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+          }
+
+          .dexMobileRow {
+            grid-template-columns: 58px minmax(0, 1fr);
+            gap: 8px;
+            padding: 8px;
+            border-radius: 12px;
+          }
+
+          .dexMobileSprite {
+            width: 54px;
+            height: 54px;
+          }
+
+          .dexMobileMain {
+            gap: 5px;
+          }
+
+          .dexMobileName {
+            font-size: 0.9rem;
+          }
+
+          .dexMobileMeta {
+            font-size: 0.68rem;
+          }
+
+          .dexMobileActions {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+          }
+
+          .dexMobileActions .dexCtaBtn {
+            min-height: 30px;
+            padding: 6px 7px;
+            border-radius: 8px;
+            font-size: 0.72rem;
+          }
+
+          .dexMobileRow [style*="margin-top: 8px"] {
+            margin-top: 5px !important;
+            gap: 4px !important;
+          }
+
+          .dexMobileRow [style*="margin-top: 8px"] > div {
+            padding: 4px 7px !important;
+            font-size: 0.64rem !important;
+          }
+        }
+
+        @media (max-width: 390px) {
+          .dexMobileRow {
+            grid-template-columns: 68px minmax(0, 1fr);
+            gap: 10px;
+            padding: 10px;
+          }
+
+          .dexMobileSprite {
+            width: 62px;
+            height: 62px;
+          }
+
+          .dexMobileActions {
+            grid-template-columns: 1fr;
+          }
+        }
       `}</style>
 
-      <div style={{ width: "min(980px, 96vw)", margin: "0 auto", paddingTop: 12 }}>
+      <div className="pokedex-inner" style={{ width: "min(980px, 96vw)", margin: "0 auto", paddingTop: 12 }}>
         {/* Header row */}
         <div
+          className="pokedex-header-row"
           style={{
             display: "grid",
             gridTemplateColumns: "1fr auto",
@@ -1524,7 +1939,7 @@ export default function Pokedex() {
         >
           <h2 style={{ margin: 0 }}>Pokédex</h2>
 
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
+          <div className="pokedex-header-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
             <button style={btn} onClick={() => nav(-1)}>
               Zurück
             </button>
@@ -1554,9 +1969,17 @@ export default function Pokedex() {
           </div>
         </div>
 
-        <div style={{ ...overlay, marginTop: 12, maxHeight: "calc(100vh - 90px)", overflow: "hidden" }}>
+        <div
+          className="pokedex-overlay-card"
+          style={{
+            ...overlay,
+            marginTop: 12,
+            maxHeight: isMobileDex ? "none" : "calc(100vh - 90px)",
+            overflow: isMobileDex ? "visible" : "hidden",
+          }}
+        >
           {/* Search + Filter toggle row */}
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div className="dex-search-row" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <input
               value={query}
               onChange={(e) => {
@@ -1658,14 +2081,20 @@ export default function Pokedex() {
             className="dex-scroll"
             style={{
               marginTop: 12,
-              maxHeight: filtersOpen ? "calc(100vh - 440px)" : "calc(100vh - 270px)",
-              overflowY: "auto",
-              paddingRight: 2,
+              maxHeight: isMobileDex
+                ? "none"
+                : filtersOpen
+                  ? "calc(100vh - 440px)"
+                  : "calc(100vh - 270px)",
+              overflowY: isMobileDex ? "visible" : "auto",
+              paddingRight: isMobileDex ? 0 : 2,
             }}
-            onWheel={onWheel}
+            onWheel={isMobileDex ? undefined : onWheel}
           >
             {list.length === 0 ? (
               <div style={{ padding: 14, opacity: 0.75 }}>Keine Treffer.</div>
+            ) : isMobileDex ? (
+              renderMobileDexList()
             ) : (
               <>
                 {/* Top 2 */}

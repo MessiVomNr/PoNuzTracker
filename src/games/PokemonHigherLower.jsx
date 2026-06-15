@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { comboMatches, isTypingTarget, loadHotkeys } from "../utils/hotkeys";
 import {
-  DEFAULT_ENABLED_FORM_GROUPS,
   FORM_GROUPS,
   buildPokemonPool,
   getPoolEntryKey,
@@ -12,6 +11,7 @@ import {
 import "./guessStyles.css";
 
 const HIGHER_LOWER_HIGHSCORES_KEY = "pokemonHigherLowerHighscores_v3";
+const HIGHER_LOWER_SETTINGS_KEY = "pokemonHigherLowerSettings_v1";
 const LEGACY_HIGHER_LOWER_HIGHSCORES_KEY = "pokemonHigherLowerHighscores_v2";
 const LEGACY_HIGHER_LOWER_HIGHSCORE_KEY = "pokemonHigherLowerHighscore_v1";
 
@@ -43,6 +43,90 @@ const STAT_MODES = [
 const PLAYABLE_STAT_KEYS = STAT_MODES
   .filter((mode) => mode.key !== "random")
   .map((mode) => mode.key);
+
+function getAllEnabledFormGroups() {
+  return FORM_GROUPS.reduce((next, group) => {
+    next[group.key] = true;
+    return next;
+  }, {});
+}
+
+function getDefaultHigherLowerSettings() {
+  return {
+    statMode: "bst",
+    enabledGens: [...GEN_KEYS],
+    enabledFormGroups: getAllEnabledFormGroups(),
+  };
+}
+
+function normalizeSavedStatMode(value) {
+  return STAT_MODES.some((mode) => mode.key === value) ? value : "bst";
+}
+
+function normalizeSavedGens(value) {
+  const selected = Array.isArray(value)
+    ? [...new Set(value.map(Number))]
+        .filter((gen) => GEN_RANGES[gen])
+        .sort((a, b) => a - b)
+    : [];
+
+  return selected.length ? selected : [...GEN_KEYS];
+}
+
+function normalizeSavedFormGroups(value) {
+  const next = {};
+  let hasSelectedForm = false;
+
+  FORM_GROUPS.forEach((group) => {
+    const enabled =
+      value && Object.prototype.hasOwnProperty.call(value, group.key)
+        ? !!value[group.key]
+        : true;
+
+    next[group.key] = enabled;
+
+    if (enabled) {
+      hasSelectedForm = true;
+    }
+  });
+
+  return hasSelectedForm ? next : getAllEnabledFormGroups();
+}
+
+function getSavedHigherLowerSettings() {
+  try {
+    const raw = localStorage.getItem(HIGHER_LOWER_SETTINGS_KEY);
+
+    if (!raw) {
+      return getDefaultHigherLowerSettings();
+    }
+
+    const parsed = JSON.parse(raw);
+
+    return {
+      statMode: normalizeSavedStatMode(parsed?.statMode),
+      enabledGens: normalizeSavedGens(parsed?.enabledGens),
+      enabledFormGroups: normalizeSavedFormGroups(parsed?.enabledFormGroups),
+    };
+  } catch {
+    return getDefaultHigherLowerSettings();
+  }
+}
+
+function saveHigherLowerSettings(settings) {
+  try {
+    localStorage.setItem(
+      HIGHER_LOWER_SETTINGS_KEY,
+      JSON.stringify({
+        statMode: normalizeSavedStatMode(settings?.statMode),
+        enabledGens: normalizeSavedGens(settings?.enabledGens),
+        enabledFormGroups: normalizeSavedFormGroups(settings?.enabledFormGroups),
+      })
+    );
+  } catch {
+    // localStorage kann in seltenen Browser-/Privacy-Fällen blockiert sein.
+  }
+}
 
 function getSelectedGenBucket(enabledGens) {
   const selected = Array.isArray(enabledGens)
@@ -210,11 +294,12 @@ async function fetchPokemon(poolEntry) {
 
 export default function PokemonHigherLower() {
   const navigate = useNavigate();
+  const [initialSettings] = useState(getSavedHigherLowerSettings);
 
   const [screen, setScreen] = useState("menu");
-  const [statMode, setStatMode] = useState("bst");
-  const [enabledGens, setEnabledGens] = useState([1, 2, 3, 4, 5, 6]);
-  const [enabledFormGroups, setEnabledFormGroups] = useState(DEFAULT_ENABLED_FORM_GROUPS);
+  const [statMode, setStatMode] = useState(initialSettings.statMode);
+  const [enabledGens, setEnabledGens] = useState(initialSettings.enabledGens);
+  const [enabledFormGroups, setEnabledFormGroups] = useState(initialSettings.enabledFormGroups);
   const [showStatMenu, setShowStatMenu] = useState(false);
   const [showGenMenu, setShowGenMenu] = useState(false);
   const [showFormMenu, setShowFormMenu] = useState(false);
@@ -405,6 +490,12 @@ useEffect(() => {
   }
 
   function startGame() {
+    saveHigherLowerSettings({
+      statMode,
+      enabledGens,
+      enabledFormGroups,
+    });
+
     setStreak(0);
     setLeftPokemon(null);
     setRightPokemon(null);
@@ -500,29 +591,40 @@ useEffect(() => {
   }, [handleGuess, nextRound, revealed, screen]);
 
   return (
-    <main className="games-page" style={pageStyle}>
-      <section style={panelStyle}>
+    <main className="games-page higher-lower-page" style={pageStyle}>
+      <section className="higher-lower-panel" style={panelStyle}>
         <button
           type="button"
           className="games-hub-back-button"
-          onClick={() => navigate("/games")}
+          onClick={() => {
+            if (screen === "game") {
+              setScreen("menu");
+              setRevealed(false);
+              setLastGuess("");
+              setLastCorrect(null);
+              setErr("");
+              return;
+            }
+
+            navigate("/games");
+          }}
         >
           <span className="games-hub-back-arrow">‹</span>
           Zurück
         </button>
 
-        <header style={headerStyle}>
-          <p style={eyebrowStyle}>Endless Game</p>
-          <h1 style={titleStyle}>Higher oder Lower</h1>
-          <p style={subtitleStyle}>
+        <header className="higher-lower-header" style={headerStyle}>
+          <p className="higher-lower-eyebrow" style={eyebrowStyle}>Endless Game</p>
+          <h1 className="higher-lower-title" style={titleStyle}>Higher oder Lower</h1>
+          <p className="higher-lower-subtitle" style={subtitleStyle}>
             Vergleiche Pokémon-Werte und baue die längste Serie auf.
           </p>
         </header>
 
         {screen === "menu" ? (
-          <div style={menuGridStyle}>
-            <section style={compactFiltersCardStyle}>
-              <div style={filterGridStyle}>
+          <div className="higher-lower-menu-grid" style={menuGridStyle}>
+            <section className="higher-lower-filters-card" style={compactFiltersCardStyle}>
+              <div className="higher-lower-filter-grid" style={filterGridStyle}>
                 <div style={filterItemStyle}>
                   <div style={compactLabelStyle}>Wert</div>
 
@@ -781,7 +883,7 @@ useEffect(() => {
               </div>
             </section>
 
-            <section style={startCardStyle}>
+            <section className="higher-lower-start-card" style={startCardStyle}>
               <div>
                 <h2 style={sectionTitleStyle}>Highscore</h2>
                 <div style={highscoreBigStyle}>{currentHighscore}</div>
@@ -792,7 +894,7 @@ useEffect(() => {
                 </p>
               </div>
 
-              <div style={startActionsStyle}>
+              <div className="higher-lower-start-actions" style={startActionsStyle}>
                 <button
                   type="button"
                   style={{
@@ -817,18 +919,17 @@ useEffect(() => {
             </section>
           </div>
         ) : (
-          <div style={gameWrapStyle}>
-            <div style={scoreRowStyle}>
-              <div style={scorePillStyle}>
+          <div className="higher-lower-game-wrap" style={gameWrapStyle}>
+            <div className="higher-lower-score-row" style={scoreRowStyle}>
+              <div className="higher-lower-score-pill" style={scorePillStyle}>
                 Serie: <strong>{streak}</strong>
               </div>
 
-              <div style={scorePillStyle}>
+              <div className="higher-lower-score-pill" style={scorePillStyle}>
                 Highscore: <strong>{currentHighscore}</strong>
-                <span style={scoreSubLabelStyle}>{currentHighscoreLabel}</span>
               </div>
 
-              <div style={scorePillStyle}>
+              <div className="higher-lower-score-pill" style={scorePillStyle}>
                 Wert: <strong>{getStatLabel(currentStatKey)}</strong>
               </div>
             </div>
@@ -839,7 +940,7 @@ useEffect(() => {
               </div>
             )}
 
-            <div style={versusGridStyle}>
+            <div className="higher-lower-versus-grid" style={versusGridStyle}>
               <PokemonCard
                 side="links"
                 pokemon={leftPokemon}
@@ -848,11 +949,8 @@ useEffect(() => {
                 revealed
               />
 
-              <div style={centerStyle}>
-                <div style={versusTextStyle}>VS</div>
-                <div style={compareTextStyle}>
-                  Ist rechts höher, gleich oder niedriger?
-                </div>
+              <div className="higher-lower-vs-center" style={centerStyle}>
+                <div className="higher-lower-vs-badge" style={versusTextStyle}>VS</div>
               </div>
 
               <PokemonCard
@@ -865,9 +963,10 @@ useEffect(() => {
             </div>
 
             {!revealed ? (
-              <div style={guessRowStyle}>
+              <div className="higher-lower-guess-row" style={guessRowStyle}>
                 <button
                   type="button"
+                  className="higher-lower-guess-button"
                   style={guessButtonStyle}
                   disabled={loading}
                   onClick={() => handleGuess("higher")}
@@ -877,6 +976,7 @@ useEffect(() => {
 
                 <button
                   type="button"
+                  className="higher-lower-guess-button"
                   style={guessButtonStyle}
                   disabled={loading}
                   onClick={() => handleGuess("equal")}
@@ -886,6 +986,7 @@ useEffect(() => {
 
                 <button
                   type="button"
+                  className="higher-lower-guess-button"
                   style={guessButtonStyle}
                   disabled={loading}
                   onClick={() => handleGuess("lower")}
@@ -911,7 +1012,7 @@ useEffect(() => {
                   disabled={loading}
                   onClick={nextRound}
                 >
-                  {loading ? "Lädt..." : "Weiter · Enter"}
+                  {loading ? "Lädt..." : "Weiter"}
                 </button>
               </div>
             )}
@@ -924,29 +1025,30 @@ useEffect(() => {
 
 function PokemonCard({ side, pokemon, statKey, value, revealed }) {
   return (
-    <section style={pokemonCardStyle}>
-      <div style={cardSideStyle}>{side}</div>
+    <section className="higher-lower-pokemon-card" style={pokemonCardStyle}>
+      <div className="higher-lower-card-side" style={cardSideStyle}>{side}</div>
 
-      <div style={imageWrapStyle}>
+      <div className="higher-lower-image-wrap" style={imageWrapStyle}>
         {pokemon ? (
           <img
+            className="higher-lower-pokemon-image"
             src={pokemon.sprite}
             alt={pokemon.name}
             style={pokemonImageStyle}
             draggable={false}
           />
         ) : (
-          <div style={imagePlaceholderStyle}>?</div>
+          <div className="higher-lower-pokemon-placeholder" style={imagePlaceholderStyle}>?</div>
         )}
       </div>
 
-      <h2 style={pokemonNameStyle}>
+      <h2 className="higher-lower-pokemon-name" style={pokemonNameStyle}>
         {pokemon?.name || "Lädt..."}
       </h2>
 
-      <div style={statBoxStyle}>
-        <div style={statLabelStyle}>{getStatLabel(statKey)}</div>
-        <div style={statValueStyle}>
+      <div className="higher-lower-stat-box" style={statBoxStyle}>
+        <div className="higher-lower-stat-label" style={statLabelStyle}>{getStatLabel(statKey)}</div>
+        <div className="higher-lower-stat-value" style={statValueStyle}>
           {revealed ? value : "???"}
         </div>
       </div>

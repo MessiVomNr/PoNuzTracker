@@ -794,3 +794,73 @@ html, body {
   padding: 8px 10px;
   outline: none;
 }
+
+/* =========================================================
+   Global mobile scroll fix
+   - allows scrolling on mobile
+   - keeps scrollbars hidden visually
+========================================================= */
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+html,
+body {
+  height: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+body {
+  overscroll-behavior-y: auto;
+}
+
+/* Scrollbar verstecken, Scrollen bleibt trotzdem aktiv */
+html,
+body,
+* {
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+@media (max-width: 760px) {
+  html,
+  body,
+  #root {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  main,
+  .app,
+  .page,
+  .home-page,
+  .home-wrap,
+  .home-shell,
+  .games-page,
+  .games-hub-page,
+  .guess-menu-page,
+  .pokemon-guess-menu-page,
+  .pokemon-guess-solo-page,
+  .online-menu-page,
+  .online-lobby-page,
+  .online-guess-page {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow: visible !important;
+  }
+}

@@ -1464,122 +1464,6 @@ button.game-card-disabled:hover {
   opacity: 0.8;
 }
 
-.online-reveal-top-actions {
-  position: sticky;
-  top: 12px;
-  z-index: 20;
-  margin: 14px 0 18px;
-  padding: 12px;
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.9);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
-}
-
-.online-final-podium {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  margin-top: 10px;
-}
-
-.online-final-podium h2 {
-  text-align: center;
-  margin: 0;
-  font-size: 26px;
-}
-
-.online-podium-layout {
-  display: grid;
-  grid-template-columns: 1fr 1.15fr 1fr;
-  gap: 16px;
-  align-items: end;
-}
-
-.online-podium-place {
-  position: relative;
-  overflow: hidden;
-
-  border-radius: 22px;
-  padding: 22px 16px 0;
-  text-align: center;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background:
-    radial-gradient(circle at 50% 0%, rgba(52, 211, 153, 0.16), transparent 50%),
-    rgba(15, 23, 42, 0.78);
-
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.online-podium-first {
-  min-height: 250px;
-}
-
-.online-podium-second {
-  min-height: 205px;
-}
-
-.online-podium-third {
-  min-height: 180px;
-}
-
-.online-podium-medal {
-  font-size: 52px;
-  line-height: 1;
-}
-
-.online-podium-place strong {
-  font-size: 20px;
-}
-
-.online-podium-place span {
-  opacity: 0.86;
-  margin-bottom: 16px;
-}
-
-.online-podium-place::after {
-  content: "";
-  display: block;
-  height: 54px;
-  margin: 10px -16px 0;
-  background:
-    linear-gradient(180deg, rgba(52, 211, 153, 0.24), rgba(34, 197, 94, 0.1)),
-    rgba(15, 23, 42, 0.55);
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
-}
-
-.online-podium-first::after {
-  height: 74px;
-}
-
-.online-podium-second::after {
-  height: 58px;
-}
-
-.online-podium-third::after {
-  height: 46px;
-}
-
-.online-podium-rest {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.online-podium-rest-row {
-  display: grid;
-  grid-template-columns: 50px 1fr auto;
-  gap: 12px;
-
-  padding: 12px 16px;
-  border-radius: 14px;
-
-  background: rgba(15, 23, 42, 0.58);
-  border: 1px solid rgba(148, 163, 184, 0.15);
-}
 
 .online-reveal-top-actions {
   position: static;
@@ -4772,21 +4656,6 @@ button.game-card-disabled:hover {
   z-index: 30 !important;
 }
 
-.solo-level-picker {
-  position: relative !important;
-  z-index: 60 !important;
-}
-
-.solo-level-picker-menu {
-  z-index: 999 !important;
-  max-height: 260px !important;
-  overflow-y: auto !important;
-  scrollbar-width: none !important;
-}
-
-.solo-level-picker-menu::-webkit-scrollbar {
-  display: none !important;
-}
 
 .solo-rules-settings-row {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -4909,37 +4778,6 @@ button.game-card-disabled:hover {
   .solo-level-picker-menu {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
-}
-
-/* =========================================================
-   Pokemon Guess resolution screen
-========================================================= */
-
-.guess-resolution-box {
-  display: grid !important;
-  justify-items: center !important;
-  gap: 10px !important;
-}
-
-.guess-result-pokemon-image {
-  width: min(220px, 58vw) !important;
-  height: min(220px, 58vw) !important;
-  object-fit: contain !important;
-  image-rendering: auto !important;
-  user-select: none !important;
-  filter: drop-shadow(0 18px 28px rgba(0, 0, 0, 0.42)) !important;
-}
-
-.guess-result-small-text {
-  color: rgba(203, 213, 225, 0.88) !important;
-  font-size: 0.95rem !important;
-}
-
-.guess-next-shortcut-hint {
-  margin: 0 !important;
-  color: rgba(203, 213, 225, 0.62) !important;
-  font-size: 0.85rem !important;
-  font-weight: 750 !important;
 }
 
 /* =========================================================
@@ -5173,4 +5011,897 @@ button.game-card-disabled:hover {
 
 .guess-panel .guess-score-box small {
   white-space: nowrap !important;
+}
+
+/* =========================================================
+   Higher / Lower mobile layout
+========================================================= */
+
+@media (max-width: 760px) {
+  .higher-lower-page {
+    min-height: 100dvh !important;
+    padding: 12px 8px 24px !important;
+    align-items: flex-start !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .higher-lower-panel {
+    position: relative !important;
+    width: min(100%, calc(100vw - 16px)) !important;
+    margin: 0 auto !important;
+    padding: 62px 12px 14px !important;
+    border-radius: 18px !important;
+    box-sizing: border-box !important;
+  }
+
+  .higher-lower-panel .games-hub-back-button {
+    top: 14px !important;
+    left: 14px !important;
+    height: 36px !important;
+    padding: 0 12px !important;
+    border-radius: 8px !important;
+    font-size: 0.9rem !important;
+  }
+
+  .higher-lower-header {
+    margin-top: 0 !important;
+    margin-bottom: 12px !important;
+  }
+
+  .higher-lower-eyebrow {
+    font-size: 11px !important;
+    letter-spacing: 2.4px !important;
+  }
+
+  .higher-lower-title {
+    margin: 8px 0 6px !important;
+    font-size: clamp(34px, 12vw, 46px) !important;
+    line-height: 0.84 !important;
+    letter-spacing: -0.04em !important;
+  }
+
+  .higher-lower-subtitle {
+    font-size: 14px !important;
+    line-height: 1.35 !important;
+  }
+
+  .higher-lower-menu-grid {
+    gap: 10px !important;
+  }
+
+  .higher-lower-filter-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .higher-lower-filters-card,
+  .higher-lower-start-card {
+    padding: 12px !important;
+    border-radius: 16px !important;
+  }
+
+  .higher-lower-start-card {
+    display: grid !important;
+    gap: 14px !important;
+    align-items: stretch !important;
+  }
+
+  .higher-lower-start-actions {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .higher-lower-game-wrap {
+    gap: 10px !important;
+  }
+
+  .higher-lower-score-row {
+    display: flex !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .higher-lower-score-pill {
+    min-width: 0 !important;
+    padding: 8px 11px !important;
+    border-radius: 14px !important;
+    font-size: 13px !important;
+    line-height: 1.15 !important;
+  }
+
+  .higher-lower-score-pill span {
+    display: block !important;
+    margin-left: 0 !important;
+    margin-top: 3px !important;
+    max-width: 220px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .higher-lower-versus-grid {
+    position: relative !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    align-items: stretch !important;
+  }
+
+  .higher-lower-vs-center {
+    position: absolute !important;
+    left: 50% !important;
+    top: 47% !important;
+    z-index: 5 !important;
+    transform: translate(-50%, -50%) !important;
+    pointer-events: none !important;
+  }
+
+  .higher-lower-vs-badge {
+    width: 54px !important;
+    height: 54px !important;
+    font-size: 20px !important;
+    border-radius: 50% !important;
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.34) !important;
+  }
+
+  .higher-lower-pokemon-card {
+    min-height: 270px !important;
+    grid-template-rows: auto 118px minmax(44px, auto) auto !important;
+    gap: 8px !important;
+    padding: 12px !important;
+    border-radius: 18px !important;
+    overflow: hidden !important;
+  }
+
+  .higher-lower-card-side {
+    font-size: 10px !important;
+    letter-spacing: 1.7px !important;
+  }
+
+  .higher-lower-image-wrap {
+    min-height: 118px !important;
+  }
+
+  .higher-lower-pokemon-image {
+    width: min(118px, 88%) !important;
+    max-height: 112px !important;
+  }
+
+  .higher-lower-pokemon-placeholder {
+    width: 104px !important;
+    height: 104px !important;
+    font-size: 40px !important;
+  }
+
+  .higher-lower-pokemon-name {
+    min-height: 44px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    font-size: clamp(18px, 5.2vw, 22px) !important;
+    line-height: 1.05 !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+    text-wrap: balance !important;
+  }
+
+  .higher-lower-stat-box {
+    padding: 10px 8px !important;
+    border-radius: 14px !important;
+  }
+
+  .higher-lower-stat-label {
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+  }
+
+  .higher-lower-stat-value {
+    font-size: 28px !important;
+  }
+
+  .higher-lower-guess-row {
+    position: sticky !important;
+    bottom: 8px !important;
+    z-index: 20 !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    padding-top: 4px !important;
+  }
+
+  .higher-lower-guess-button {
+    min-height: 50px !important;
+    padding: 0 8px !important;
+    border-radius: 14px !important;
+    font-size: 16px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .higher-lower-title {
+    font-size: 32px !important;
+  }
+
+  .higher-lower-versus-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .higher-lower-vs-center {
+    position: static !important;
+    transform: none !important;
+    justify-self: center !important;
+    margin: -4px 0 !important;
+  }
+
+  .higher-lower-pokemon-card {
+    min-height: 235px !important;
+  }
+
+  .higher-lower-guess-button {
+    font-size: 14px !important;
+  }
+}
+
+/* =========================================================
+   Final mobile + landscape polish for Pokemon Guess / Games
+========================================================= */
+
+@media (max-width: 640px) {
+  .games-page {
+    min-height: 100dvh !important;
+    padding: 10px 8px 24px !important;
+    align-items: flex-start !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .games-panel,
+  .games-hub-panel,
+  .pokemon-guess-solo-panel,
+  .online-menu-panel,
+  .online-lobby-panel {
+    width: min(100%, calc(100vw - 16px)) !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    border-radius: 14px !important;
+  }
+
+  .guess-topbar {
+    display: grid !important;
+    gap: 12px !important;
+  }
+
+  .guess-panel .guess-score-box {
+    width: 100% !important;
+    justify-self: stretch !important;
+    text-align: left !important;
+  }
+
+  .guess-clue-card {
+    min-height: 260px !important;
+    padding: 16px !important;
+    border-radius: 18px !important;
+  }
+
+  .guess-text-clue {
+    font-size: 1.05rem !important;
+  }
+
+  .guess-image,
+  .guess-canvas-image {
+    width: min(230px, 66vw) !important;
+    height: min(230px, 66vw) !important;
+  }
+
+  .guess-result-box {
+    padding: 16px !important;
+    border-radius: 18px !important;
+  }
+
+  .guess-result-pokemon-image {
+    width: min(170px, 54vw) !important;
+    height: min(170px, 54vw) !important;
+  }
+
+  .guess-page-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .guess-page-actions button {
+    width: 100% !important;
+  }
+
+  .solo-clean-layout {
+    gap: 12px !important;
+    margin-top: 14px !important;
+  }
+
+  .solo-clean-card {
+    padding: 13px !important;
+  }
+
+  .solo-clean-section-head {
+    grid-template-columns: 34px minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .solo-clean-section-head > span {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 0.78rem !important;
+  }
+
+  .solo-mode-picker-button {
+    grid-template-columns: 42px minmax(0, 1fr) 18px !important;
+    gap: 10px !important;
+    min-height: 78px !important;
+    padding: 12px !important;
+  }
+
+  .solo-mode-picker-badge {
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 0.78rem !important;
+  }
+
+  .solo-mode-picker-content strong {
+    font-size: 1.05rem !important;
+  }
+
+  .solo-mode-picker-content em {
+    font-size: 0.82rem !important;
+  }
+
+  .solo-preview-stage {
+    min-height: 180px !important;
+  }
+
+  .solo-preview-stage .guess-image,
+  .solo-preview-stage .guess-canvas-image {
+    width: min(160px, 48vw) !important;
+    height: min(160px, 48vw) !important;
+  }
+
+  .solo-mode-modal {
+    width: min(100%, calc(100vw - 18px)) !important;
+    max-height: calc(100dvh - 18px) !important;
+    padding: 14px !important;
+  }
+
+  .solo-mode-modal-head {
+    gap: 10px !important;
+  }
+
+  .solo-mode-modal-card {
+    min-height: 82px !important;
+    padding: 12px !important;
+  }
+}
+
+@media (max-width: 980px) and (max-height: 560px) and (orientation: landscape) {
+  .games-page,
+  .games-hub-page,
+  .pokemon-guess-solo-page,
+  .online-menu-page,
+  .online-lobby-page,
+  .higher-lower-page {
+    min-height: 100dvh !important;
+    padding: 8px !important;
+    align-items: flex-start !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .games-panel,
+  .games-hub-panel,
+  .pokemon-guess-solo-panel,
+  .online-menu-panel,
+  .online-lobby-panel,
+  .higher-lower-panel {
+    width: min(100%, calc(100vw - 16px)) !important;
+    padding: 56px 14px 16px !important;
+    border-radius: 14px !important;
+  }
+
+  .games-hub-back-button,
+  .higher-lower-panel .games-hub-back-button {
+    top: 12px !important;
+    left: 12px !important;
+    height: 36px !important;
+    padding: 0 12px !important;
+    font-size: 0.88rem !important;
+  }
+
+  .games-hub-header,
+  .pokemon-guess-solo-header,
+  .online-menu-header,
+  .online-lobby-header,
+  .higher-lower-header {
+    margin-bottom: 14px !important;
+  }
+
+  .games-hub-header h1,
+  .pokemon-guess-solo-header h1,
+  .online-menu-header h1,
+  .online-lobby-header h1,
+  .higher-lower-title {
+    font-size: clamp(1.8rem, 5vw, 2.65rem) !important;
+    line-height: 0.92 !important;
+  }
+
+  .games-hub-header p,
+  .pokemon-guess-solo-header p,
+  .online-menu-header p,
+  .online-lobby-header p,
+  .higher-lower-subtitle {
+    font-size: 0.88rem !important;
+    line-height: 1.35 !important;
+  }
+
+  .solo-clean-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 0.62fr) !important;
+    gap: 12px !important;
+    margin-top: 12px !important;
+  }
+
+  .solo-clean-card {
+    padding: 12px !important;
+  }
+
+  .solo-wide-card {
+    grid-column: 1 / -1 !important;
+  }
+
+  .solo-clean-section-head {
+    grid-template-columns: 34px minmax(0, 1fr) !important;
+    gap: 10px !important;
+    margin-bottom: 10px !important;
+  }
+
+  .solo-clean-section-head > span {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 0.76rem !important;
+  }
+
+  .solo-clean-section-head h2 {
+    font-size: 1.05rem !important;
+  }
+
+  .solo-clean-section-head p {
+    display: none !important;
+  }
+
+  .solo-mode-picker-button {
+    grid-template-columns: 42px minmax(0, 1fr) 18px !important;
+    gap: 10px !important;
+    min-height: 70px !important;
+    padding: 11px !important;
+  }
+
+  .solo-mode-picker-badge {
+    width: 38px !important;
+    height: 38px !important;
+    font-size: 0.76rem !important;
+  }
+
+  .solo-mode-picker-content strong {
+    font-size: 1rem !important;
+  }
+
+  .solo-mode-picker-content em {
+    font-size: 0.78rem !important;
+  }
+
+  .solo-endless-card {
+    min-height: 58px !important;
+    padding: 10px 12px !important;
+    gap: 10px !important;
+  }
+
+  .solo-preview-stage {
+    min-height: 145px !important;
+    padding: 8px !important;
+  }
+
+  .solo-preview-stage .guess-image,
+  .solo-preview-stage .guess-canvas-image {
+    width: min(135px, 22vw) !important;
+    height: min(135px, 22vw) !important;
+  }
+
+  .solo-gen-grid {
+    grid-template-columns: repeat(9, minmax(54px, 1fr)) !important;
+    gap: 7px !important;
+  }
+
+  .solo-gen-card {
+    min-height: 58px !important;
+    padding: 7px !important;
+    gap: 5px !important;
+  }
+
+  .solo-gen-title {
+    font-size: 0.72rem !important;
+  }
+
+  .solo-gen-mini-switch {
+    width: 30px !important;
+    height: 18px !important;
+  }
+
+  .solo-gen-mini-switch input[type="checkbox"] {
+    width: 30px !important;
+    height: 18px !important;
+  }
+
+  .solo-gen-mini-switch input[type="checkbox"]::before {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  .solo-gen-mini-switch input[type="checkbox"]:checked::before {
+    left: 14px !important;
+  }
+
+  .solo-gen-only-button {
+    min-width: 48px !important;
+    min-height: 26px !important;
+    padding: 0 7px !important;
+    font-size: 0.72rem !important;
+  }
+
+  .solo-mode-modal {
+    width: min(760px, calc(100vw - 16px)) !important;
+    max-height: calc(100dvh - 16px) !important;
+    padding: 14px !important;
+  }
+
+  .solo-mode-modal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .solo-mode-modal-card {
+    min-height: 72px !important;
+    padding: 10px !important;
+  }
+
+  .guess-page-actions {
+    margin-bottom: 10px !important;
+    gap: 8px !important;
+  }
+
+  .games-back-button {
+    min-height: 36px !important;
+    padding: 0 12px !important;
+    font-size: 0.86rem !important;
+  }
+
+  .guess-topbar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 10px !important;
+    margin-top: 8px !important;
+  }
+
+  .guess-panel .guess-score-box {
+    justify-self: end !important;
+    padding: 7px 10px !important;
+  }
+
+  .guess-panel .guess-score-box strong {
+    font-size: 1rem !important;
+  }
+
+  .guess-round-layout {
+    margin-top: 10px !important;
+  }
+
+  .guess-clue-card {
+    min-height: 220px !important;
+    padding: 14px !important;
+    border-radius: 16px !important;
+  }
+
+  .guess-clue-stack .guess-text-clue,
+  .guess-clue-stack .guess-image-wrap {
+    padding: 12px !important;
+    border-radius: 14px !important;
+  }
+
+  .guess-text-clue {
+    font-size: 1rem !important;
+  }
+
+  .guess-image,
+  .guess-canvas-image {
+    width: min(180px, 30vw) !important;
+    height: min(180px, 30vw) !important;
+  }
+
+  .guess-round-layout-resolved {
+    grid-template-columns: minmax(0, 1fr) minmax(230px, 0.62fr) !important;
+    gap: 12px !important;
+  }
+
+  .guess-result-pokemon-image {
+    width: min(130px, 18vw) !important;
+    height: min(130px, 18vw) !important;
+  }
+
+  .guess-resolution-box {
+    padding: 14px !important;
+    gap: 5px !important;
+  }
+
+  .guess-resolution-box h2 {
+    font-size: 1.25rem !important;
+  }
+
+  .guess-input-row {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+    margin-top: 12px !important;
+  }
+
+  .guess-name-input,
+  .guess-submit-button {
+    min-height: 40px !important;
+  }
+
+  .guess-suggestion-menu {
+    max-height: 150px !important;
+  }
+
+  .higher-lower-menu-grid {
+    gap: 10px !important;
+  }
+
+  .higher-lower-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .higher-lower-versus-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .higher-lower-pokemon-card {
+    min-height: 220px !important;
+    padding: 10px !important;
+  }
+
+  .higher-lower-image-wrap {
+    min-height: 92px !important;
+  }
+
+  .higher-lower-pokemon-image {
+    width: min(96px, 80%) !important;
+    max-height: 92px !important;
+  }
+
+  .higher-lower-pokemon-name {
+    min-height: 34px !important;
+    font-size: clamp(15px, 2.6vw, 18px) !important;
+  }
+
+  .higher-lower-stat-value {
+    font-size: 24px !important;
+  }
+
+  .higher-lower-guess-button {
+    min-height: 42px !important;
+    font-size: 14px !important;
+  }
+}
+
+@media (max-width: 700px) and (max-height: 430px) and (orientation: landscape) {
+  .solo-clean-layout,
+  .guess-round-layout-resolved,
+  .higher-lower-versus-grid,
+  .higher-lower-filter-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .guess-topbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .guess-panel .guess-score-box {
+    width: 100% !important;
+    justify-self: stretch !important;
+  }
+
+  .solo-gen-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .guess-input-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .guess-submit-button {
+    width: 100% !important;
+  }
+}
+
+/* =========================================================
+   Higher / Lower landscape: Pokemon immer nebeneinander
+========================================================= */
+
+@media (max-width: 980px) and (max-height: 560px) and (orientation: landscape) {
+  .higher-lower-page {
+    min-height: 100dvh !important;
+    padding: 8px !important;
+    align-items: flex-start !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .higher-lower-panel {
+    width: min(100%, calc(100vw - 16px)) !important;
+    padding: 52px 12px 12px !important;
+    border-radius: 14px !important;
+  }
+
+  .higher-lower-header {
+    margin-bottom: 8px !important;
+  }
+
+  .higher-lower-eyebrow {
+    font-size: 10px !important;
+    letter-spacing: 2px !important;
+  }
+
+  .higher-lower-title {
+    margin: 4px 0 3px !important;
+    font-size: clamp(24px, 5vw, 38px) !important;
+    line-height: 0.9 !important;
+  }
+
+  .higher-lower-subtitle {
+    font-size: 12px !important;
+    line-height: 1.25 !important;
+  }
+
+  .higher-lower-game-wrap {
+    gap: 8px !important;
+  }
+
+  .higher-lower-score-row {
+    gap: 6px !important;
+  }
+
+  .higher-lower-score-pill {
+    padding: 6px 9px !important;
+    border-radius: 10px !important;
+    font-size: 12px !important;
+  }
+
+  .higher-lower-versus-grid {
+    position: relative !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    align-items: stretch !important;
+  }
+
+  .higher-lower-vs-center {
+    position: absolute !important;
+    left: 50% !important;
+    top: 46% !important;
+    z-index: 5 !important;
+    transform: translate(-50%, -50%) !important;
+    pointer-events: none !important;
+  }
+
+  .higher-lower-vs-badge {
+    width: 46px !important;
+    height: 46px !important;
+    font-size: 17px !important;
+  }
+
+  .higher-lower-pokemon-card {
+    min-height: 190px !important;
+    grid-template-rows: auto 78px minmax(28px, auto) auto !important;
+    gap: 6px !important;
+    padding: 9px !important;
+    border-radius: 14px !important;
+  }
+
+  .higher-lower-card-side {
+    font-size: 9px !important;
+    letter-spacing: 1.4px !important;
+  }
+
+  .higher-lower-image-wrap {
+    min-height: 78px !important;
+  }
+
+  .higher-lower-pokemon-image {
+    width: min(82px, 78%) !important;
+    max-height: 78px !important;
+  }
+
+  .higher-lower-pokemon-placeholder {
+    width: 74px !important;
+    height: 74px !important;
+    font-size: 30px !important;
+  }
+
+  .higher-lower-pokemon-name {
+    min-height: 28px !important;
+    font-size: clamp(13px, 2.4vw, 17px) !important;
+    line-height: 1.05 !important;
+  }
+
+  .higher-lower-stat-box {
+    padding: 7px 6px !important;
+    border-radius: 11px !important;
+  }
+
+  .higher-lower-stat-label {
+    font-size: 10px !important;
+  }
+
+  .higher-lower-stat-value {
+    font-size: 22px !important;
+  }
+
+  .higher-lower-guess-row {
+    position: sticky !important;
+    bottom: 6px !important;
+    z-index: 20 !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+  }
+
+  .higher-lower-guess-button {
+    min-height: 38px !important;
+    padding: 0 8px !important;
+    border-radius: 10px !important;
+    font-size: 13px !important;
+  }
+}
+
+@media (max-width: 700px) and (max-height: 430px) and (orientation: landscape) {
+  .higher-lower-versus-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .higher-lower-pokemon-card {
+    min-height: 172px !important;
+    grid-template-rows: auto 64px minmax(24px, auto) auto !important;
+    padding: 8px !important;
+  }
+
+  .higher-lower-image-wrap {
+    min-height: 64px !important;
+  }
+
+  .higher-lower-pokemon-image {
+    width: min(68px, 76%) !important;
+    max-height: 64px !important;
+  }
+
+  .higher-lower-pokemon-name {
+    min-height: 24px !important;
+    font-size: clamp(12px, 2.3vw, 15px) !important;
+  }
+
+  .higher-lower-stat-value {
+    font-size: 19px !important;
+  }
+
+  .higher-lower-vs-badge {
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 15px !important;
+  }
 }

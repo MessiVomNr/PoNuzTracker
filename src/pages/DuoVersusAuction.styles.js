@@ -1,24 +1,40 @@
-// src/pages/DuoVersusAuction.styles.js
+// src/versus/DuoVersusAuction.styles.js
+
+const cardBase = {
+  boxSizing: "border-box",
+  minWidth: 0,
+};
+
+const buttonBase = {
+  boxSizing: "border-box",
+  touchAction: "manipulation",
+  WebkitTapHighlightColor: "transparent",
+};
 
 export const statPanel = {
-  padding: 12,
+  ...cardBase,
+  padding: "clamp(10px, 1.6vw, 12px)",
   borderRadius: 12,
   border: "1px solid rgba(137,155,184,0.22)",
   background:
-    "radial-gradient(circle at 0% 0%, rgba(52,211,153,0.075), transparent 44%), linear-gradient(180deg, rgba(13,24,42,0.82), rgba(8,15,28,0.82))",
+    "radial-gradient(circle at 0% 0%, rgba(96,165,250,0.08), transparent 44%), linear-gradient(180deg, rgba(13,24,42,0.82), rgba(8,15,28,0.82))",
   boxShadow:
     "inset 0 1px 0 rgba(255,255,255,0.035), 0 12px 28px rgba(0,0,0,0.32)",
 };
 
 export const auctionGrid = {
   display: "grid",
-  gridTemplateColumns: "1.6fr 1fr",
-  gap: 10,
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
+  gap: "clamp(10px, 1.8vw, 14px)",
   alignItems: "start",
+  minWidth: 0,
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 export const playerCard = {
-  padding: 12,
+  ...cardBase,
+  padding: "clamp(10px, 1.6vw, 12px)",
   borderRadius: 12,
   border: "1px solid rgba(100,140,215,0.24)",
   background:
@@ -28,7 +44,8 @@ export const playerCard = {
 };
 
 export const teamSlotCard = {
-  padding: 12,
+  ...cardBase,
+  padding: "clamp(10px, 1.6vw, 12px)",
   borderRadius: 12,
   border: "1px solid rgba(137,155,184,0.2)",
   background:
@@ -38,13 +55,16 @@ export const teamSlotCard = {
 };
 
 export const timerBig = {
-  fontSize: 40,
+  fontSize: "clamp(28px, 8vw, 40px)",
   fontWeight: 900,
   letterSpacing: 1,
   marginBottom: 6,
+  lineHeight: 1,
 };
 
 export const input = {
+  width: "100%",
+  minWidth: 0,
   minHeight: 42,
   padding: "10px 12px",
   borderRadius: 10,
@@ -54,14 +74,14 @@ export const input = {
   color: "#f8fafc",
   outline: "none",
   fontWeight: 800,
+  boxSizing: "border-box",
   boxShadow:
     "inset 0 1px 0 rgba(255,255,255,0.045), 0 8px 18px rgba(0,0,0,0.18)",
 };
 
 export const selectDark = {
   ...input,
-  width: "100%",
-  padding: "10px 42px 10px 12px",
+  padding: "10px 38px 10px 12px",
   backgroundColor: "#101827",
   color: "#f8fafc",
   colorScheme: "dark",
@@ -76,24 +96,28 @@ export const selectOption = {
 };
 
 export const checkboxStyle = {
-  accentColor: "#34d399",
+  accentColor: "#60a5fa",
 };
 
 export const btnPrimary = {
-  padding: "10px 12px",
+  ...buttonBase,
+  padding: "10px 14px",
+  minHeight: 42,
   borderRadius: 10,
-  border: "1px solid rgba(52,211,153,0.46)",
+  border: "1px solid rgba(96,165,250,0.52)",
   background:
-    "linear-gradient(180deg, rgba(32,142,112,0.92), rgba(13,86,72,0.92))",
+    "linear-gradient(180deg, rgba(37,99,235,0.88), rgba(30,64,175,0.88))",
   color: "#ffffff",
   cursor: "pointer",
   fontWeight: 950,
   boxShadow:
-    "inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 22px rgba(0,0,0,0.24)",
+    "inset 0 1px 0 rgba(255,255,255,0.10), 0 10px 22px rgba(0,0,0,0.24)",
 };
 
 export const btnGhost = {
-  padding: "10px 12px",
+  ...buttonBase,
+  padding: "10px 14px",
+  minHeight: 42,
   borderRadius: 10,
   border: "1px solid rgba(120,138,170,0.42)",
   background:
@@ -109,7 +133,9 @@ export const btnSecondary =
   "px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white transition";
 
 export const btnGhostSmall = {
+  ...buttonBase,
   padding: "8px 10px",
+  minHeight: 34,
   borderRadius: 9,
   border: "1px solid rgba(120,138,170,0.42)",
   background:
@@ -123,6 +149,7 @@ export const btnGhostSmall = {
 };
 
 export const imgBtn = {
+  ...buttonBase,
   padding: 0,
   border: "none",
   background: "transparent",
@@ -130,19 +157,24 @@ export const imgBtn = {
 };
 
 export const pokeHeroWrap = {
+  ...cardBase,
   position: "relative",
-  width: 320,
-  height: 320,
+  width: "min(320px, 100%)",
+  maxWidth: "100%",
+  aspectRatio: "1 / 1",
+  height: "auto",
+  margin: "0 auto",
   borderRadius: 18,
   overflow: "hidden",
   border: "1px solid rgba(137,155,184,0.3)",
   background:
-    "radial-gradient(circle at 50% 26%, rgba(52,211,153,0.18), transparent 35%), radial-gradient(circle at 50% 70%, rgba(96,165,250,0.12), transparent 42%), linear-gradient(180deg, rgba(13,24,42,0.9), rgba(5,11,21,0.9))",
+    "radial-gradient(circle at 50% 26%, rgba(96,165,250,0.18), transparent 35%), radial-gradient(circle at 50% 70%, rgba(148,163,184,0.12), transparent 42%), linear-gradient(180deg, rgba(13,24,42,0.9), rgba(5,11,21,0.9))",
   boxShadow:
     "inset 0 1px 0 rgba(255,255,255,0.045), 0 20px 48px rgba(0,0,0,0.5)",
 };
 
 export const pokeHeroBtn = {
+  ...buttonBase,
   padding: 0,
   border: "none",
   background: "transparent",
@@ -170,9 +202,10 @@ export const pokeHeroOverlay = {
   background:
     "linear-gradient(to top, rgba(0,0,0,0.88), rgba(0,0,0,0.28), rgba(0,0,0,0))",
   color: "white",
+  boxSizing: "border-box",
+  minWidth: 0,
 };
 
-// ✅ absichtlich leer -> kein weißer Rahmen/Glow beim Bieten
 export const pokeHeroOverlayFlash = {};
 
 export const pokeHeroRightBadge = {
@@ -183,11 +216,13 @@ export const pokeHeroRightBadge = {
   border: "1px solid rgba(137,155,184,0.26)",
   minWidth: 7,
   textAlign: "center",
+  boxSizing: "border-box",
   boxShadow:
     "inset 0 1px 0 rgba(255,255,255,0.035), 0 8px 16px rgba(0,0,0,0.22)",
 };
 
 export const evoCardBtn = {
+  ...buttonBase,
   display: "grid",
   justifyItems: "center",
   gap: 4,
@@ -199,6 +234,7 @@ export const evoCardBtn = {
   color: "#f8fafc",
   cursor: "pointer",
   textAlign: "center",
+  minWidth: 0,
   boxShadow:
     "inset 0 1px 0 rgba(255,255,255,0.035), 0 10px 22px rgba(0,0,0,0.28)",
 };
@@ -210,6 +246,7 @@ export const typeIconRow = {
   justifyContent: "center",
   alignItems: "center",
   flexWrap: "wrap",
+  minWidth: 0,
 };
 
 export const typeIcon = {
@@ -220,11 +257,14 @@ export const typeIcon = {
   background:
     "linear-gradient(180deg, rgba(13,24,42,0.86), rgba(8,15,28,0.86))",
   border: "1px solid rgba(137,155,184,0.24)",
+  boxSizing: "border-box",
   boxShadow: "0 6px 12px rgba(0,0,0,0.2)",
 };
 
 export const btnDanger = {
-  padding: "10px 12px",
+  ...buttonBase,
+  padding: "10px 14px",
+  minHeight: 42,
   borderRadius: 10,
   border: "1px solid rgba(248,113,113,0.38)",
   background:
@@ -238,5 +278,5 @@ export const btnDanger = {
 
 export const pokeHeroOverlayFlashStrong = {
   boxShadow:
-    "0 0 0 2px rgba(52,211,153,0.34), 0 0 28px rgba(52,211,153,0.22), 0 18px 40px rgba(0,0,0,0.45)",
+    "0 0 0 2px rgba(96,165,250,0.34), 0 0 28px rgba(96,165,250,0.22), 0 18px 40px rgba(0,0,0,0.45)",
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { versionToPokedex } from "./data/versionToPokedex";
@@ -557,6 +557,260 @@ const TEAM_PAGE_CSS = `
     outline: 2px solid rgba(120,170,255,0.55) !important;
     outline-offset: 2px !important;
   }
+  .team-slot-sprite,
+  .team-pokebox-item,
+  .pokeboxImgStatic {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+  }
+    
+  @media (max-width: 760px), (max-width: 980px) and (max-height: 560px) and (orientation: landscape) {
+    .team-page {
+      min-height: 100dvh !important;
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+    }
+
+    .team-content {
+      width: 100% !important;
+      padding: 10px 8px 28px !important;
+    }
+
+    .team-topbar {
+      width: 100% !important;
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      align-items: stretch !important;
+      gap: 10px !important;
+      padding: 12px !important;
+      border-radius: 18px !important;
+    }
+
+    .team-topbar button {
+      width: 100% !important;
+      min-height: 40px !important;
+      padding: 8px 10px !important;
+      font-size: 0.86rem !important;
+    }
+
+    .team-header-card {
+      width: 100% !important;
+      margin: 0 0 12px !important;
+      padding: 14px !important;
+      border-radius: 18px !important;
+    }
+
+    .team-header-card h1 {
+      font-size: clamp(1.75rem, 8vw, 2.35rem) !important;
+      line-height: 0.95 !important;
+      text-shadow: 2px 2px #079e4b !important;
+    }
+
+    .team-header-actions {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 8px !important;
+    }
+
+    .team-header-actions button {
+      width: 100% !important;
+      min-height: 42px !important;
+      padding: 9px 10px !important;
+      font-size: 0.86rem !important;
+    }
+
+    .team-teams-wrap {
+      width: 100% !important;
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      gap: 14px !important;
+      justify-content: stretch !important;
+    }
+
+    .team-column {
+      width: 100% !important;
+      gap: 12px !important;
+    }
+
+    .team-glass-card {
+      padding: 12px !important;
+      border-radius: 18px !important;
+    }
+
+    .team-party-card > div:first-child {
+      margin-bottom: 10px !important;
+      align-items: center !important;
+    }
+
+    .team-party-card h2,
+    .team-box-card h3 {
+      font-size: 1.25rem !important;
+      line-height: 1.05 !important;
+    }
+
+    .team-party-card > div:first-child button {
+      min-height: 38px !important;
+      padding: 8px 10px !important;
+      font-size: 0.84rem !important;
+    }
+
+    .team-list {
+      gap: 8px !important;
+    }
+
+    .team-slot-card {
+      min-height: 76px !important;
+      padding: 9px !important;
+      border-radius: 14px !important;
+      touch-action: pan-y;
+    }
+
+    .team-slot-card-empty {
+      min-height: 54px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    .team-slot-content {
+      gap: 10px !important;
+      align-items: center !important;
+    }
+
+    .team-slot-sprite {
+      width: 58px !important;
+      height: 58px !important;
+      flex: 0 0 58px !important;
+      object-fit: contain !important;
+    }
+
+    .team-slot-info {
+      min-width: 0 !important;
+      flex: 1 1 auto !important;
+    }
+
+    .team-slot-name-row {
+      gap: 6px !important;
+      margin-bottom: 5px !important;
+      flex-wrap: wrap !important;
+    }
+
+    .team-slot-name {
+      max-width: 100% !important;
+      overflow: hidden !important;
+      font-size: 1rem !important;
+      line-height: 1.1 !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+    }
+
+    .team-slot-name-row span {
+      max-width: 100% !important;
+      font-size: 0.68rem !important;
+      padding: 4px 7px !important;
+    }
+
+    .team-type-row {
+      gap: 6px !important;
+    }
+
+    .team-type-icon {
+      width: 30px !important;
+      height: 30px !important;
+      padding: 4px !important;
+      border-radius: 9px !important;
+    }
+
+    .team-pokebox-list {
+      grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)) !important;
+      gap: 8px !important;
+    }
+
+    .team-pokebox-item {
+      border-radius: 13px !important;
+      padding: 5px !important;
+    }
+
+    .analysisModalScroll {
+      width: min(100%, calc(100vw - 18px)) !important;
+      max-height: 88dvh !important;
+      padding: 14px !important;
+      border-radius: 18px !important;
+    }
+
+    .analysisModalScroll > div:first-child {
+      align-items: stretch !important;
+      flex-direction: column !important;
+    }
+
+    .analysisModalScroll > div:first-child button {
+      width: 100% !important;
+      min-height: 40px !important;
+    }
+  }
+
+  @media (max-width: 980px) and (max-height: 560px) and (orientation: landscape) {
+    .team-content {
+      padding: 8px 8px 22px !important;
+    }
+
+    .team-header-card {
+      padding: 12px !important;
+    }
+
+    .team-header-card h1 {
+      font-size: clamp(1.45rem, 4.8vw, 2rem) !important;
+    }
+
+    .team-teams-wrap {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 12px !important;
+    }
+
+    .team-glass-card {
+      padding: 10px !important;
+    }
+
+    .team-slot-card {
+      min-height: 68px !important;
+      padding: 8px !important;
+    }
+
+    .team-slot-sprite {
+      width: 52px !important;
+      height: 52px !important;
+      flex-basis: 52px !important;
+    }
+
+    .team-type-icon {
+      width: 26px !important;
+      height: 26px !important;
+      padding: 3px !important;
+    }
+
+    .team-pokebox-list {
+      grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)) !important;
+      gap: 7px !important;
+    }
+  }
+
+  @media (max-width: 390px), (max-width: 700px) and (max-height: 430px) and (orientation: landscape) {
+    .team-header-actions {
+      grid-template-columns: 1fr !important;
+    }
+
+    .team-slot-sprite {
+      width: 54px !important;
+      height: 54px !important;
+      flex-basis: 54px !important;
+    }
+
+    .team-pokebox-list {
+      grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)) !important;
+    }
+  }
 `;
 
 /* =========================
@@ -698,6 +952,8 @@ const [analysisModal, setAnalysisModal] = useState({
   open: false,
   teamIndex: 0,
 });
+const pokemonLongPressTimerRef = useRef(null);
+const ignoreNextPokemonClickRef = useRef(false);
 
   // ===== Load Dex + Teams + Box when sources change =====
   useEffect(() => {
@@ -1002,6 +1258,47 @@ useEffect(() => {
     setShowHardResetModal(false);
   };
 
+  const clearPokemonLongPressTimer = () => {
+    if (pokemonLongPressTimerRef.current) {
+      window.clearTimeout(pokemonLongPressTimerRef.current);
+      pokemonLongPressTimerRef.current = null;
+    }
+  };
+
+  const openPokemonInfo = (idToUse) => {
+    const id = Number(idToUse);
+    if (!id) return;
+
+    navigate(`/pokemon/${id}`);
+  };
+
+  const startPokemonLongPress = (idToUse) => {
+    clearPokemonLongPressTimer();
+
+    const id = Number(idToUse);
+    if (!id) return;
+
+    ignoreNextPokemonClickRef.current = false;
+
+    pokemonLongPressTimerRef.current = window.setTimeout(() => {
+      ignoreNextPokemonClickRef.current = true;
+      openPokemonInfo(id);
+
+      window.setTimeout(() => {
+        ignoreNextPokemonClickRef.current = false;
+      }, 900);
+    }, 600);
+  };
+
+  const handlePokemonPrimaryClick = async (teamIndex, pokemonName) => {
+    if (ignoreNextPokemonClickRef.current) {
+      ignoreNextPokemonClickRef.current = false;
+      return;
+    }
+
+    await toggleLinkedPokemon(teamIndex, pokemonName);
+  };
+
   return (
     <div className="team-page" style={page}>
       <style>{TEAM_PAGE_CSS}</style>
@@ -1009,9 +1306,9 @@ useEffect(() => {
       <div style={bg} />
       <div style={overlay} />
 
-      <div style={content}>
+      <div className="team-content" style={content}>
         {isDuo && (
-  <div style={topBar}>
+  <div className="team-topbar" style={topBar}>
     <div>
       <strong style={{ color: "#079e4b" }}>
         {effectiveLinkMode === "solo"
@@ -1038,7 +1335,7 @@ useEffect(() => {
 )}
         {duoError && <p style={{ color: "crimson" }}>{duoError}</p>}
 
-        <div style={headerCard}>
+        <div className="team-header-card" style={headerCard}>
   <h1 style={{ margin: 0 }}>
   Dein Team (
   {linkMode === "solo" ? "Solo" : linkMode === "trio" ? "Trio" : "Duo"}
@@ -1046,6 +1343,7 @@ useEffect(() => {
 </h1>
 
   <div
+    className="team-header-actions"
     style={{
       marginTop: 10,
       display: "flex",
@@ -1063,10 +1361,10 @@ useEffect(() => {
   </div>
 </div>
 
-        <div style={teamsWrap}>
+        <div className="team-teams-wrap" style={teamsWrap}>
           {teams.map((team, i) => (
-            <div key={i} style={teamCol}>
-              <div style={glassCard}>
+            <div key={i} className="team-column" style={teamCol}>
+              <div className="team-glass-card team-party-card" style={glassCard}>
   <div
     style={{
       display: "flex",
@@ -1094,7 +1392,7 @@ useEffect(() => {
                 <DragDropContext onDragEnd={(res) => onDragEnd(res, i)}>
                   <Droppable droppableId={`team-${i}`}>
                     {(provided) => (
-                      <ul ref={provided.innerRef} {...provided.droppableProps} style={teamList}>
+                      <ul className="team-list" ref={provided.innerRef} {...provided.droppableProps} style={teamList}>
                         {team.map((p, j) => {
                           const baseDexId = p ? getDexIdFromName(p, fullDex) : null;
                           const formKey = p ? (formByName[p] || "") : "";
@@ -1117,23 +1415,29 @@ useEffect(() => {
                                   ref={provided.innerRef}
                                   {...provided.draggableProps}
                                   {...provided.dragHandleProps}
+                                  className={p ? "team-slot-card" : "team-slot-card team-slot-card-empty"}
                                   style={{
                                     ...teamSlot,
                                     ...(provided.draggableProps.style || {}),
                                   }}
                                 >
                                   {p ? (
-                                    <div style={slotContent}>
+                                    <div className="team-slot-content" style={slotContent}>
                                       {imgUrl && (
                                         <img
+                                          className="team-slot-sprite"
                                           src={imgUrl}
                                           alt={p}
-                                          onClick={() => toggleLinkedPokemon(i, p)}
+                                          onClick={() => handlePokemonPrimaryClick(i, p)}
+                                          onTouchStart={() => startPokemonLongPress(idToUse)}
+                                          onTouchMove={clearPokemonLongPressTimer}
+                                          onTouchEnd={clearPokemonLongPressTimer}
+                                          onTouchCancel={clearPokemonLongPressTimer}
                                           onContextMenu={(e) => {
                                             e.preventDefault();
-                                            if (idToUse) navigate(`/pokemon/${idToUse}`);
+                                            openPokemonInfo(idToUse);
                                           }}
-                                          title="Linksklick: aus Team entfernen | Rechtsklick: Pokédex öffnen"
+                                          title="Klick: aus Team entfernen | Gedrückt halten/Rechtsklick: Pokédex öffnen"
                                           style={{
                                             width: 72,
                                             height: 72,
@@ -1151,9 +1455,9 @@ useEffect(() => {
                                         />
                                       )}
 
-                                      <div style={{ flex: 1 }}>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                                          <div style={{ fontWeight: 900 }}>{p}</div>
+                                      <div className="team-slot-info" style={{ flex: 1 }}>
+                                        <div className="team-slot-name-row" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                                          <div className="team-slot-name" style={{ fontWeight: 900 }}>{p}</div>
 
                                           {!!formKey && (
                                             <span
@@ -1175,10 +1479,11 @@ useEffect(() => {
                                           )}
                                         </div>
 
-                                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                                        <div className="team-type-row" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                                           {types.map((type) => (
                                             <img
                                               key={type}
+                                              className="team-type-icon"
                                               src={typeIconUrl(type)}
                                               alt={type}
                                               title={type}
@@ -1216,9 +1521,9 @@ useEffect(() => {
                 </DragDropContext>
               </div>
 
-                            <div style={glassCard}>
+                            <div className="team-glass-card team-box-card" style={glassCard}>
                 <h3 style={{ marginTop: 0 }}>Box {i + 1}</h3>
-                <div style={pokeboxList}>
+                <div className="team-pokebox-list" style={pokeboxList}>
                   {linkedBoxRows.map((row, rowIndex) => {
                     const p = row.names[i] || "";
 
@@ -1249,13 +1554,17 @@ useEffect(() => {
                     return (
                       <button
                         key={`box-${i}-${rowIndex}-${p}`}
-                        onClick={() => toggleLinkedPokemon(i, p)}
+                        onClick={() => handlePokemonPrimaryClick(i, p)}
+                        onTouchStart={() => startPokemonLongPress(idToUse)}
+                        onTouchMove={clearPokemonLongPressTimer}
+                        onTouchEnd={clearPokemonLongPressTimer}
+                        onTouchCancel={clearPokemonLongPressTimer}
                         onContextMenu={(e) => {
                           e.preventDefault();
-                          if (idToUse) navigate(`/pokemon/${idToUse}`);
+                          openPokemonInfo(idToUse);
                         }}
-                        title={`${rowIndex + 1}. ${p}${row.route ? ` - ${row.route}` : ""} | Linksklick: ins Team | Rechtsklick: Pokédex`}
-                        className="pokeboxItemStatic"
+                        title={`${rowIndex + 1}. ${p}${row.route ? ` - ${row.route}` : ""} | Klick: ins Team | Gedrückt halten/Rechtsklick: Pokédex`}
+                        className="pokeboxItemStatic team-pokebox-item"
                         style={pokeboxItem}
                       >
                         {imgUrl ? (

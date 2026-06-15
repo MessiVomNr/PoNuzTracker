@@ -263,7 +263,7 @@ export default function VersusHome() {
           }}
           onClick={() => nav("/")}
         >
-          ← Zur Startseite
+          Zur Startseite
         </button>
 
         <header className="versus-home-header">

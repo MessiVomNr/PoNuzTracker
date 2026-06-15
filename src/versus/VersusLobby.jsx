@@ -244,7 +244,7 @@ export default function VersusLobby() {
           className="pnt-back-button"
           onClick={() => nav("/")}
         >
-          ← Zur Startseite
+          Zur Startseite
         </button>
 
         <header className="versus-lobby-header">

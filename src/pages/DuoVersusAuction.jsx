@@ -1347,11 +1347,55 @@ useEffect(() => {
   const teamNames = auction?.teamNames || {};
   const hasDraftBackground = phase === "lobby" || phase === "auction" || phase === "blindReveal" || phase === "results";
   const draftBgOverlay = phase === "lobby" ? "rgba(0,0,0,0.88)" : "rgba(0,0,0,0.78)";
+
+  function getDraftViewport() {
+    if (typeof window === "undefined") {
+      return { width: 1200, height: 800 };
+    }
+
+    const vv = window.visualViewport;
+
+    return {
+      width: Math.round(vv?.width || window.innerWidth || 1200),
+      height: Math.round(vv?.height || window.innerHeight || 800),
+    };
+  }
+
+  const [draftViewport, setDraftViewport] = useState(getDraftViewport);
+
+  useEffect(() => {
+    function updateDraftViewport() {
+      setDraftViewport(getDraftViewport());
+    }
+
+    updateDraftViewport();
+
+    window.addEventListener("resize", updateDraftViewport);
+    window.addEventListener("orientationchange", updateDraftViewport);
+    window.visualViewport?.addEventListener("resize", updateDraftViewport);
+
+    return () => {
+      window.removeEventListener("resize", updateDraftViewport);
+      window.removeEventListener("orientationchange", updateDraftViewport);
+      window.visualViewport?.removeEventListener("resize", updateDraftViewport);
+    };
+  }, []);
+
+  const draftIsPortraitMobile = draftViewport.width <= 720;
+  const draftIsPhoneLandscape =
+    draftViewport.width <= 950 &&
+    draftViewport.height <= 540 &&
+    draftViewport.width > draftViewport.height;
+  const draftIsCompact = draftIsPortraitMobile || draftIsPhoneLandscape;
   
   const outerStyle = {
     ...outer,
     display: phase === "lobby" ? "block" : "grid",
     alignContent: "start",
+    minHeight: "100svh",
+    overflowX: "hidden",
+    boxSizing: "border-box",
+    padding: draftIsCompact ? "8px 10px 24px" : outer?.padding,
     backgroundImage: hasDraftBackground
       ? `linear-gradient(${draftBgOverlay}, ${draftBgOverlay}), url('/backgrounds/background_draft.png')`
       : "none",
@@ -1359,7 +1403,7 @@ useEffect(() => {
     backgroundPosition: phase === "lobby" ? "center 22%" : "center 30%",
     backgroundRepeat: "no-repeat",
     backgroundColor: hasDraftBackground ? "#05070b" : "transparent",
-    backgroundAttachment: hasDraftBackground ? "fixed" : "scroll",
+    backgroundAttachment: hasDraftBackground && !draftIsCompact ? "fixed" : "scroll",
     position: "relative",
   };
 
@@ -4839,39 +4883,54 @@ function teamTitle(tid) {
     return teamOwners?.[tid] === myPlayerId;
   }
 
+  const lobbyPanelWidth = draftIsPortraitMobile
+    ? "calc(100vw - 20px)"
+    : draftIsPhoneLandscape
+      ? "calc(100vw - 24px)"
+      : "min(1240px, calc(100vw - 36px))";
+
   const lobbyPagePanel = {
     ...panel,
-    width: "min(1240px, calc(100vw - 36px))",
-    margin: "22px auto 0",
-    padding: 20,
+    width: lobbyPanelWidth,
+    maxWidth: "1240px",
+    margin: draftIsCompact ? "10px auto 0" : "22px auto 0",
+    padding: draftIsPortraitMobile ? 12 : draftIsPhoneLandscape ? 14 : 20,
+    boxSizing: "border-box",
+    overflow: "hidden",
     background:
-      "radial-gradient(circle at 18% 0%, rgba(52,211,153,0.11), transparent 38%), radial-gradient(circle at 84% 0%, rgba(96,165,250,0.11), transparent 34%), linear-gradient(180deg, rgba(10,18,33,0.94), rgba(5,11,21,0.91))",
+      "radial-gradient(circle at 18% 0%, rgba(96,165,250,0.13), transparent 38%), radial-gradient(circle at 84% 0%, rgba(148,163,184,0.10), transparent 34%), linear-gradient(180deg, rgba(10,18,33,0.95), rgba(5,11,21,0.93))",
     border: "1px solid rgba(137,155,184,0.24)",
-    boxShadow:
-      "0 24px 80px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.045)",
+    boxShadow: draftIsCompact
+      ? "0 18px 54px rgba(0,0,0,0.44), inset 0 1px 0 rgba(255,255,255,0.045)"
+      : "0 24px 80px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.045)",
     backdropFilter: "blur(14px)",
     WebkitBackdropFilter: "blur(14px)",
   };
 
   const lobbyLayout = {
     display: "grid",
-    gridTemplateColumns: "310px minmax(0, 1fr)",
-    gap: 30,
+    gridTemplateColumns: draftIsPortraitMobile
+      ? "1fr"
+      : draftIsPhoneLandscape
+        ? "235px minmax(0, 1fr)"
+        : "310px minmax(0, 1fr)",
+    gap: draftIsPortraitMobile ? 14 : draftIsPhoneLandscape ? 14 : 30,
     alignItems: "start",
+    minWidth: 0,
   };
 
   const lobbyTitle = {
-    fontSize: 24,
+    fontSize: draftIsPortraitMobile ? 22 : draftIsPhoneLandscape ? 22 : 24,
     fontWeight: 950,
     marginBottom: 3,
     letterSpacing: "-0.02em",
     color: "#ffffff",
-    textShadow: "0 2px 12px rgba(52,211,153,0.16)",
+    textShadow: "0 2px 12px rgba(96,165,250,0.16)",
   };
 
   const lobbyHint = {
-    fontSize: 12,
-    lineHeight: 1.45,
+    fontSize: draftIsCompact ? 11 : 12,
+    lineHeight: 1.42,
     color: "rgba(235,241,250,0.66)",
     fontWeight: 700,
   };
@@ -4880,29 +4939,31 @@ function teamTitle(tid) {
     width: "100%",
     boxSizing: "border-box",
     textAlign: "left",
-    padding: "16px 16px",
+    padding: draftIsCompact ? "12px 12px" : "16px 16px",
     borderRadius: 12,
     border: "1px solid rgba(137,155,184,0.22)",
     background:
-      "radial-gradient(circle at 0% 0%, rgba(52,211,153,0.075), transparent 44%), linear-gradient(180deg, rgba(13,24,42,0.82), rgba(8,15,28,0.82))",
+      "radial-gradient(circle at 0% 0%, rgba(96,165,250,0.09), transparent 44%), linear-gradient(180deg, rgba(13,24,42,0.82), rgba(8,15,28,0.82))",
     color: "white",
     cursor: "pointer",
     display: "grid",
-    gap: 7,
+    gap: draftIsCompact ? 5 : 7,
+    minWidth: 0,
+    touchAction: "manipulation",
     boxShadow:
       "inset 0 1px 0 rgba(255,255,255,0.035), 0 10px 24px rgba(0,0,0,0.22)",
   };
 
   const lobbyTeamList = {
     display: "grid",
-    gap: 10,
+    gap: draftIsCompact ? 8 : 10,
     minWidth: 0,
   };
 
   const lobbyTeamRow = {
     width: "100%",
     boxSizing: "border-box",
-    padding: "12px 14px",
+    padding: draftIsPortraitMobile ? "10px 10px" : draftIsPhoneLandscape ? "10px 12px" : "12px 14px",
     borderRadius: 12,
     border: "1px solid rgba(100,140,215,0.28)",
     background:
@@ -4910,11 +4971,17 @@ function teamTitle(tid) {
     color: "white",
     cursor: "pointer",
     display: "grid",
-    gridTemplateColumns: "72px minmax(0, 1.15fr) minmax(92px, 150px) 70px",
-    gap: 10,
+    gridTemplateColumns: draftIsPortraitMobile
+      ? "48px minmax(0, 1fr) minmax(54px, 82px) 58px"
+      : draftIsPhoneLandscape
+        ? "54px minmax(0, 1fr) minmax(74px, 118px) 62px"
+        : "72px minmax(0, 1.15fr) minmax(92px, 150px) 70px",
+    gap: draftIsCompact ? 6 : 10,
     alignItems: "center",
     textAlign: "left",
     minWidth: 0,
+    fontSize: draftIsCompact ? 12 : 14,
+    touchAction: "manipulation",
     boxShadow:
       "inset 0 1px 0 rgba(255,255,255,0.035), 0 8px 20px rgba(0,0,0,0.2)",
   };
@@ -4924,23 +4991,35 @@ function teamTitle(tid) {
     inset: 0,
     zIndex: 9999,
     background:
-      "radial-gradient(circle at 20% 0%, rgba(52,211,153,0.11), transparent 34%), radial-gradient(circle at 80% 10%, rgba(96,165,250,0.12), transparent 34%), rgba(0,0,0,0.72)",
+      "radial-gradient(circle at 20% 0%, rgba(96,165,250,0.12), transparent 34%), radial-gradient(circle at 80% 10%, rgba(148,163,184,0.10), transparent 34%), rgba(0,0,0,0.72)",
     backdropFilter: "blur(8px)",
     WebkitBackdropFilter: "blur(8px)",
-    display: "grid",
-    placeItems: "center",
-    padding: 18,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: draftIsPortraitMobile ? 10 : draftIsPhoneLandscape ? "10px 14px" : 18,
+    boxSizing: "border-box",
+    overflowX: "hidden",
+    overflowY: "auto",
+    WebkitOverflowScrolling: "touch",
   };
 
   const modalBox = {
-    width: "min(720px, 96vw)",
-    maxHeight: "86vh",
-    overflow: "auto",
-    padding: 18,
-    borderRadius: 14,
+    width: draftIsPortraitMobile
+      ? "calc(100vw - 20px)"
+      : draftIsPhoneLandscape
+        ? "min(680px, calc(100vw - 28px))"
+        : "min(720px, calc(100vw - 36px))",
+    maxWidth: "720px",
+    maxHeight: draftIsPhoneLandscape ? "calc(100svh - 20px)" : "calc(100svh - 24px)",
+    overflowX: "hidden",
+    overflowY: "auto",
+    boxSizing: "border-box",
+    padding: draftIsPortraitMobile ? 14 : draftIsPhoneLandscape ? 14 : 18,
+    borderRadius: draftIsPortraitMobile ? 13 : 14,
     border: "1px solid rgba(137,155,184,0.34)",
     background:
-      "radial-gradient(circle at 50% 0%, rgba(52,211,153,0.10), transparent 42%), linear-gradient(180deg, rgba(10,18,33,0.98), rgba(8,15,28,0.98))",
+      "radial-gradient(circle at 50% 0%, rgba(96,165,250,0.10), transparent 42%), linear-gradient(180deg, rgba(10,18,33,0.98), rgba(8,15,28,0.98))",
     color: "white",
     boxShadow:
       "0 26px 90px rgba(0,0,0,0.64), inset 0 1px 0 rgba(255,255,255,0.05)",
@@ -4948,12 +5027,200 @@ function teamTitle(tid) {
 
   const modalSection = {
     display: "grid",
-    gap: 10,
-    padding: 13,
+    gap: draftIsCompact ? 10 : 12,
+    padding: draftIsCompact ? 12 : 13,
     borderRadius: 12,
     border: "1px solid rgba(137,155,184,0.22)",
     background:
       "radial-gradient(circle at 0% 0%, rgba(96,165,250,0.08), transparent 42%), rgba(5,11,21,0.34)",
+    minWidth: 0,
+    boxSizing: "border-box",
+  };
+
+  const modalHeader = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: draftIsCompact ? 10 : 12,
+    alignItems: draftIsPortraitMobile ? "stretch" : "center",
+    flexDirection: draftIsPortraitMobile ? "column" : "row",
+    marginBottom: 14,
+    minWidth: 0,
+  };
+
+  const modalTitleText = {
+    fontSize: draftIsCompact ? 20 : 22,
+    fontWeight: 950,
+    color: "#ffffff",
+    letterSpacing: "-0.02em",
+    textShadow: "0 2px 12px rgba(96,165,250,0.18)",
+    lineHeight: 1.12,
+    overflowWrap: "anywhere",
+  };
+
+  const modalCloseButton = {
+    ...btnGhostSmall,
+    alignSelf: draftIsPortraitMobile ? "stretch" : "center",
+    minWidth: draftIsPortraitMobile ? 0 : 96,
+    width: draftIsPortraitMobile ? "100%" : undefined,
+    whiteSpace: "nowrap",
+  };
+
+  const auctionTeamsPanelStyle = {
+    ...panel,
+    gridColumn: "1 / -1",
+    boxSizing: "border-box",
+    minWidth: 0,
+    overflow: "hidden",
+  };
+
+  const auctionPokemonPanelStyle = {
+    ...panel,
+    gridColumn: draftIsCompact ? "1 / -1" : "1 / 2",
+    boxSizing: "border-box",
+    minWidth: 0,
+    overflow: "hidden",
+  };
+
+  const auctionTimerPanelStyle = {
+    ...panel,
+    gridColumn: draftIsCompact ? "1 / -1" : "2 / 3",
+    height: draftIsCompact ? "auto" : "min(61.5vh)",
+    boxSizing: "border-box",
+    minWidth: 0,
+    overflow: "hidden",
+  };
+
+  const auctionTeamsGridStyle = {
+    display: "grid",
+    gridTemplateColumns: draftIsPortraitMobile
+      ? "1fr"
+      : draftIsPhoneLandscape
+        ? "repeat(2, minmax(0, 1fr))"
+        : "repeat(2, minmax(0, 1fr))",
+    gap: draftIsCompact ? 8 : 10,
+    minWidth: 0,
+  };
+
+  const auctionPokemonInfoGridStyle = {
+    display: "grid",
+    gridTemplateColumns: draftIsCompact ? "1fr" : "280px minmax(0, 1fr)",
+    gap: draftIsCompact ? 12 : 16,
+    alignItems: "start",
+    minWidth: 0,
+  };
+
+  const auctionPokemonSideStyle = {
+    display: "grid",
+    gap: 10,
+    justifyItems: "stretch",
+    width: "100%",
+    minWidth: 0,
+  };
+
+  const auctionHeroOverlayRowStyle = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: draftIsPortraitMobile ? 8 : 12,
+    alignItems: "flex-end",
+    minWidth: 0,
+  };
+
+  const auctionBidAmountStyle = {
+    fontSize: draftIsPortraitMobile ? 30 : draftIsPhoneLandscape ? 32 : 38,
+    fontWeight: 950,
+    lineHeight: 1,
+    transform: bidFlash ? "scale(1.06)" : "scale(1)",
+    transition: "transform 160ms ease",
+    overflowWrap: "anywhere",
+  };
+
+  const auctionEvoFlowStyle = {
+    display: "flex",
+    gap: draftIsCompact ? 6 : 8,
+    rowGap: draftIsCompact ? 6 : 8,
+    alignItems: "center",
+    flexWrap: "wrap",
+    justifyContent: draftIsPortraitMobile ? "center" : "flex-start",
+    alignContent: "flex-start",
+    width: "100%",
+    overflow: "hidden",
+    paddingBottom: 6,
+    boxSizing: "border-box",
+  };
+
+  const auctionEvoStatsGridStyle = {
+    display: "grid",
+    gridTemplateColumns: draftIsPortraitMobile
+      ? "1fr"
+      : draftIsPhoneLandscape
+        ? "repeat(2, minmax(180px, 1fr))"
+        : `repeat(${evoLineWithMega.length}, minmax(220px, 1fr))`,
+    gap: draftIsCompact ? 8 : 10,
+    width: "100%",
+    justifyContent: "start",
+    overflowX: draftIsPortraitMobile ? "hidden" : "auto",
+    paddingBottom: 6,
+    boxSizing: "border-box",
+  };
+
+  const blindMultiOptionsGridStyle = {
+    display: "grid",
+    gridTemplateColumns: draftIsPortraitMobile
+      ? "1fr"
+      : draftIsPhoneLandscape
+        ? "repeat(3, minmax(0, 1fr))"
+        : "repeat(3, minmax(0, 1fr))",
+    gap: 8,
+    minWidth: 0,
+  };
+
+  const bidInputGridStyle = {
+    display: "grid",
+    gridTemplateColumns: draftIsPortraitMobile ? "1fr" : "minmax(0, 1fr) auto",
+    gap: 8,
+    minWidth: 0,
+  };
+
+  const quickBidGridStyle = {
+    display: "grid",
+    gridTemplateColumns: draftIsPortraitMobile
+      ? "repeat(2, minmax(0, 1fr))"
+      : "repeat(auto-fit, minmax(92px, auto))",
+    gap: 8,
+    marginTop: 10,
+    minWidth: 0,
+  };
+
+  const revealPanelStyle = {
+    ...panel,
+    width: draftIsCompact ? "calc(100vw - 20px)" : "min(1240px, calc(100vw - 36px))",
+    margin: draftIsCompact ? "10px auto 0" : "12px auto 0",
+    boxSizing: "border-box",
+    minWidth: 0,
+    overflow: "hidden",
+  };
+
+  const revealHeaderStyle = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: draftIsCompact ? 10 : 12,
+    alignItems: draftIsPortraitMobile ? "stretch" : "center",
+    flexDirection: draftIsPortraitMobile ? "column" : "row",
+    marginBottom: 12,
+    minWidth: 0,
+  };
+
+  const revealResultCardStyle = {
+    padding: draftIsCompact ? 10 : 12,
+    borderRadius: 16,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(0,0,0,0.28)",
+    display: "grid",
+    gridTemplateColumns: draftIsPortraitMobile ? "1fr" : "120px minmax(0, 1fr)",
+    gap: draftIsCompact ? 10 : 14,
+    alignItems: "start",
+    minWidth: 0,
+    boxSizing: "border-box",
   };
 
   function lobbyStatusPill(info) {
@@ -5071,23 +5338,15 @@ function teamTitle(tid) {
     return (
       <div style={modalBackdrop} onClick={() => setSettingsModal(null)}>
         <div style={modalBox} onClick={(e) => e.stopPropagation()}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 14 }}>
-            <div>
-              <div
-                style={{
-                  fontSize: 22,
-                  fontWeight: 950,
-                  color: "#ffffff",
-                  letterSpacing: "-0.02em",
-                  textShadow: "0 2px 12px rgba(52,211,153,0.18)",
-                }}
-              >
+          <div style={modalHeader}>
+            <div style={{ minWidth: 0 }}>
+              <div style={modalTitleText}>
                 {title}
               </div>
               <div style={lobbyHint}>Änderungen werden direkt für den Raum gespeichert.</div>
             </div>
 
-            <button type="button" style={btnGhostSmall} onClick={() => setSettingsModal(null)}>
+            <button type="button" style={modalCloseButton} onClick={() => setSettingsModal(null)}>
               Schließen
             </button>
           </div>
@@ -5332,12 +5591,12 @@ function teamTitle(tid) {
     return (
       <div style={modalBackdrop} onClick={() => setTeamModal(null)}>
         <div style={modalBox} onClick={(e) => e.stopPropagation()}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 14 }}>
-            <div>
+          <div style={modalHeader}>
+            <div style={{ minWidth: 0 }}>
               <div
                 style={{
                   fontSize: 12,
-                  color: "rgba(52,211,153,0.9)",
+                  color: "rgba(96,165,250,0.95)",
                   fontWeight: 950,
                   letterSpacing: "0.14em",
                   textTransform: "uppercase",
@@ -5345,23 +5604,24 @@ function teamTitle(tid) {
               >
                 TEAM {slotIdx + 1}
               </div>
-              <div
-                style={{
-                  fontSize: 24,
-                  fontWeight: 950,
-                  color: "#ffffff",
-                  letterSpacing: "-0.02em",
-                  textShadow: "0 2px 12px rgba(52,211,153,0.18)",
-                }}
-              >
+
+              <div style={modalTitleText}>
                 {info.teamName}
               </div>
-              <div style={{ color: "rgba(235,241,250,0.72)", marginTop: 4, fontWeight: 700 }}>
+
+              <div
+                style={{
+                  color: "rgba(235,241,250,0.72)",
+                  marginTop: 4,
+                  fontWeight: 700,
+                  overflowWrap: "anywhere",
+                }}
+              >
                 {info.playerName}
               </div>
             </div>
 
-            <button type="button" style={btnGhostSmall} onClick={() => setTeamModal(null)}>
+            <button type="button" style={modalCloseButton} onClick={() => setTeamModal(null)}>
               Schließen
             </button>
           </div>
@@ -5539,18 +5799,51 @@ const draftBgStyle = {
   return (
   <div style={outerStyle}>
     {showDraftBackground && <div style={draftBgStyle} />}
-      <div style={topLine}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-          <div style={{ fontWeight: 900 }}>Versus — Auction Draft</div>
+      <div
+        style={{
+          ...topLine,
+          width: draftIsCompact ? "calc(100vw - 20px)" : "min(1240px, calc(100vw - 36px))",
+          margin: draftIsCompact ? "8px auto 0" : "10px auto 0",
+          padding: draftIsCompact ? "6px 0" : "6px 0",
+          maxWidth: "1240px",
+          boxSizing: "border-box",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 10,
+            alignItems: "center",
+            flexWrap: "wrap",
+            minWidth: 0,
+          }}
+        >
+          <button
+            type="button"
+            style={{
+              ...btnGhostSmall,
+              padding: draftIsCompact ? "8px 10px" : "10px 14px",
+              whiteSpace: "nowrap",
+            }}
+            onClick={goLobby}
+            title="Zur Draft-Lobby"
+          >
+            Zurück zur Lobby
+          </button>
 
-          {/* ✅ Zurück zur Lobby Button (immer sichtbar in auction/results) */}
           {(phase === "auction" || phase === "blindReveal" || phase === "results") && (
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <button type="button" style={btnGhostSmall} onClick={goLobby} title="Zur Versus-Lobby">
-                ← Zurück zur Lobby
-              </button>
-
-              {/* ✅ NEW: Type / Analysis Modal */}
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                justifyContent: draftIsPortraitMobile ? "flex-start" : "flex-end",
+                flexWrap: "wrap",
+                minWidth: 0,
+              }}
+            >
               <button
                 type="button"
                 style={btnGhostSmall}
@@ -5559,46 +5852,53 @@ const draftBgStyle = {
               >
                 Typen / Analyse
               </button>
-<button
-  type="button"
-  style={btnGhostSmall}
-  onClick={toggleSoundMuted}
-  title={soundMuted ? "Sound aktivieren" : "Sound stummschalten"}
->
-  {soundMuted ? "🔇 Sound" : "🔊 Sound"}
-</button>
-<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-  <span style={{ minWidth: 28 }}>Vol</span>
 
-  <input
-  type="range"
-  min={0}
-  max={100}
-  step={1}
-  value={soundVolume}
-  onChange={(e) => {
-    const v = Number(e.target.value);
-    setSoundVolume(v);
-    localStorage.setItem("versusSoundVolume", String(v));
-  }}
-  className="vs-vol"
-  style={{ width: 120 }}
-/>
+              <button
+                type="button"
+                style={btnGhostSmall}
+                onClick={toggleSoundMuted}
+                title={soundMuted ? "Sound aktivieren" : "Sound stummschalten"}
+              >
+                {soundMuted ? "🔇 Sound" : "🔊 Sound"}
+              </button>
 
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  maxWidth: draftIsPortraitMobile ? "100%" : undefined,
+                }}
+              >
+                <span style={{ minWidth: 24, fontSize: 12 }}>Vol</span>
 
-  <span
-    style={{
-      fontSize: 12,
-      opacity: 0.85,
-      width: 36,
-      textAlign: "right",
-      fontVariantNumeric: "tabular-nums",
-    }}
-  >
-    {soundVolume}%
-  </span>
-</div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={soundVolume}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setSoundVolume(v);
+                    localStorage.setItem("versusSoundVolume", String(v));
+                  }}
+                  className="vs-vol"
+                  style={{ width: draftIsCompact ? 92 : 120 }}
+                />
 
+                <span
+                  style={{
+                    fontSize: 12,
+                    opacity: 0.85,
+                    width: 34,
+                    textAlign: "right",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {soundVolume}%
+                </span>
+              </div>
 
               {meIsHost && (
                 <button
@@ -5614,7 +5914,24 @@ const draftBgStyle = {
           )}
         </div>
 
-        <div style={{ opacity: 0.8, fontSize: 12 }}>
+        <div
+          style={{
+            fontWeight: 900,
+            fontSize: draftIsCompact ? 13 : 16,
+            marginTop: 4,
+            overflowWrap: "anywhere",
+          }}
+        >
+          Versus — Auction Draft
+        </div>
+
+        <div
+          style={{
+            opacity: 0.8,
+            fontSize: draftIsCompact ? 11 : 12,
+            overflowWrap: "anywhere",
+          }}
+        >
           Room: <b>{roomId}</b>
           {" · "}Host: <b>{labelPlayer(hostPlayerId, room)}</b>
           {" · "}Du: <b>{labelPlayer(myPlayerId, room)}</b>
@@ -5627,31 +5944,51 @@ const draftBgStyle = {
             style={{
               display: "flex",
               justifyContent: "space-between",
-              gap: 14,
-              alignItems: "flex-start",
-              marginBottom: 18,
+              gap: draftIsCompact ? 10 : 14,
+              alignItems: draftIsPortraitMobile ? "stretch" : "center",
+              marginBottom: draftIsCompact ? 12 : 18,
+              flexDirection: draftIsPortraitMobile ? "column" : "row",
+              minWidth: 0,
             }}
           >
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={lobbyTitle}>Auction Draft Lobby</div>
-              
             </div>
 
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div
+              style={{
+                display: draftIsPortraitMobile ? "grid" : "flex",
+                gridTemplateColumns: meIsHost ? "1fr 1fr" : "1fr",
+                gap: draftIsCompact ? 8 : 10,
+                alignItems: "center",
+                minWidth: draftIsPortraitMobile ? 0 : 280,
+              }}
+            >
               <button
                 type="button"
                 onClick={copyRoomCode}
                 style={{
                   ...btnGhostSmall,
-                  padding: "12px 14px",
-                  minWidth: 130,
+                  padding: draftIsCompact ? "10px 10px" : "12px 14px",
+                  minWidth: draftIsPortraitMobile ? 0 : 130,
+                  width: draftIsPortraitMobile ? "100%" : undefined,
+                  whiteSpace: "nowrap",
                 }}
               >
                 {copiedRoom ? "Kopiert" : `Code: ${roomId}`}
               </button>
 
               {meIsHost && (
-                <button onClick={startDraft} style={{ ...btnPrimary, padding: "12px 18px" }}>
+                <button
+                  type="button"
+                  onClick={startDraft}
+                  style={{
+                    ...btnPrimary,
+                    padding: draftIsCompact ? "10px 12px" : "12px 18px",
+                    width: draftIsPortraitMobile ? "100%" : undefined,
+                    whiteSpace: "nowrap",
+                  }}
+                >
                   Draft starten
                 </button>
               )}
@@ -5726,7 +6063,16 @@ const draftBgStyle = {
 
             {/* Rechts: Teams clean untereinander */}
             <div style={{ display: "grid", gap: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: draftIsCompact ? 8 : 12,
+                  alignItems: draftIsPortraitMobile ? "flex-start" : "baseline",
+                  flexDirection: draftIsPortraitMobile ? "column" : "row",
+                  minWidth: 0,
+                }}
+              >
                 <div>
                   <div style={{ fontWeight: 950, opacity: 0.92 }}>Teams</div>
                   <div style={lobbyHint}>
@@ -5816,10 +6162,10 @@ const draftBgStyle = {
       {phase === "auction" && (
         <div style={auctionGrid}>
           {/* Teams */}
-          <section style={{ ...panel, gridColumn: "1 / 3" }}>
+          <section style={auctionTeamsPanelStyle}>
             <div style={{ fontWeight: 900, marginBottom: 10 }}>Teams</div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+            <div style={auctionTeamsGridStyle}>
               {draft.teamIds.map((tid) => {
                 const money = draft.budgets?.[tid] ?? 0;
                 const team = draft.teams?.[tid] ?? [];
@@ -5979,7 +6325,7 @@ const draftBgStyle = {
           </section>
 
           {/* Current Pokémon */}
-          <section style={{ ...panel, gridColumn: "1 / 2" }}>
+          <section style={auctionPokemonPanelStyle}>
             <div style={{ fontWeight: 900, marginBottom: 10 }}>
   {(() => {
     const total = Number(draft.totalPokemon ?? 0);
@@ -5994,7 +6340,7 @@ const draftBgStyle = {
 
             {displayPokemon ? (
               // ✅ NEW: Left stats + right centered pokemon
-              <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16, alignItems: "start" }}>
+              <div style={auctionPokemonInfoGridStyle}>
                 {/* LEFT: Stats */}
                 <div style={statPanel}>
                   <div style={{ fontWeight: 950, marginBottom: 10 }}>Basiswerte</div>
@@ -6019,7 +6365,7 @@ const draftBgStyle = {
                 </div>
 
                 {/* RIGHT: Pokémon + info (centered) */}
-                <div style={{ display: "grid", gap: 10, justifyItems: "stretch", width: "100%" }}>
+                <div style={auctionPokemonSideStyle}>
                   <div style={{ ...pokeHeroWrap, justifySelf: "center" }}>
                     <button
                       style={pokeHeroBtn}
@@ -6040,20 +6386,14 @@ const draftBgStyle = {
                         ...(bidFlash ? pokeHeroOverlayFlash : null),
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-end" }}>
+                      <div style={auctionHeroOverlayRowStyle}>
                         <div>
                           <div style={{ fontSize: 12, opacity: 0.85, marginTop: 6 }}>
                             {isBlindMode ? "Dein verdecktes Gebot" : "Höchstgebot"}
                           </div>
 
                           <div
-                            style={{
-                              fontSize: 38,
-                              fontWeight: 950,
-                              lineHeight: 1,
-                              transform: bidFlash ? "scale(1.06)" : "scale(1)",
-                              transition: "transform 160ms ease",
-                            }}
+                            style={auctionBidAmountStyle}
                           >
                             {isBlindMode ? (myBlindBid?.amount || 0) : (draft.highestBid || 0)}€
                           </div>
@@ -6140,20 +6480,7 @@ const draftBgStyle = {
                     ) : showEvoUI ? (
 
                       <div style={{ display: "grid", gap: 10, justifyItems: "start", width: "100%" }}>
-                        <div
-  style={{
-    display: "flex",
-    gap: 1,
-    rowGap: 1,
-    alignItems: "center",
-    flexWrap: "wrap",          
-    justifyContent: "flex-start",
-    alignContent: "flex-start",
-    width: "100%",             
-    overflow: "hidden",        
-    paddingBottom: 6,
-  }}
->
+                        <div style={auctionEvoFlowStyle}>
 
                          {evoLineWithMega.map((p, idx) => {
   const name = p.nameOverride || getPokemonName(p.dexId);
@@ -6204,17 +6531,7 @@ const draftBgStyle = {
     Basiswerte pro Stufe
   </div>
 
-  <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: `repeat(${evoLineWithMega.length}, minmax(220px, 1fr))`,
-    gap: 10,
-    width: "100%",
-    justifyContent: "start",
-    overflowX: "auto",
-    paddingBottom: 6,
-  }}
->
+  <div style={auctionEvoStatsGridStyle}>
 
     {evoLineWithMega.map((p, idx) => {
       const name = p.nameOverride || getPokemonName(p.dexId);
@@ -6276,9 +6593,9 @@ const draftBgStyle = {
 
           {/* Timer + Bid */}
           <section
-  className={isUrgent ? "timer-urgent" : ""}
-  style={{ ...panel, gridColumn: "2 / 3", height: "min(61.5vh)" }}
->
+            className={isUrgent ? "timer-urgent" : ""}
+            style={auctionTimerPanelStyle}
+          >
 
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
               <div style={{ fontWeight: 900 }}>Timer</div>
@@ -6303,7 +6620,7 @@ const draftBgStyle = {
                     Wähle genau ein Pokémon aus und gib dein verdecktes Gebot ab. Pokémon ohne Gebot verschwinden nach der Runde.
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+                  <div style={blindMultiOptionsGridStyle}>
                     {(currentOptions || []).map((p) => {
                       const key = getPokemonAuctionKey(p);
                       const selected = blindOptionKey === key;
@@ -6380,7 +6697,7 @@ const draftBgStyle = {
                 </div>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+              <div style={bidInputGridStyle}>
                 {/* ✅ Spectator-Host: Startbutton, wenn kein Team */}
 {!isBlindMode && meIsHost && !myTeamId && !draft.hasStarted && Number(draft.highestBid ?? 0) === 0 && !draft.highestTeamId ? (
   <div style={{ marginBottom: 10 }}>
@@ -6421,7 +6738,7 @@ const draftBgStyle = {
               </div>
 
               {/* ✅ Quick-Buttons */}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+              <div style={quickBidGridStyle}>
                 <button style={btnGhost} onClick={() => setBidInput(100)} disabled={!myTeamId}>
                   100
                 </button>
@@ -6524,8 +6841,8 @@ const draftBgStyle = {
         const shouldFinish = !!reveal?.shouldFinish || !reveal?.nextCurrent;
 
         return (
-          <section style={panel}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 }}>
+          <section style={revealPanelStyle}>
+            <div style={revealHeaderStyle}>
               <div>
                 <div style={{ fontWeight: 950, fontSize: 22 }}>Blind-Reveal</div>
                 <div style={{ opacity: 0.8, fontSize: 13 }}>
@@ -6560,16 +6877,7 @@ const draftBgStyle = {
                   return (
                     <div
                       key={`blind-reveal-${r?.optionKey || idx}`}
-                      style={{
-                        padding: 12,
-                        borderRadius: 16,
-                        border: "1px solid rgba(255,255,255,0.14)",
-                        background: "rgba(0,0,0,0.28)",
-                        display: "grid",
-                        gridTemplateColumns: "120px 1fr",
-                        gap: 14,
-                        alignItems: "start",
-                      }}
+                      style={revealResultCardStyle}
                     >
                       <button style={imgBtn} onClick={() => openPokemonDetails(poke.dexId)} title="Pokémon-Details öffnen">
                         <img
@@ -6734,11 +7042,11 @@ const draftBgStyle = {
       })()}
 
       {phase === "results" && (
-        <section style={panel}>
+        <section style={revealPanelStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
             <div style={{ fontWeight: 900, fontSize: 18 }}>Draft fertig ✅</div>
             <button style={btnGhostSmall} onClick={goLobby} title="Zur Versus-Lobby">
-              ← Zurück zur Lobby
+              Zurück zur Lobby
             </button>
           </div>
 
@@ -6890,10 +7198,40 @@ if (!showDraftedAsIs) {
 }
 
 function Row({ label, children }) {
+  const width =
+    typeof window === "undefined"
+      ? 1200
+      : Math.round(window.visualViewport?.width || window.innerWidth || 1200);
+
+  const compact = width <= 620;
+
+  const fixedChildren = React.isValidElement(children)
+    ? React.cloneElement(children, {
+        style: {
+          ...(children.props?.style || {}),
+          width: "100%",
+          minWidth: 0,
+          boxSizing: "border-box",
+        },
+      })
+    : children;
+
   return (
-    <label style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 10, alignItems: "center" }}>
-      <span style={{ opacity: 0.85 }}>{label}</span>
-      {children}
+    <label
+      style={{
+        display: "grid",
+        gridTemplateColumns: compact ? "1fr" : "minmax(150px, 220px) minmax(0, 1fr)",
+        gap: compact ? 6 : 10,
+        alignItems: compact ? "stretch" : "center",
+        minWidth: 0,
+        width: "100%",
+        boxSizing: "border-box",
+      }}
+    >
+      <span style={{ opacity: 0.85, minWidth: 0 }}>{label}</span>
+      <span style={{ display: "block", minWidth: 0, width: "100%" }}>
+        {fixedChildren}
+      </span>
     </label>
   );
 }

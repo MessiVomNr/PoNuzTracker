@@ -1593,6 +1593,226 @@ const usedFossilsBySlot = useMemo(() => {
     });
   };
 
+  function renderMobileEncounterCards() {
+    return (
+      <div className="encounter-mobile-list">
+        {filteredLocations.map((loc) => {
+          const data = encounters[loc] || {};
+          const status = data.status || "";
+
+          const rowClass =
+            status === "Gefangen"
+              ? "status-caught"
+              : status === "Besiegt"
+              ? "status-fainted"
+              : status === "Entkommen"
+              ? "status-escaped"
+              : "unused-location";
+
+          const allFilled = [...Array(slotCount)].every((_, i) => !!data[`pokemon${i + 1}`]);
+
+          const sinnerKey = (data.sinner || "").trim();
+          const sinnerEnabled = status === "Entkommen" || status === "Besiegt";
+
+          return (
+            <section
+              key={`mobile-${loc}`}
+              className={`encounter-mobile-card ${rowClass}`}
+              data-status={status || "Offen"}
+            >
+              <div className="encounter-mobile-card-head">
+                <div className="encounter-mobile-card-title-wrap">
+                  <div className="encounter-mobile-location">{loc}</div>
+                  <div className="encounter-mobile-meta">
+                    {status || "Offen"}
+                    {allFilled ? " · Pokémon eingetragen" : ""}
+                  </div>
+                </div>
+
+                <div className="encounter-mobile-status-icon">
+                  {status ? (
+                    <StatusIcon status={status} size={34} />
+                  ) : (
+                    <span className="encounter-mobile-open-dot" />
+                  )}
+                </div>
+              </div>
+
+              <div className="encounter-mobile-slots">
+                {[...Array(slotCount)].map((_, i) => {
+                  const slotName = `pokemon${i + 1}`;
+                  const slotLabel = (slotNames[i] || "").trim() || `Pokémon ${i + 1}`;
+                  const formKey = data[`form${i + 1}`] || "";
+                  const selected = data[slotName] || "";
+
+                  const isFossil = isFossilLocation(loc);
+                  const fossilField = fossilFieldForSlot(i);
+                  const chosenFossil = data[fossilField] || "";
+                  const usedSet = usedFossilsBySlot[i] || new Set();
+                  const fossilOptions = fossilPool;
+
+                  const selectOptions = pokemonList.map((name) => {
+                    const info = familyStatusByName.get(name) || {
+                      alreadyOwned: false,
+                      isFamilyMatch: false,
+                      statuses: [],
+                      statusText: "",
+                    };
+
+                    const isCurrentSelected = selected === name;
+                    const alreadyOwned = !isCurrentSelected && info.alreadyOwned;
+
+                    return {
+                      value: name,
+                      label: name,
+                      customLabel: alreadyOwned ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              minWidth: 18,
+                            }}
+                          >
+                            {getOwnedStatusIcon(info.statuses)}
+                          </span>
+                          <span>
+                            {name} ({info.statusText})
+                          </span>
+                        </div>
+                      ) : (
+                        name
+                      ),
+                      alreadyOwned,
+                      isFamilyMatch: info.isFamilyMatch,
+                    };
+                  });
+
+                  const dexId = selected ? nameToDexId.get(selected) : null;
+                  const formOptions = dexId ? getFormOptionsForDexId(dexId) : [];
+                  const hasForms = formOptions.length > 0;
+                  const sprite = dexId ? spriteUrlFor(dexId, formKey) : null;
+
+                  return (
+                    <div key={`${loc}-mobile-slot-${i}`} className="encounter-mobile-slot">
+                      <div className="encounter-mobile-slot-head">
+                        <span>{slotLabel}</span>
+
+                        <button
+                          type="button"
+                          onClick={() => editSlotName(i)}
+                          title="Spaltenname bearbeiten"
+                          className="encounter-mobile-edit-button"
+                        >
+                          <PencilIcon size={14} />
+                        </button>
+                      </div>
+
+                      <div className="encounter-mobile-pokemon-row">
+                        <div className="encounter-mobile-select-wrap">
+                          <CreatableSelect
+                            key={`${loc}-${i}-${theme}-mobile`}
+                            options={selectOptions}
+                            formatOptionLabel={(option) => option.customLabel || option.label}
+                            value={selected ? { label: selected, value: selected } : null}
+                            onChange={(sel) => handleChange(loc, slotName, sel?.value || "")}
+                            isClearable
+                            isSearchable
+                            placeholder={slotLabel}
+                            styles={getSelectStyles()}
+                          />
+                        </div>
+
+                        {selected && dexId && hasForms && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = nextSpecialForm(formKey, formOptions);
+                              handleChange(loc, `form${i + 1}`, next);
+                            }}
+                            title="Form wechseln"
+                            className="encounter-mobile-form-button"
+                            style={megaBtn(dark, !!formKey)}
+                          >
+                            {formLabel(formKey)}
+                          </button>
+                        )}
+
+                        {selected && dexId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const formId = getFormIdFor(dexId, formKey);
+                              const idToUse = formId || Number(dexId);
+
+                              if (idToUse) navigate(`/pokemon/${idToUse}`);
+                            }}
+                            title={`Info öffnen: ${selected}${formKey ? ` (${formLabel(formKey)})` : ""}`}
+                            className="encounter-mobile-sprite-button"
+                          >
+                            <img
+                              src={sprite || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexId}.png`}
+                              alt={selected}
+                              className="encounter-mobile-sprite"
+                            />
+                          </button>
+                        )}
+                      </div>
+
+                      {isFossil && (
+                        <div className="encounter-mobile-fossil-row">
+                          <span>Fossil</span>
+
+                          <select
+                            value={chosenFossil}
+                            onChange={(e) => handleChange(loc, fossilField, e.target.value)}
+                          >
+                            <option value="">— wählen —</option>
+                            {fossilOptions.map((f) => (
+                              <option
+                                key={f.key}
+                                value={f.key}
+                                disabled={usedSet.has(f.key) && f.key !== chosenFossil}
+                              >
+                                {f.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="encounter-mobile-bottom">
+                <div className="encounter-mobile-field">
+                  <span>Status</span>
+                  <EncounterStatusSelect
+                    value={status || ""}
+                    allFilled={allFilled}
+                    onChange={(nextStatus) => handleChange(loc, "status", nextStatus)}
+                  />
+                </div>
+
+                <div className="encounter-mobile-field">
+                  <span>Sündiger</span>
+                  <EncounterSinnerSelect
+                    value={sinnerKey || ""}
+                    disabled={!sinnerEnabled}
+                    options={sinnerOptions}
+                    onChange={(nextSinner) => handleChange(loc, "sinner", nextSinner)}
+                  />
+                </div>
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    );
+  }
+
   const dark = theme === "dark";
 
   return (
@@ -1600,7 +1820,7 @@ const usedFossilsBySlot = useMemo(() => {
       {dark && <div style={bg} />}
       {dark && <div style={bgOverlay} />}
 
-      <div style={contentCard(dark)}>
+      <div className="encounter-content-card" style={contentCard(dark)}>
         <style>{tableCss(dark)}</style>
 
         {/* Duo Status + Exit */}
@@ -1693,8 +1913,8 @@ const usedFossilsBySlot = useMemo(() => {
           </div>
         )}
 
-        <div style={headerRow}>
-          <div style={topRightActions}>
+        <div className="encounter-header-actions-row" style={headerRow}>
+          <div className="encounter-top-actions" style={topRightActions}>
             <button onClick={() => navigate("/team")}>Zum Team</button>
             <button onClick={() => navigate("/guide")}>Story-Guide öffnen</button>
           </div>
@@ -1833,7 +2053,9 @@ const usedFossilsBySlot = useMemo(() => {
   </button>
 </div>
 
-        <table>
+        {renderMobileEncounterCards()}
+
+        <table className="encounter-desktop-table">
           <thead>
             <tr>
               <th>Ort</th>
@@ -3187,6 +3409,10 @@ const tableCss = (dark) => {
       image-rendering: auto;
     }
 
+    .encounter-mobile-list {
+      display: none;
+    }
+
     @media (max-width: 900px) {
       .encounter-page {
         overflow-x: hidden;
@@ -3198,6 +3424,327 @@ const tableCss = (dark) => {
 
       .encounter-page .button-row {
         justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 760px), (max-width: 980px) and (max-height: 560px) and (orientation: landscape) {
+      .encounter-page {
+        min-height: 100dvh;
+        padding: 10px 8px 26px !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+      }
+
+      .encounter-content-card {
+        width: 100% !important;
+        padding: 12px !important;
+        border-radius: 18px !important;
+      }
+
+      .encounter-page h1 {
+        font-size: clamp(1.65rem, 8vw, 2.35rem) !important;
+        line-height: 0.95 !important;
+        text-shadow: 2px 2px #079e4b !important;
+      }
+
+      .encounter-header-actions-row {
+        margin: 8px 0 10px !important;
+        min-height: 0 !important;
+        justify-content: stretch !important;
+      }
+
+      .encounter-top-actions {
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+      }
+
+      .encounter-top-actions button {
+        min-height: 40px !important;
+        padding: 8px 10px !important;
+        font-size: 0.82rem !important;
+      }
+
+      .encounter-page .button-row {
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+        padding: 8px !important;
+        margin: 10px 0 12px !important;
+      }
+
+      .encounter-page .button-row button,
+      .encounter-page .button-row select {
+        width: 100% !important;
+        min-height: 39px !important;
+        padding: 8px 9px !important;
+        font-size: 0.78rem !important;
+      }
+
+      .encounter-desktop-table {
+        display: none !important;
+      }
+
+      .encounter-mobile-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .encounter-mobile-card {
+        position: relative;
+        overflow: visible;
+        padding: 12px;
+        border-radius: 18px;
+        border: 1px solid rgba(180, 205, 255, 0.14);
+        background:
+          linear-gradient(145deg, rgba(12, 22, 42, 0.82), rgba(5, 10, 24, 0.78));
+        box-shadow:
+          0 16px 38px rgba(0, 0, 0, 0.28),
+          inset 0 1px 0 rgba(255, 255, 255, 0.07);
+      }
+
+      .encounter-mobile-card[data-status="Gefangen"] {
+        border-color: rgba(67, 233, 123, 0.24);
+        background:
+          linear-gradient(145deg, rgba(7, 158, 75, 0.26), rgba(5, 10, 24, 0.78));
+      }
+
+      .encounter-mobile-card[data-status="Besiegt"] {
+        border-color: rgba(255, 110, 130, 0.22);
+        background:
+          linear-gradient(145deg, rgba(185, 28, 28, 0.26), rgba(5, 10, 24, 0.78));
+      }
+
+      .encounter-mobile-card[data-status="Entkommen"] {
+        border-color: rgba(180, 190, 210, 0.16);
+        background:
+          linear-gradient(145deg, rgba(95, 105, 124, 0.22), rgba(5, 10, 24, 0.78));
+      }
+
+      .encounter-mobile-card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .encounter-mobile-card-title-wrap {
+        min-width: 0;
+      }
+
+      .encounter-mobile-location {
+        color: #ffffff;
+        font-size: 1.08rem;
+        font-weight: 1000;
+        line-height: 1.08;
+        overflow-wrap: anywhere;
+      }
+
+      .encounter-mobile-meta {
+        margin-top: 3px;
+        color: rgba(235, 241, 250, 0.64);
+        font-size: 0.78rem;
+        font-weight: 850;
+      }
+
+      .encounter-mobile-status-icon {
+        width: 38px;
+        height: 38px;
+        flex: 0 0 38px;
+        display: grid;
+        place-items: center;
+        border-radius: 13px;
+        border: 1px solid rgba(180, 205, 255, 0.12);
+        background: rgba(0, 0, 0, 0.16);
+      }
+
+      .encounter-mobile-open-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.34);
+      }
+
+      .encounter-mobile-slots {
+        display: grid;
+        gap: 10px;
+      }
+
+      .encounter-mobile-slot {
+        padding: 10px;
+        border-radius: 14px;
+        border: 1px solid rgba(180, 205, 255, 0.10);
+        background: rgba(5, 10, 24, 0.32);
+      }
+
+      .encounter-mobile-slot-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+        color: rgba(235, 241, 250, 0.78);
+        font-size: 0.78rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .encounter-mobile-edit-button {
+        width: 30px !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        padding: 0 !important;
+        border-radius: 9px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
+
+      .encounter-mobile-edit-button svg {
+        display: block !important;
+        margin: 0 auto !important;
+      }
+
+      .encounter-mobile-pokemon-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .encounter-mobile-select-wrap {
+        min-width: 0;
+      }
+
+      .encounter-mobile-form-button {
+        max-width: 92px;
+        min-height: 38px !important;
+        padding: 7px 9px !important;
+        font-size: 0.76rem !important;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .encounter-mobile-sprite-button {
+        grid-column: 2;
+        width: 46px !important;
+        height: 46px !important;
+        min-height: 46px !important;
+        padding: 0 !important;
+      }
+
+      .encounter-mobile-sprite {
+        width: 44px !important;
+        height: 44px !important;
+        object-fit: contain;
+      }
+
+      .encounter-mobile-fossil-row {
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: 58px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+      }
+
+      .encounter-mobile-fossil-row span {
+        color: rgba(235, 241, 250, 0.66);
+        font-size: 0.76rem;
+        font-weight: 900;
+      }
+
+      .encounter-mobile-fossil-row select {
+        width: 100%;
+        min-height: 38px;
+        padding: 7px 9px;
+        border-radius: 10px;
+      }
+
+      .encounter-mobile-bottom {
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .encounter-mobile-field {
+        min-width: 0;
+        display: grid;
+        gap: 6px;
+      }
+
+      .encounter-mobile-field > span {
+        color: rgba(235, 241, 250, 0.66);
+        font-size: 0.75rem;
+        font-weight: 950;
+      }
+
+      .encounter-mobile-card .encounter-custom-select,
+      .encounter-mobile-card .encounter-status-select,
+      .encounter-mobile-card .encounter-sinner-select {
+        width: 100% !important;
+      }
+
+      .encounter-mobile-card .encounter-custom-select-trigger {
+        min-height: 38px !important;
+        padding: 8px 10px !important;
+      }
+
+      .encounter-mobile-card .encounter-custom-select-menu {
+        min-width: 100% !important;
+      }
+    }
+
+    @media (max-width: 980px) and (max-height: 560px) and (orientation: landscape) {
+      .encounter-content-card {
+        padding: 10px !important;
+      }
+
+      .encounter-page h1 {
+        font-size: clamp(1.4rem, 4.6vw, 2rem) !important;
+      }
+
+      .encounter-page .button-row {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      }
+
+      .encounter-mobile-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .encounter-mobile-card {
+        padding: 10px;
+      }
+
+      .encounter-mobile-slot {
+        padding: 9px;
+      }
+
+      .encounter-mobile-bottom {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 390px), (max-width: 700px) and (max-height: 430px) and (orientation: landscape) {
+      .encounter-top-actions,
+      .encounter-page .button-row,
+      .encounter-mobile-bottom {
+        grid-template-columns: 1fr !important;
+      }
+
+      .encounter-mobile-pokemon-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+
+      .encounter-mobile-form-button {
+        grid-column: 1 / -1;
+        max-width: none;
+        width: 100%;
       }
     }
   `;

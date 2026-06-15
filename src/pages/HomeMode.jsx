@@ -848,6 +848,173 @@ export default function HomeMode() {
             grid-template-columns: 1fr;
           }
         }
+
+        @media (max-width: 980px) and (max-height: 560px) and (orientation: landscape) {
+          .home-mode-shell {
+            min-height: 100dvh;
+            padding: 8px;
+            align-items: flex-start;
+            overflow-x: hidden;
+            overflow-y: auto;
+          }
+
+          .home-mode-card {
+            width: min(100%, calc(100vw - 16px));
+            grid-template-columns: minmax(0, 1fr) minmax(330px, 0.9fr);
+            gap: 10px;
+            padding: 10px;
+            border-radius: 18px;
+          }
+
+          .home-mode-hero {
+            min-height: 0;
+            padding: 18px;
+            border-radius: 16px;
+            gap: 14px;
+          }
+
+          .home-mode-kicker {
+            padding: 6px 10px;
+            font-size: 10px;
+          }
+
+          .home-mode-hero .home-mode-title {
+            margin: 12px 0 10px;
+            font-size: clamp(42px, 8vw, 66px);
+            line-height: 0.82;
+          }
+
+          .home-mode-subtitle {
+            max-width: 360px;
+            font-size: 13px;
+            line-height: 1.35;
+          }
+
+          .home-mode-quick-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+          }
+
+          .home-mode-quick-button {
+            min-height: 70px;
+            padding: 10px;
+            border-radius: 15px;
+          }
+
+          .home-mode-quick-button strong {
+            font-size: clamp(11px, 1.75vw, 13px);
+            line-height: 1.05;
+            overflow-wrap: anywhere;
+            word-break: normal;
+            hyphens: auto;
+          }
+
+          .home-mode-quick-button span {
+            font-size: 10px;
+            line-height: 1.15;
+          }
+
+          .home-mode-actions {
+            gap: 9px;
+          }
+
+          .home-mode-top-row {
+            padding: 2px;
+          }
+
+          .home-mode-section-title h2 {
+            font-size: 20px;
+          }
+
+          .home-mode-section-title p {
+            font-size: 13px;
+          }
+
+          .home-mode-settings-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+          }
+
+          .home-mode-main-button {
+            min-height: 86px;
+            padding: 14px;
+            border-radius: 18px;
+            gap: 12px;
+          }
+
+          .home-mode-button-icon-image-controller {
+            width: 44px;
+            height: 44px;
+          }
+
+          .home-mode-lobby-icon-circle {
+            width: 44px;
+            height: 44px;
+          }
+
+          .home-mode-lobby-image-icon-globe {
+            width: 36px;
+            height: 36px;
+          }
+
+          .home-mode-button-text strong {
+            font-size: 20px;
+          }
+
+          .home-mode-button-text span {
+            font-size: 12px;
+            line-height: 1.3;
+          }
+
+          .home-mode-arrow {
+            width: 34px;
+            height: 34px;
+          }
+
+          .home-mode-online-panel {
+            padding: 9px;
+            border-radius: 18px;
+          }
+
+          .home-mode-small-button {
+            min-height: 92px;
+            padding: 11px;
+            border-radius: 16px;
+          }
+
+          .home-mode-small-button strong {
+            font-size: 16px;
+          }
+
+          .home-mode-small-button span {
+            font-size: 11px;
+            line-height: 1.25;
+          }
+        }
+
+        @media (max-width: 760px) and (max-height: 430px) and (orientation: landscape) {
+          .home-mode-card {
+            grid-template-columns: 1fr 1fr;
+          }
+
+          .home-mode-hero {
+            padding: 14px;
+          }
+
+          .home-mode-hero .home-mode-title {
+            font-size: clamp(34px, 8vw, 52px);
+          }
+
+          .home-mode-quick-button strong {
+            font-size: 11px;
+          }
+
+          .home-mode-main-button {
+            min-height: 78px;
+          }
+        }
       `}</style>
 
       <main className="home-mode-card">

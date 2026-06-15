@@ -1,64 +1,18 @@
 // src/games/PokemonGuessMenu.jsx
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
-import controllerIcon from "../assets/Controller.png";
 import "./guessStyles.css";
 
-const ROTATING_MENU_POKEMON = [
-  { dexId: 25, size: 66 },   // Pikachu
-  { dexId: 6, size: 56 },    // Glurak
-  { dexId: 3, size: 58 },    // Bisaflor
-  { dexId: 9, size: 58 },    // Turtok
-  { dexId: 94, size: 62 },   // Gengar
-  { dexId: 133, size: 64 },  // Evoli
-  { dexId: 149, size: 58 },  // Dragoran
-  { dexId: 150, size: 60 },  // Mewtu
-  { dexId: 383, size: 54 },  // Groudon
-  { dexId: 382, size: 54 },  // Kyogre
-  { dexId: 384, size: 52 },  // Rayquaza
-  { dexId: 448, size: 62 },  // Lucario
-  { dexId: 130, size: 52 },  // Garados
-];
-
-function PokemonSpriteIcon() {
-  const [pokemonIndex, setPokemonIndex] = useState(0);
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setPokemonIndex((currentIndex) =>
-        (currentIndex + 1) % ROTATING_MENU_POKEMON.length
-      );
-    }, 3000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, []);
-
-  const currentPokemon = ROTATING_MENU_POKEMON[pokemonIndex];
-
+function PokemonSilhouetteIcon({ dexId, size }) {
   return (
     <span className="games-hub-card-icon games-hub-card-icon-muted" aria-hidden="true">
       <img
-        key={currentPokemon.dexId}
         className="pokemon-guess-menu-sprite"
-        src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${currentPokemon.dexId}.png`}
+        src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexId}.png`}
         alt=""
         style={{
-          "--pokemon-guess-menu-sprite-size": `${currentPokemon.size}px`,
+          "--pokemon-guess-menu-sprite-size": `${size}px`,
         }}
-      />
-    </span>
-  );
-}
-
-function ControllerIcon() {
-  return (
-    <span className="games-hub-card-icon games-hub-card-icon-muted" aria-hidden="true">
-      <img
-        className="games-hub-controller-img"
-        src={controllerIcon}
-        alt=""
       />
     </span>
   );
@@ -101,7 +55,7 @@ export default function PokemonGuessMenu() {
             className="games-hub-card games-hub-card-primary"
             onClick={() => navigate("/games/pokemon-guess/solo")}
           >
-            <PokemonSpriteIcon />
+            <PokemonSilhouetteIcon dexId={327} size={66} />
 
             <span className="games-hub-card-content">
               <span className="games-hub-card-title">
@@ -120,7 +74,7 @@ export default function PokemonGuessMenu() {
             className="games-hub-card games-hub-card-primary"
             onClick={() => navigate("/games/pokemon-guess/online")}
           >
-            <ControllerIcon />
+            <PokemonSilhouetteIcon dexId={925} size={66} />
 
             <span className="games-hub-card-content">
               <span className="games-hub-card-title">

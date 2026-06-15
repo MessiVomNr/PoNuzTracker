@@ -17,7 +17,7 @@ export const pokedexGen9 = {
   "pokedex921": "Pamo",
   "pokedex922": "Pamamo",
   "pokedex923": "Pamomamo",
-  "pokedex924": "Famieps",
+  "pokedex924": "Zwieps",
   "pokedex925": "Famieps",
   "pokedex926": "Hefel",
   "pokedex927": "Backel",

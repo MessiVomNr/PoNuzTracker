@@ -286,7 +286,18 @@ export default function PokemonGuessSolo() {
       : Math.max(1, rawVisibleClues.length || 1);
 
   const suggestions = useMemo(() => {
-    return getPokemonNameSuggestions(guessInput, pokemonPool);
+    const cleanInput = guessInput.trim().toLocaleLowerCase("de-DE");
+
+    if (!cleanInput) {
+      return [];
+    }
+
+    const nextSuggestions = getPokemonNameSuggestions(guessInput, pokemonPool);
+    const hasExactMatch = nextSuggestions.some(
+      (pokemon) => pokemon.name.trim().toLocaleLowerCase("de-DE") === cleanInput
+    );
+
+    return hasExactMatch ? [] : nextSuggestions;
   }, [guessInput, pokemonPool]);
 
   useEffect(() => {

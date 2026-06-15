@@ -672,6 +672,52 @@ const hideScrollbarCss = `
     font-size: 11px;
     font-weight: 950;
   }
+  @media (max-width: 760px) {
+    .pinfo-button,
+    .pinfo-soft-button {
+      min-height: 40px !important;
+      padding: 0 11px !important;
+      font-size: 0.88rem !important;
+    }
+
+    .pinfo-mini-card {
+      border-radius: 12px !important;
+    }
+
+    .pinfo-gen-select-wrap {
+      width: 100%;
+    }
+
+    .pinfo-gen-select {
+      min-height: 42px;
+    }
+
+    .pinfo-evo-card {
+      grid-template-columns: 52px minmax(0, 1fr);
+      padding: 10px;
+      border-radius: 12px;
+    }
+
+    .pinfo-evo-img-wrap {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+    }
+
+    .pinfo-evo-img {
+      width: 42px;
+      height: 42px;
+    }
+
+    .pinfo-evo-name {
+      font-size: 13px;
+    }
+
+    .pinfo-evo-rule {
+      font-size: 11px;
+      white-space: normal;
+    }
+  }
 `;
 
 function timerBallMult(gen, turnsPassed) {
@@ -908,6 +954,28 @@ export default function PokemonInfo() {
   const nav = useNavigate();
   const id = Number(dexId);
 
+  const [isMobileInfo, setIsMobileInfo] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(max-width: 760px)").matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mediaQuery = window.matchMedia("(max-width: 760px)");
+    const updateIsMobile = () => setIsMobileInfo(mediaQuery.matches);
+
+    updateIsMobile();
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", updateIsMobile);
+      return () => mediaQuery.removeEventListener("change", updateIsMobile);
+    }
+
+    mediaQuery.addListener(updateIsMobile);
+    return () => mediaQuery.removeListener(updateIsMobile);
+  }, []);
+
   const [typesDe, setTypesDe] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -943,13 +1011,13 @@ export default function PokemonInfo() {
   // ✅ Abilities
   const [abilityInfoByUrl, setAbilityInfoByUrl] = useState({});
 
-  // ✅ Background/Body darf NICHT scrollen
+  // Detailseite darf auf Desktop und Mobile normal scrollen.
   useEffect(() => {
     const prevHtml = document.documentElement.style.overflow;
     const prevBody = document.body.style.overflow;
 
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "auto";
+    document.body.style.overflow = "auto";
 
     return () => {
       document.documentElement.style.overflow = prevHtml;
@@ -1491,9 +1559,9 @@ useEffect(() => {
   }, [showCatchCalc]);
 
   const pageOuter = {
-    minHeight: "100vh",
-    height: "100vh",
-    padding: 18,
+    minHeight: "100dvh",
+    height: "auto",
+    padding: isMobileInfo ? "10px 8px 28px" : "18px 18px 34px",
     boxSizing: "border-box",
     color: "var(--pnt-text, white)",
     backgroundImage: `
@@ -1505,13 +1573,14 @@ useEffect(() => {
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
-    backgroundAttachment: "fixed",
+    backgroundAttachment: isMobileInfo ? "scroll" : "fixed",
     position: "relative",
-    overflow: "hidden",
+    overflowX: "hidden",
+    overflowY: "visible",
   };
 
   const page = {
-    width: "min(1400px, 96vw)",
+    width: isMobileInfo ? "100%" : "min(1400px, 96vw)",
     margin: "0 auto",
   };
 
@@ -1597,19 +1666,33 @@ useEffect(() => {
       />
 
       <div style={page}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2>Pokémon Info</h2>
+        <div
+          style={{
+            display: isMobileInfo ? "grid" : "flex",
+            justifyContent: "space-between",
+            alignItems: isMobileInfo ? "stretch" : "center",
+            gap: isMobileInfo ? 10 : 0,
+          }}
+        >
+          <h2 style={{ margin: isMobileInfo ? "0 0 2px" : undefined }}>Pokémon Info</h2>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <button className="pinfo-button" onClick={() => nav("/pokedex")} style={buttonBase}>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              justifyContent: isMobileInfo ? "stretch" : "flex-end",
+            }}
+          >
+            <button className="pinfo-button" onClick={() => nav("/pokedex")} style={{ ...buttonBase, flex: isMobileInfo ? "1 1 0" : undefined }}>
               Pokédex
             </button>
 
-            <button className="pinfo-button" onClick={() => nav(-1)} style={buttonBase}>
+            <button className="pinfo-button" onClick={() => nav(-1)} style={{ ...buttonBase, flex: isMobileInfo ? "1 1 0" : undefined }}>
               Zurück
             </button>
 
-            <button className="pinfo-button" onClick={() => nav(`/compare/${id}`)} style={buttonBase}>
+            <button className="pinfo-button" onClick={() => nav(`/compare/${id}`)} style={{ ...buttonBase, flex: isMobileInfo ? "1 1 0" : undefined }}>
               Vergleichen
             </button>
           </div>
@@ -1626,7 +1709,7 @@ useEffect(() => {
             style={{
               ...card,
               marginTop: 12,
-              padding: 22,
+              padding: isMobileInfo ? 12 : 22,
               borderRadius: 18,
               background:
                 "linear-gradient(180deg, rgba(10, 18, 33, 0.94), rgba(6, 12, 24, 0.92))",
@@ -1634,7 +1717,7 @@ useEffect(() => {
               boxShadow:
                 "var(--pnt-shadow, 0 18px 48px rgba(0, 0, 0, 0.36)), inset 0 1px 0 rgba(255, 255, 255, 0.045)",
               backdropFilter: "blur(10px)",
-              width: "min(1400px, 96vw)",
+              width: isMobileInfo ? "100%" : "min(1400px, 96vw)",
               marginLeft: "auto",
               marginRight: "auto",
             }}
@@ -1643,27 +1726,42 @@ useEffect(() => {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(360px, 1fr) minmax(360px, 1fr) minmax(420px, 1fr)",
-                gap: 14,
+                gridTemplateColumns: isMobileInfo
+                  ? "1fr"
+                  : "minmax(360px, 1fr) minmax(360px, 1fr) minmax(420px, 1fr)",
+                gap: isMobileInfo ? 12 : 14,
                 alignItems: "start",
               }}
             >
               {/* ================= LEFT: POKEMON + STATS ================= */}
               <div style={{ minWidth: 0 }}>
-                <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-                  <div style={{ width: 170 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: isMobileInfo ? 10 : 14,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    justifyContent: isMobileInfo ? "center" : "flex-start",
+                    textAlign: isMobileInfo ? "center" : "left",
+                  }}
+                >
+                  <div style={{ width: isMobileInfo ? 132 : 170 }}>
                     {compactSprite(pokemon) ? (
                       <img
                         src={compactSprite(pokemon)}
                         alt={pokemon?.name || "pokemon"}
-                        style={{ width: 170, height: 170, objectFit: "contain" }}
+                        style={{
+                          width: isMobileInfo ? 132 : 170,
+                          height: isMobileInfo ? 132 : 170,
+                          objectFit: "contain",
+                        }}
                       />
                     ) : (
                       <div style={{ width: 170, height: 170, opacity: 0.6 }}>Kein Bild</div>
                     )}
                   </div>
 
-                  <div style={{ flex: 1, minWidth: 220 }}>
+                  <div style={{ flex: 1, minWidth: isMobileInfo ? "100%" : 220 }}>
                     <div style={{ fontSize: 22, fontWeight: 900 }}>
                       {getLocalizedName(species?.names, "de") || cap(pokemon?.name)}{" "}
                       <span style={{ opacity: 0.6, fontWeight: 700 }}>#{id}</span>
@@ -1839,7 +1937,16 @@ useEffect(() => {
                 </div>
 
                 {/* Stats Grid */}
-                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+                <div
+                  style={{
+                    marginTop: 12,
+                    display: "grid",
+                    gridTemplateColumns: isMobileInfo
+                      ? "repeat(2, minmax(0, 1fr))"
+                      : "repeat(3, minmax(0, 1fr))",
+                    gap: 10,
+                  }}
+                >
                   {Object.entries(activeStats).map(([k, v]) => (
                     <div
                       key={k}
@@ -1974,9 +2081,9 @@ useEffect(() => {
                     className="hide-scrollbar"
                     style={{
                       ...hideScrollbar,
-                      maxHeight: "44vh",
-                      overflowY: "auto",
-                      paddingRight: 6,
+                      maxHeight: isMobileInfo ? "none" : "44vh",
+                      overflowY: isMobileInfo ? "visible" : "auto",
+                      paddingRight: isMobileInfo ? 0 : 6,
                     }}
                   >
                     {activeMoves.length === 0 && <div style={{ opacity: 0.75 }}>Keine Daten</div>}
@@ -2065,10 +2172,10 @@ useEffect(() => {
                       className="hide-scrollbar"
                       style={{
                         ...hideScrollbar,
-                        overflowY: "auto",
+                        overflowY: isMobileInfo ? "visible" : "auto",
                         overflowX: "hidden",
-                        maxHeight: "28vh",
-                        padding: "2px 8px 2px 2px",
+                        maxHeight: isMobileInfo ? "none" : "28vh",
+                        padding: isMobileInfo ? "2px 0" : "2px 8px 2px 2px",
                         display: "grid",
                         gap: 10,
                         boxSizing: "border-box",
