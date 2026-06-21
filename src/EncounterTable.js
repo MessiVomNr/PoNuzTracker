@@ -3518,9 +3518,15 @@ const tableCss = (dark) => {
       }
 
       .encounter-mobile-card[data-status="Entkommen"] {
-        border-color: rgba(180, 190, 210, 0.16);
+        border-color: rgba(245, 158, 11, 0.42);
         background:
-          linear-gradient(145deg, rgba(95, 105, 124, 0.22), rgba(5, 10, 24, 0.78));
+          radial-gradient(circle at 12% 0%, rgba(251, 191, 36, 0.26), transparent 46%),
+          linear-gradient(145deg, rgba(245, 158, 11, 0.30), rgba(92, 53, 12, 0.20)),
+          rgba(5, 10, 24, 0.78);
+        box-shadow:
+          0 16px 38px rgba(0, 0, 0, 0.28),
+          0 0 22px rgba(245, 158, 11, 0.10),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
       }
 
       .encounter-mobile-card-head {

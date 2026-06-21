@@ -15,6 +15,7 @@ export default [
   "Route 107 (Surfen)",
   "Route 108 (Surfen)",
   "Route 109 (Surfen)",
+  "Blütenburg City",
   "Graphitport City (Angeln)",
   "Route 110 (Gras)",
   "Malvenfroh City (Geschenk)",
