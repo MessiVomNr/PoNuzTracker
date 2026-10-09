@@ -14,6 +14,7 @@ import levelCapsByGen from "./guides/level_caps";
 import { getFossilPoolForRunGen } from "./data/fossilsByGen";
 import { evolutionFamiliesByDex } from "./data/evolutionFamilies";
 import { isGloballyBanned } from "./genlocke/core";
+import FullWipeModal from "./components/FullWipeModal";
 import GeflohenIconImg from "./assets/Geflohen.png";
 import PokeballIconImg from "./assets/Pokeball.png";
 import BesiegtIconImg from "./assets/Besiegt.png";
@@ -929,6 +930,7 @@ const saveSlotName = async () => {
   // ===== Encounters state =====
   const [encounters, setEncounters] = useState(() => currentSave?.encounters || {});
   const [confirmModal, setConfirmModal] = useState(null);
+  const [showFullWipe, setShowFullWipe] = useState(false);
   const [slotNameModal, setSlotNameModal] = useState({
   open: false,
   index: null,
@@ -1203,6 +1205,31 @@ useEffect(() => {
  const handleReset = async () => {
   setConfirmModal("reset");
 };
+
+  const commitFullWipe = async (summary) => {
+    const emptyTeams = Array.from({length:slotCount},()=>Array(6).fill(""));
+    const oldSave = isDuo ? (duoSave || {}) : (JSON.parse(localStorage.getItem("savegames")||"{}")[activeSave]||{});
+    const prevArchives = oldSave.runArchives || [];
+    const update = {
+      encounters: {},
+      teams: isDuo ? Object.fromEntries(emptyTeams.map((team,i)=>[i,team])) : emptyTeams,
+      team: emptyTeams[0],
+      globalSinnerStats: {},
+      runCounter: 0,
+      runArchives: [...prevArchives,{...summary,attempt:prevArchives.length+1}]
+    };
+    if (isDuo) {
+      await patchDuoSave(update);
+    } else {
+      const saves=JSON.parse(localStorage.getItem("savegames")||"{}");
+      if(!saves[activeSave])throw new Error("Spielstand wurde nicht gefunden.");
+      saves[activeSave]={...saves[activeSave],...update};
+      localStorage.setItem("savegames",JSON.stringify(saves));
+    }
+    setEncounters({});
+    setGlobalSinnerStats({});
+    setRunCounter(0);
+  };
 
   const handleClearListOnly = async () => {
   setConfirmModal("clear");
@@ -1832,6 +1859,7 @@ const usedFossilsBySlot = useMemo(() => {
       {dark && <div style={bg} />}
       {dark && <div style={bgOverlay} />}
 
+      <FullWipeModal open={showFullWipe} save={isDuo?duoSave:currentSave} playerCount={slotCount} onCancel={()=>setShowFullWipe(false)} onConfirm={commitFullWipe} />
       <div className="encounter-content-card" style={contentCard(dark)}>
         <style>{tableCss(dark)}</style>
 
