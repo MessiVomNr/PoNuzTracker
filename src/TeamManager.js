@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { versionToPokedex } from "./data/versionToPokedex";
 import { useDuoSave } from "./duo/useDuoSave";
+import { belongsToHeir } from "./genlocke/core";
 
 function getDexIdFromName(name, fullDex) {
   const entry = Object.entries(fullDex).find(([, n]) => n === name);
@@ -898,9 +899,11 @@ function TeamManager() {
   const lockedGenlockeHeirs = (currentGenStage?.heirs || [])
     .filter((heir) => heir.locked && !heir.dead);
   const isLockedGenlockePokemon = (name, player) =>
-    !!name && lockedGenlockeHeirs.some((heir) => heir.player === player && heir.pokemon === name);
+    !!name && lockedGenlockeHeirs.some((heir) =>
+      heir.player === player && belongsToHeir(heir, name, effectiveEdition));
   const isGenlockeHeir = (name, player) =>
-    !!name && (currentGenStage?.heirs || []).some((heir) => heir.player === player && heir.pokemon === name && !heir.dead);
+    !!name && (currentGenStage?.heirs || []).some((heir) =>
+      heir.player === player && belongsToHeir(heir, name, effectiveEdition));
 
 
   // ===== Local Save State =====
@@ -1097,7 +1100,7 @@ const teamAnalysis = useMemo(() => {
 
   // ===== Persist Teams helper =====
   const persistTeams = async (newTeams) => {
-    if (lockedGenlockeHeirs.some((heir) => !newTeams[heir.player]?.includes(heir.pokemon))) {
+    if (lockedGenlockeHeirs.some((heir) => !newTeams[heir.player]?.some((mon) => belongsToHeir(heir, mon, effectiveEdition)))) {
       alert("Ein gelockter Champion-Erbe darf nicht aus dem Team entfernt werden.");
       return false;
     }
