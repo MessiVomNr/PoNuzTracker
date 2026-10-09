@@ -184,12 +184,14 @@ export function bannedEvolutionIds(dexId) {
 }
 
 export function isGloballyBanned(g, dexId, { gift = false } = {}) {
-  if (!g?.rules?.globalDeathBan || (gift && g.rules.giftException)) return false;
+  if (!g || (gift && g.rules?.giftException)) return false;
   const id = Number(dexId);
   if (!id) return false;
-  return [...(g.deaths || []), ...(g.released || [])].some((event) =>
-    bannedEvolutionIds(event.dexId).includes(id)
-  );
+  const sources = [
+    ...(g.rules?.globalDeathBan ? (g.deaths || []) : []),
+    ...(g.rules?.releaseChampions ? (g.released || []) : []),
+  ];
+  return sources.some((event) => bannedEvolutionIds(event.dexId).includes(id));
 }
 
 export function registerDeath(g, { pokemon, dexId, player = 0, note = "", stageIndex = g.currentIndex }) {
@@ -218,12 +220,13 @@ function freshStartSave(save, g, nextHeirs, players) {
   const next = copy(save);
   const teams = Array.from({ length: players }, () => Array(6).fill(""));
   const encounters = {};
-  nextHeirs.forEach((h, i) => {
+  nextHeirs.forEach((h) => {
     if (!teams[h.player]) return;
     const existing = teams[h.player].findIndex((v) => !v);
     if (existing >= 0) teams[h.player][existing] = h.pokemon;
-    const key = "Erbe " + (i + 1);
-    if (!encounters[key]) encounters[key] = { status: "Gefangen", inherited: true };
+    // Each inherited Soul-Pair must share one encounter row.
+    const key = "Erbe " + (h.sourceSlot + 1);
+    if (!encounters[key]) encounters[key] = { status: "Gefangen", inherited: true, originalSlot: h.sourceSlot };
     encounters[key]["pokemon" + (h.player + 1)] = h.pokemon;
     encounters[key]["status" + (h.player + 1)] = "Gefangen";
   });
