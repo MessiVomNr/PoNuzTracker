@@ -199,7 +199,7 @@ export default function GenlockeHub() {
           </div></details>
           <button style={{...btn,background:"#2a7956",marginTop:14}} onClick={()=>run(async()=>{if(window.confirm("Regeln während des Runs ändern? Bisherige Erben und Ergebnisse bleiben erhalten."))await persist({...save,genlocke:{...g,rules:cleanRules(rules)}});})}>Änderungen speichern</button>
         </>}
-      </section>
+      </section>}
       {tab==="wipe"&&<section style={{...frame,textAlign:"center"}}><h1>GAME OVER</h1><h2>{quote}</h2><p>Versuch archiviert. Ein neuer Versuch beginnt bei der ersten Edition.</p><button style={btn} onClick={()=>setTab("overview")}>Weiter zum nächsten Versuch</button></section>}
     </div>
   </div>;
