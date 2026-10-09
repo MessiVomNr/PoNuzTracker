@@ -4,6 +4,9 @@ on:
     branches:
       - feature/genlocke
   workflow_dispatch:
+concurrency:
+  group: genlocke-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
