@@ -10,7 +10,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "start-electron": "electron .",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "test": "react-scripts test"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
