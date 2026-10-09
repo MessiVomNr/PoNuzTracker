@@ -35,8 +35,9 @@ function SaveGameManager() {
   }, []);
 
   const selectSave = (name) => {
+    localStorage.removeItem("activeDuoRoomId");
     localStorage.setItem("activeSave", name);
-    navigate("/table");
+    navigate(savegames[name]?.genlocke ? "/genlocke" : "/table");
   };
 
   const createSave = () => {
@@ -183,6 +184,7 @@ function SaveGameManager() {
     }}>
 
       <h1>Spielstände verwalten</h1>
+      <button onClick={() => navigate("/genlocke/create")} style={{ marginBottom: "1.5rem", padding: "12px 20px", borderRadius: 12, background: "#37678f", color: "white", cursor: "pointer" }}>+ Genlocke erstellen</button>
 
       <div className="savegame-list-scroll" style={{
         display: "flex",
@@ -223,6 +225,7 @@ function SaveGameManager() {
                 <strong style={{ fontSize: "1.2rem", color: "#007c38" }}>{name}</strong>
                 <div style={{ margin: "0.3rem 0", fontSize: "0.95rem" }}>
                   Edition: <em>{savegames[name].edition || "Unbekannt"}</em><br />
+                  {savegames[name].genlocke && <><strong>Genlocke</strong> · Etappe {savegames[name].genlocke.currentIndex + 1} / {savegames[name].genlocke.editions.length}<br /></>}
                   Modus: <em>{savegames[name].linkMode || "solo"}</em>
                 </div>
                 <div style={{ marginTop: "0.5rem" }}>
