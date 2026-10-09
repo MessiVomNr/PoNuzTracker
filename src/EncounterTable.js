@@ -13,6 +13,7 @@ import { upsertRecentRoom } from "./duo/recentRooms";
 import levelCapsByGen from "./guides/level_caps";
 import { getFossilPoolForRunGen } from "./data/fossilsByGen";
 import { evolutionFamiliesByDex } from "./data/evolutionFamilies";
+import { isGloballyBanned } from "./genlocke/core";
 import GeflohenIconImg from "./assets/Geflohen.png";
 import PokeballIconImg from "./assets/Pokeball.png";
 import BesiegtIconImg from "./assets/Besiegt.png";
@@ -726,6 +727,7 @@ function EncounterTable() {
   const activeSave = localStorage.getItem("activeSave");
   const savegames = JSON.parse(localStorage.getItem("savegames") || "{}");
   const currentSave = activeSave ? savegames[activeSave] : null;
+  const genlocke = isDuo ? duoSave?.genlocke : currentSave?.genlocke;
 
   // ===== Effective meta (Duo prefers Firestore) =====
   const effectiveEdition = isDuo ? (duoSave?.edition || "Rot") : (currentSave?.edition || "Alpha Saphir");
@@ -1133,11 +1135,21 @@ useEffect(() => {
 
   const handleChange = async (location, field, value) => {
     const prev = encounters[location] || {};
+    let giftOverride = prev.giftOverride || false;
+    if (genlocke && field.startsWith("pokemon") && value && isGloballyBanned(genlocke, nameToDexId.get(value))) {
+      if (!genlocke.rules?.giftException) {
+        alert("Diese Pokémon-Entwicklungslinie ist in der Genlocke gesperrt.");
+        return;
+      }
+      if (!window.confirm("Diese Linie ist gesperrt. Handelt es sich ausdrücklich um ein Geschenk-Pokémon?")) return;
+      giftOverride = true;
+    }
     const updated = {
       ...encounters,
       [location]: {
         ...prev,
         [field]: value,
+        ...(field.startsWith("pokemon") ? { giftOverride } : {}),
       },
     };
 
@@ -1926,7 +1938,7 @@ const usedFossilsBySlot = useMemo(() => {
               Aktuelles Level-Cap: <span style={{ fontSize: 18 }}>{currentLevelCap.level}</span>
             </div>
             <div style={{ opacity: 0.9, fontSize: 13, marginTop: 2 }}>
-              {currentLevelCap.order}. {currentLevelCap.name}
+              {genlocke?.rules?.aceCap ? "1 Ace bis " + currentLevelCap.level + ", alle anderen bis " + Math.max(1, currentLevelCap.level - (genlocke.rules.aceDifference || 2)) + " · " : ""}{currentLevelCap.order}. {currentLevelCap.name}
               {currentLevelCap.location ? ` — ${currentLevelCap.location}` : ""}
             </div>
           </div>
