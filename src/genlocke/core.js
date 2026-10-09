@@ -372,6 +372,36 @@ export function archiveWipe(save, reason = "FULLWIPE") {
   return { ...freshStartSave(save, g, [], g.mode === "duo" ? 2 : 1), genlocke: g };
 }
 
+export function clearCurrentList(save) {
+  return { ...save, encounters: {} };
+}
+
+export function clearAllLists(save) {
+  const next = copy(save);
+  next.encounters = {};
+  if (next.genlocke) {
+    next.genlocke.stages.forEach(stage => {
+      if (stage.snapshot) stage.snapshot.encounters = {};
+    });
+  }
+  return next;
+}
+
+export function restartGenlocke(save) {
+  if (!save?.genlocke) return save;
+  const g = copy(save.genlocke);
+  g.attempt = 1;
+  g.currentIndex = 0;
+  g.finishedAt = null;
+  g.startedAt = Date.now();
+  g.stages = [makeStage(g.editions[0], 1)];
+  g.deaths = [];
+  g.released = [];
+  g.wheelHistory = [];
+  g.backups = [];
+  return { ...freshStartSave(save, g, [], g.mode === "duo" ? 2 : 1), genlocke:g };
+}
+
 export function getPresets() {
   try {
     const parsed = JSON.parse(localStorage.getItem(GENLOCKE_PRESETS_KEY) || "{}");
