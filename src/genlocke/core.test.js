@@ -1,7 +1,7 @@
 import {
   CLASSIC_EDITIONS, createGenlocke, cleanRules, finishStage, getTeams,
   isGloballyBanned, bannedEvolutionIds, inheritBasePokemon,
-  resolveWheel, adjustHistoricalStage, archiveWipe, restartGenlocke
+  resolveWheel, killPokemonInSave, adjustHistoricalStage, archiveWipe, restartGenlocke
 } from "./core";
 
 const makeSave = (editions = ["Feuerrot", "Smaragd"], overrides = {}) => {
@@ -96,4 +96,25 @@ test("wipe archives attempt, while full restart clears current progress", () => 
 
 test("heir base form has an available entry in the next edition", () => {
   expect(inheritBasePokemon("Glurak","Feuerrot","Smaragd")).toMatchObject({pokemon:"Glumanda",available:true});
+});
+
+test("Duo Pokémon death removes both linked heirs, keeps history and triggers team wipe", () => {
+  const g = createGenlocke({name:"Duo",editions:["Feuerrot","Smaragd"],mode:"duo"});
+  const first = {genlocke:g, edition:"Feuerrot", teams:{0:["Glurak"],1:["Garados"]},encounters:{}};
+  const inherited = finishStage(first,[0],[0],[],[],2);
+  const { save, wipe, targets } = killPokemonInSave(inherited,{pokemon:"Glumanda",player:0});
+  expect(wipe).toBe(true);
+  expect(targets).toEqual([{pokemon:"Glumanda",player:0},{pokemon:"Karpador",player:1}]);
+  expect(save.genlocke.deaths).toHaveLength(2);
+  expect(getTeams(save,2).every(team=>team.every(name=>name===""))).toBe(true);
+  expect(save.encounters["Erbe 1"].status).toBe("Besiegt");
+  expect(save.genlocke.stages[1].heirs.every(heir=>heir.dead)).toBe(true);
+});
+test("Solo manual death registers banned evolution family", () => {
+  const first = makeSave(["Feuerrot","Smaragd"]);
+  const {save,wipe} = killPokemonInSave(first,{pokemon:"Glurak",player:0});
+  expect(wipe).toBe(false); // Garados is still in team
+  expect(getTeams(save,1)[0][0]).toBe("");
+  expect(getTeams(save,1)[0][1]).toBe("Garados");
+  expect(isGloballyBanned(save.genlocke,4)).toBe(true);
 });
