@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { WHEEL_RESULTS, getCurrentStage, stageSnapshot, adjustHistoricalStage, finishStage, resolveWheel, archiveWipe, clearCurrentList, clearAllLists, restartGenlocke, isGloballyBanned, registerDeath, cleanRules, copy } from "./core";
+import { WHEEL_RESULTS, getCurrentStage, stageSnapshot, adjustHistoricalStage, finishStage, resolveWheel, archiveWipe, clearCurrentList, clearAllLists, restartGenlocke, isGloballyBanned, registerDeath, killPokemonInSave, syncCurrentTeamWithDeaths, getTeams, cleanRules, copy } from "./core";
 import { versionToPokedex } from "../data/versionToPokedex";
 import { useDuoSave } from "../duo/useDuoSave";
 import HistoricalEditor from "./HistoricalEditor";
@@ -39,6 +39,7 @@ export default function GenlockeHub() {
   const [wheelResult,setWheelResult]=useState(null);
   const [wheelSpun,setWheelSpun]=useState(false);
   const [deathName,setDeathName]=useState("");
+  const [deathPlayer,setDeathPlayer]=useState(0);
   const [notice,setNotice]=useState("");
   const [quote,setQuote]=useState(quotes[0]);
   const [wipeModal,setWipeModal]=useState(false);
@@ -73,8 +74,10 @@ export default function GenlockeHub() {
   };
   const recordDeath=()=>run(async()=>{
     if(!deathName.trim())return;
-    const next=copy(g);const changed=registerDeath(next,{pokemon:deathName.trim(),dexId:dexId(deathName.trim(),stage.edition)});
-    await persist({...save,genlocke:changed});setDeathName("");
+    const result=killPokemonInSave(save,{pokemon:deathName.trim(),player:deathPlayer});
+    await persist(result.save);
+    setDeathName("");
+    if(result.wipe) setWipeModal(true);
   });
   const doWheel=()=>run(async()=>{
     if(!g.rules.wheel) return;
@@ -98,7 +101,13 @@ export default function GenlockeHub() {
     }
     if(previous.some(x=>x.pokemon===selectedMon)) throw new Error("Dieses Pokémon wurde bereits gedreht.");
     const {genlocke,record}=resolveWheel(g,selectedMon,wheelPlayer);
-    await persist({...save,genlocke});setWheelResult(record);
+    const next=syncCurrentTeamWithDeaths({...save,genlocke});
+    await persist(next);
+    if (record.effects.includes("death")) {
+      const remaining=getTeams(next,playerCount);
+      if (remaining.some((team,i)=>getTeams(save,playerCount)[i].some(Boolean)&&team.every(n=>!n))) setWipeModal(true);
+    }
+    setWheelResult(record);
     setWheelSpun(true);
   });
   return <div style={{minHeight:"100vh",background:"#091225",color:"#edf2ff",padding:"24px 14px"}}>
@@ -166,7 +175,11 @@ export default function GenlockeHub() {
               {(g.wheelHistory||[]).filter(x=>x.stageIndex===g.currentIndex).map(h=><div key={h.id} style={{borderBottom:"1px solid #39455c",padding:"6px 0"}}>Spieler {h.player+1}: {h.pokemon} – {h.effects.join(", ")}</div>)}
             </>:<p>In den Regeln deaktiviert.</p>}
           </section>
-          <section style={frame}><h2>Tod eintragen</h2><input style={btn} placeholder="Pokémon" value={deathName} onChange={e=>setDeathName(e.target.value)}/><button style={btn} onClick={recordDeath}>Als tot markieren</button></section>
+          <section style={frame}><h2>Tod eintragen</h2>
+            {playerCount>1&&<label>Spieler <select style={btn} value={deathPlayer} onChange={e=>setDeathPlayer(Number(e.target.value))}><option value={0}>Spieler 1</option><option value={1}>Spieler 2</option></select></label>}
+            <input style={btn} placeholder="Pokémon" value={deathName} onChange={e=>setDeathName(e.target.value)}/>
+            <button style={btn} onClick={recordDeath}>Als tot markieren (Soullink inklusive)</button>
+          </section>
           <section style={frame}>
             <h2>Spielstand verwalten</h2>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
