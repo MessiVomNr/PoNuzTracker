@@ -130,6 +130,21 @@ export function inheritBasePokemon(pokemon, oldEdition, nextEdition) {
   return { pokemon: futureDex["pokedex" + candidate], dexId: candidate, available: true };
 }
 
+export function belongsToHeir(heir, pokemon, edition) {
+  if (!heir || !pokemon || heir.dead) return false;
+  if (heir.pokemon === pokemon) return true;
+  const originalId = Number(heir.dexId) || dexIdFor(heir.pokemon, edition);
+  const currentId = dexIdFor(pokemon, edition);
+  if (!originalId || !currentId) return false;
+  const family = evolutionFamiliesByDex[originalId] || [originalId];
+  const knownBranches = [
+    [133,134,135,136,196,197,470,471,700],
+    [236,106,107,237],[280,281,282,475]
+  ];
+  return family.includes(currentId) ||
+    knownBranches.some(branch => branch.includes(originalId) && branch.includes(currentId));
+}
+
 export function getTeams(save, players = 1) {
   const src = save?.teams;
   const initial = Array.from({ length: players }, () => Array(6).fill(""));
@@ -260,7 +275,7 @@ export function killPokemonInSave(save, { pokemon, player = 0, note = "" }) {
       ...target, dexId:dexIdFor(target.pokemon, edition), note,
     });
     (getCurrentStage(nextG)?.heirs || []).forEach(heir => {
-      if (heir.player === target.player && heir.pokemon === target.pokemon) heir.dead = true;
+      if (heir.player === target.player && belongsToHeir(heir,target.pokemon,edition)) heir.dead = true;
     });
   });
   const updated = syncCurrentTeamWithDeaths({...save,genlocke:nextG});
