@@ -2080,7 +2080,7 @@ const usedFossilsBySlot = useMemo(() => {
 
               <th>Status</th>
               {/* ✅ NEU */}
-              <th>Sündiger</th>
+              {slotCount > 1 && <th>Sündiger</th>}
             </tr>
           </thead>
 
@@ -2329,14 +2329,14 @@ const dexId = selected ? nameToDexId.get(selected) : null;
                   </td>
 
                   {/* ✅ NEU: Sündiger */}
-                  <td>
+                  {slotCount > 1 && <td>
                     <EncounterSinnerSelect
                       value={sinnerKey || ""}
                       disabled={!sinnerEnabled}
                       options={sinnerOptions}
                       onChange={(nextSinner) => handleChange(loc, "sinner", nextSinner)}
                     />
-                  </td>
+                  </td>}
                 </tr>
               );
             })}
