@@ -353,10 +353,11 @@ export function resolveWheel(g, pokemon, player = 0, random = Math.random) {
   return { genlocke: next, record };
 }
 
-export function archiveWipe(save, reason = "FULLWIPE") {
+export function archiveWipe(save, reason = "FULLWIPE", feedback = {}) {
   const g = copy(save.genlocke);
   const summary = {
     at: Date.now(), reason, attempt: g.attempt,
+    mvp: feedback.mvp || "", hater: feedback.hater || "",
     reachedStage: g.currentIndex + 1, edition: g.editions[g.currentIndex],
     deaths: g.deaths.length, released: g.released.length,
     champions: g.stages.filter((s) => s.completedAt).length,
