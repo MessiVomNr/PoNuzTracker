@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { WHEEL_RESULTS, getCurrentStage, stageSnapshot, adjustHistoricalStage, finishStage, resolveWheel, archiveWipe, isGloballyBanned, registerDeath, cleanRules, copy } from "./core";
 import { versionToPokedex } from "../data/versionToPokedex";
+import { useDuoSave } from "../duo/useDuoSave";
 
 const frame={background:"#121e32",border:"1px solid #354460",borderRadius:16,padding:16};
 const btn={border:"1px solid #5b7298",borderRadius:8,background:"#253b60",color:"#fff",padding:"9px 12px",cursor:"pointer"};
@@ -18,9 +19,12 @@ function dexId(pokemon, edition) {
 const quotes=["Nicht mal Karpador hätte das so gemacht.","Ein weiterer Run für die Geschichtsbücher. Leider das Kapitel mit den Fehlern.","Der nächste Versuch wird bestimmt besser. Vielleicht.","Game Over. Deine Pokémon verlangen eine Gewerkschaft.","Der Champ wartet noch. Sehr geduldig.","Das war kein Wipe. Das war ein strategischer Rückzug zu Gen 1."];
 export default function GenlockeHub() {
   const nav=useNavigate();
+  const roomId=localStorage.getItem("activeDuoRoomId")||"";
+  const {save:remoteSave,patchSave, error:remoteError}=useDuoSave(roomId);
   const name=localStorage.getItem("activeSave");
   const read=()=>{const saves=JSON.parse(localStorage.getItem("savegames")||"{}");return saves[name]||null;};
-  const [save,setSave]=useState(read);
+  const [localSave,setLocalSave]=useState(read);
+  const save=roomId?remoteSave:localSave;
   const [tab,setTab]=useState("overview");
   const [stageEdit,setStageEdit]=useState(0);
   const [selected,setSelected]=useState([]);
@@ -37,29 +41,34 @@ export default function GenlockeHub() {
   const [rulesOpen,setRulesOpen]=useState(false);
   const [rules,setRules]=useState(cleanRules(save?.genlocke?.rules));
   const g=save?.genlocke, stage=getCurrentStage(g);
-  const persist=(next)=>{const saves=JSON.parse(localStorage.getItem("savegames")||"{}");if(!saves[name])throw new Error("Spielstand fehlt");saves[name]=next;localStorage.setItem("savegames",JSON.stringify(saves));setSave(next);};
-  const run=(fn)=>{try{setNotice("");fn();}catch(e){setNotice(e.message||String(e));}};
-  if(!g)return <div style={{padding:40}}><h2>Keine Solo-Genlocke aktiv.</h2><button onClick={()=>nav("/solo")}>Spielstände</button></div>;
+  const persist=async(next)=>{
+    if (roomId) { await patchSave(next); return; }
+    const saves=JSON.parse(localStorage.getItem("savegames")||"{}");
+    if(!saves[name])throw new Error("Spielstand fehlt");
+    saves[name]=next;localStorage.setItem("savegames",JSON.stringify(saves));setLocalSave(next);
+  };
+  const run=async(fn)=>{try{setNotice("");await fn();}catch(e){setNotice(e.message||String(e));}};
+  if(!g)return <div style={{padding:40}}><h2>{remoteError||"Genlocke wird geladen ..."}</h2><button onClick={()=>nav("/solo")}>Spielstände</button></div>;
   const completed=g.stages.filter(s=>s.completedAt).length;
   const playerCount=g.mode==="duo"?2:1;
   const teams=save.teams||[];
   const activeHeirs=(stage?.heirs||[]).filter(h=>!h.dead);
-  const finish=()=>run(()=>{
+  const finish=()=>run(async()=>{
     if(!window.confirm("Generation abschließen? Die Erbenauswahl kann danach nicht mehr geändert werden."))return;
     const next=finishStage(save,selected,locked,mvp?[mvp]:[],hater?[hater]:[],playerCount);
-    persist(next);setSelected([]);setLocked([]);setWheelResult(null);setWheelSpun(false);setTab("overview");
+    await persist(next);setSelected([]);setLocked([]);setWheelResult(null);setWheelSpun(false);setTab("overview");
   });
-  const wipe=()=>run(()=>{
+  const wipe=()=>run(async()=>{
     if(!window.confirm("FULLWIPE: Den gesamten Versuch beenden und bei der ersten Edition neu beginnen?"))return;
     const text=quotes[Math.floor(Math.random()*quotes.length)];
-    setQuote(text);persist(archiveWipe(save));setTab("wipe");
+    setQuote(text);await persist(archiveWipe(save));setTab("wipe");
   });
-  const recordDeath=()=>run(()=>{
+  const recordDeath=()=>run(async()=>{
     if(!deathName.trim())return;
     const next=copy(g);const changed=registerDeath(next,{pokemon:deathName.trim(),dexId:dexId(deathName.trim(),stage.edition)});
-    persist({...save,genlocke:changed});setDeathName("");
+    await persist({...save,genlocke:changed});setDeathName("");
   });
-  const doWheel=()=>run(()=>{
+  const doWheel=()=>run(async()=>{
     if(!g.rules.wheel)return;
     const options=activeHeirs.filter(h=>!h.dead);
     let selectedMon=target;
@@ -67,7 +76,7 @@ export default function GenlockeHub() {
     else if(g.rules.wheelMode==="oneRandom")selectedMon=options[Math.floor(Math.random()*options.length)]?.pokemon;
     if(!selectedMon)throw new Error("Bitte ein Pokémon für das Glücksrad auswählen.");
     const {genlocke,record}=resolveWheel(g,selectedMon,0);
-    persist({...save,genlocke});setWheelResult(record);setWheelSpun(true);
+    await persist({...save,genlocke});setWheelResult(record);setWheelSpun(true);
   });
   return <div style={{minHeight:"100vh",background:"#091225",color:"#edf2ff",padding:"24px 14px"}}>
     <div style={{maxWidth:1050,margin:"auto",display:"grid",gap:15}}>
@@ -109,8 +118,8 @@ export default function GenlockeHub() {
       </>}
       {tab==="hall"&&<section style={frame}><h2>Globale Ruhmeshalle</h2>{g.stages.filter(s=>s.completedAt).map((s,i)=><div key={s.id} style={{...frame,marginBottom:12}}><h3>{s.edition} · Etappe {i+1}</h3><div style={{display:"flex",gap:14,flexWrap:"wrap"}}>{s.hall.map((h,j)=><div key={j} style={{textAlign:"center",border:"1px solid #ad9569",padding:10,borderRadius:12}}>{h.pokemon.map((p,k)=><div key={k}>{sprite(p,s.edition)&&<img src={sprite(p,s.edition)} alt={p} width="70"/>}<div>{p}</div></div>)}{s.selectedSlots?.includes(h.slot)?"★ Erbe":""}</div>)}</div><p>MVP: {s.mvp.join(", ")||"—"} · Hater: {s.hater.join(", ")||"—"}</p></div>)}</section>}
       {tab==="grave"&&<section style={frame}><h2>Friedhof</h2>{g.deaths.map((d,i)=><div key={d.id||i} style={{padding:8,borderBottom:"1px solid #34405a"}}>{d.pokemon} · {g.editions[d.stageIndex]} · {d.note||"Tot"}</div>)}<h2>Erlöste Champions (keine Tode)</h2>{g.released.map((d,i)=><div key={i} style={{padding:8}}>{d.pokemon} · {g.editions[d.stageIndex]}</div>)}</section>}
-      {tab==="history"&&<section style={frame}><h2>Chronik</h2>{g.archives.map((a,i)=><div key={i} style={{...frame,marginBottom:10}}>Versuch {a.attempt}: {a.reachedStage} Etappen · {a.deaths} Tote · {a.champions} Championsiege</div>)}<button style={btn} onClick={()=>run(()=>{if(window.confirm("Chronik endgültig löschen?"))persist({...save,genlocke:{...g,archives:[]}});})}>Chronik löschen</button></section>}
-      {tab==="rules"&&<section style={frame}><h2>Aktuelle Regeln</h2><button style={btn} onClick={()=>setRulesOpen(p=>!p)}>{rulesOpen?"Schließen":"Regeln bearbeiten"}</button>{rulesOpen&&<><p>Änderungen können den bisherigen Verlauf beeinflussen.</p><label>Erben <input style={btn} type="number" min="0" max="6" value={rules.heirs} onChange={e=>setRules(cleanRules({...rules,heirs:e.target.value}))}/></label><label>Gelockte Erben <input style={btn} type="number" min="0" max="6" value={rules.lockedHeirs} onChange={e=>setRules(cleanRules({...rules,lockedHeirs:e.target.value}))}/></label><button style={btn} onClick={()=>run(()=>{if(window.confirm("Regeln wirklich während des Runs verändern?"))persist({...save,genlocke:{...g,rules:cleanRules(rules)}});})}>Änderungen speichern</button></>}</section>}
+      {tab==="history"&&<section style={frame}><h2>Chronik</h2>{g.archives.map((a,i)=><div key={i} style={{...frame,marginBottom:10}}>Versuch {a.attempt}: {a.reachedStage} Etappen · {a.deaths} Tote · {a.champions} Championsiege</div>)}<button style={btn} onClick={()=>run(async()=>{if(window.confirm("Chronik endgültig löschen?"))await persist({...save,genlocke:{...g,archives:[]}});})}>Chronik löschen</button></section>}
+      {tab==="rules"&&<section style={frame}><h2>Aktuelle Regeln</h2><button style={btn} onClick={()=>setRulesOpen(p=>!p)}>{rulesOpen?"Schließen":"Regeln bearbeiten"}</button>{rulesOpen&&<><p>Änderungen können den bisherigen Verlauf beeinflussen.</p><label>Erben <input style={btn} type="number" min="0" max="6" value={rules.heirs} onChange={e=>setRules(cleanRules({...rules,heirs:e.target.value}))}/></label><label>Gelockte Erben <input style={btn} type="number" min="0" max="6" value={rules.lockedHeirs} onChange={e=>setRules(cleanRules({...rules,lockedHeirs:e.target.value}))}/></label><button style={btn} onClick={()=>run(async()=>{if(window.confirm("Regeln wirklich während des Runs verändern?"))await persist({...save,genlocke:{...g,rules:cleanRules(rules)}});})}>Änderungen speichern</button></>}</section>}
       {tab==="wipe"&&<section style={{...frame,textAlign:"center"}}><h1>GAME OVER</h1><h2>{quote}</h2><p>Versuch archiviert. Ein neuer Versuch beginnt bei der ersten Edition.</p><button style={btn} onClick={()=>setTab("overview")}>Weiter zum nächsten Versuch</button></section>}
     </div>
   </div>;
