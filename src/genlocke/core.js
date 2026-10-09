@@ -1,4 +1,5 @@
 import { evolutionFamiliesByDex } from "../data/evolutionFamilies";
+import { versionToPokedex } from "../data/versionToPokedex";
 
 export const CLASSIC_EDITIONS = ["Feuerrot", "Smaragd", "HeartGold", "Platin", "Schwarz 2", "X", "Ultrasonne"];
 export const GENLOCKE_PRESETS_KEY = "genlocke-rule-presets-v1";
@@ -109,6 +110,24 @@ export function createGenlocke({ name, editions = CLASSIC_EDITIONS, rules = DEFA
     archives: [],
     backups: [],
   };
+}
+
+export function dexIdFor(pokemon, edition) {
+  if (!pokemon) return null;
+  const dex = versionToPokedex[edition] || {};
+  const match = Object.entries(dex).find(([, value]) => value === pokemon);
+  return match ? Number(match[0].replace("pokedex", "")) || null : null;
+}
+
+export function inheritBasePokemon(pokemon, oldEdition, nextEdition) {
+  const id = dexIdFor(pokemon, oldEdition);
+  if (!id) return { pokemon, dexId: null, available: false };
+  const family = evolutionFamiliesByDex[id] || [id];
+  const futureDex = versionToPokedex[nextEdition] || {};
+  const candidate = family.map(Number).filter(n => Number.isInteger(n) && n > 0)
+    .find(n => Object.prototype.hasOwnProperty.call(futureDex, "pokedex" + n));
+  if (!candidate) return { pokemon, dexId: id, available: false };
+  return { pokemon: futureDex["pokedex" + candidate], dexId: candidate, available: true };
 }
 
 export function getTeams(save, players = 1) {
@@ -228,7 +247,7 @@ export function finishStage(save, pickedSlots, lockedSlots, mvp = [], hater = []
   if (picks.length !== limit && g.currentIndex < g.editions.length - 1) {
     throw new Error("Bitte genau " + limit + " Erben-Slots auswählen.");
   }
-  if (lockedSlots.length > g.rules.lockedHeirs) throw new Error("Zu viele Teamlocks ausgewählt.");
+  if (lockedSlots.length !== Math.min(g.rules.lockedHeirs, picks.length)) throw new Error("Bitte genau " + Math.min(g.rules.lockedHeirs, picks.length) + " Erben für den Teamlock auswählen.");
   stage.hall = hall;
   stage.mvp = mvp;
   stage.hater = hater;
@@ -243,15 +262,17 @@ export function finishStage(save, pickedSlots, lockedSlots, mvp = [], hater = []
   }
   const nextHeirs = picks.flatMap((slot) => {
     const item = hall.find((r) => r.slot === slot);
-    return item.pokemon.flatMap((pokemon, player) => pokemon ? [{
-      pokemon, player, fromStage: g.currentIndex,
-      locked: lockedSlots.includes(slot), dead: false, sourceSlot: slot,
-    }] : []);
+    return item.pokemon.flatMap((pokemon, player) => {
+      if (!pokemon) return [];
+      const base = inheritBasePokemon(pokemon, stage.edition, g.editions[nextIndex]);
+      if (!base.available) throw new Error("Der Erbe " + pokemon + " ist in " + g.editions[nextIndex] + " nicht verfügbar. Bitte die Erbenauswahl oder Reihenfolge prüfen.");
+      return [{ pokemon: base.pokemon, originalPokemon: pokemon, dexId: base.dexId, level: 5, player, fromStage: g.currentIndex, locked: lockedSlots.includes(slot), dead: false, sourceSlot: slot }];
+    });
   });
   if (g.rules.releaseChampions) {
     hall.filter((r) => !picks.includes(r.slot)).forEach((r) => {
       r.pokemon.forEach((pokemon, player) => {
-        if (pokemon) g.released.push({ pokemon, player, dexId: null, stageIndex: g.currentIndex, type: "released", at: Date.now() });
+        if (pokemon) g.released.push({ pokemon, player, dexId: dexIdFor(pokemon, stage.edition), stageIndex: g.currentIndex, type: "released", at: Date.now() });
       });
     });
   }
@@ -303,11 +324,14 @@ export function resolveWheel(g, pokemon, player = 0, random = Math.random) {
     effects = [spinWeighted(positive, random).id, spinWeighted(positive, random).id];
   }
   const record = { id: "spin-" + Date.now() + "-" + Math.random(), at: Date.now(), stageIndex: next.currentIndex, player, pokemon, result: result.id, effects };
+  if (next.wheelHistory.some((entry) => entry.stageIndex === next.currentIndex && entry.player === player && entry.pokemon === pokemon)) {
+    throw new Error("Für dieses Pokémon wurde in dieser Etappe bereits gedreht.");
+  }
   next.wheelHistory.push(record);
   if (effects.includes("death")) {
     const h = getCurrentStage(next)?.heirs.find((x) => x.player === player && x.pokemon === pokemon);
     if (h) h.dead = true;
-    next.deaths.push({ type: "dead", pokemon, player, dexId: null, stageIndex: next.currentIndex, note: "Glücksrad", at: Date.now() });
+    next.deaths.push({ type: "dead", pokemon, player, dexId: dexIdFor(pokemon, next.editions[next.currentIndex]), stageIndex: next.currentIndex, note: "Glücksrad", at: Date.now() });
   }
   return { genlocke: next, record };
 }
