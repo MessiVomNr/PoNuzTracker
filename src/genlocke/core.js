@@ -329,9 +329,23 @@ export function resolveWheel(g, pokemon, player = 0, random = Math.random) {
   }
   next.wheelHistory.push(record);
   if (effects.includes("death")) {
-    const h = getCurrentStage(next)?.heirs.find((x) => x.player === player && x.pokemon === pokemon);
-    if (h) h.dead = true;
-    next.deaths.push({ type: "dead", pokemon, player, dexId: dexIdFor(pokemon, next.editions[next.currentIndex]), stageIndex: next.currentIndex, note: "Glücksrad", at: Date.now() });
+    const stage = getCurrentStage(next);
+    const heirs = (stage?.heirs || []);
+    const h = heirs.find((x) => x.player === player && x.pokemon === pokemon);
+    const died = [{ pokemon, player, dexId: dexIdFor(pokemon, next.editions[next.currentIndex]) }];
+    if (h) {
+      h.dead = true;
+      if (next.mode === "duo") {
+        const partner = heirs.find((x) => x.player !== player && x.sourceSlot === h.sourceSlot && !x.dead);
+        if (partner) {
+          partner.dead = true;
+          died.push({ pokemon: partner.pokemon, player: partner.player, dexId: dexIdFor(partner.pokemon, next.editions[next.currentIndex]) });
+        }
+      }
+    }
+    died.forEach((d) => {
+      next.deaths.push({ type: "dead", ...d, stageIndex: next.currentIndex, note: "Glücksrad / Soul-Link", at: Date.now() });
+    });
   }
   return { genlocke: next, record };
 }
