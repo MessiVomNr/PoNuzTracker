@@ -49,7 +49,7 @@ function defaultSave({ edition = "Rot", linkMode = "duo", title = "" } = {}) {
   };
 }
 
-export async function createDuoRoom({ displayName, edition, linkMode, title }) {
+export async function createDuoRoom({ displayName, edition, linkMode, title, genlocke = null }) {
   if (!db) throw new Error("Firestore (db) ist null. Prüfe Firebase ENV / Config.");
   const user = await ensureAnonAuth();
 
@@ -67,7 +67,7 @@ export async function createDuoRoom({ displayName, edition, linkMode, title }) {
   };
 
   const payload = {
-    save: defaultSave({ edition, linkMode, title }),
+    save: { ...defaultSave({ edition, linkMode, title }), ...(genlocke ? { genlocke } : {}) },
     players: {
       [user.uid]: player,
     },
