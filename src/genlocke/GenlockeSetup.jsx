@@ -8,7 +8,7 @@ const panel = { background:"rgba(12,20,39,.92)",color:"#e9efff",border:"1px soli
 const button = { cursor:"pointer",padding:"9px 14px",background:"#283b60",color:"#fff",border:"1px solid #6680aa",borderRadius:9 };
 const input = { ...button,background:"#121f34",maxWidth:"100%" };
 const label = {display:"flex",alignItems:"center",gap:8,marginBottom:8};
-const OPTIONS = [
+export const RULE_OPTIONS = [
   ["legendLimit","Legendäre im Team","number"],["mythicalLimit","Mysteriöse im Team","number"],
   ["mythicalShared","Mysteriöse zählen zum Legendenlimit","check"],["ultraLimit","Ultrabestien/Paradox im Team","number"],
   ["ultraShared","Ultrabestien/Paradox zum Legendenlimit","check"],["pseudoLimit","Pseudo-Legendäre im Team","number"],
@@ -84,7 +84,7 @@ export default function GenlockeSetup() {
       <section style={panel}>
         <h2>Regeln</h2>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12}}>
-          {OPTIONS.filter(([id])=>mode==="duo"||!["crossPrimaryTypeUnique","linkPairPrimaryTypeUnique","sameAce"].includes(id)).map(([id,desc,type])=><label key={id} style={{...label,justifyContent:"space-between",borderBottom:"1px solid #26364e",padding:"7px 0"}}>
+          {RULE_OPTIONS.filter(([id])=>mode==="duo"||!["crossPrimaryTypeUnique","linkPairPrimaryTypeUnique","sameAce"].includes(id)).map(([id,desc,type])=><label key={id} style={{...label,justifyContent:"space-between",borderBottom:"1px solid #26364e",padding:"7px 0"}}>
             <span>{desc}</span>{type==="check"?<input type="checkbox" checked={!!rules[id]} onChange={e=>change(id,e.target.checked)}/>:<input type="number" style={{...input,width:72}} min={0} max={["heirs","lockedHeirs","legendLimit","mythicalLimit","ultraLimit","pseudoLimit"].includes(id)?6:undefined} value={rules[id]} onChange={e=>change(id,e.target.value)}/>}
           </label>)}
           <label style={label}>Glücksrad-Modus <select style={input} value={rules.wheelMode} onChange={e=>change("wheelMode",e.target.value)}><option value="each">Für jeden Erben</option><option value="oneChoose">Einen Erben wählen</option><option value="oneRandom">Einen Erben auslosen</option></select></label>
