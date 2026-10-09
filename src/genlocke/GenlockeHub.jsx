@@ -33,8 +33,8 @@ export default function GenlockeHub() {
   const [mvp,setMvp]=useState("");
   const [hater,setHater]=useState("");
   const [target,setTarget]=useState("");
+  const [wheelPlayer,setWheelPlayer]=useState(0);
   const [wheelResult,setWheelResult]=useState(null);
-  const [showWheel,setShowWheel]=useState(false);
   const [wheelSpun,setWheelSpun]=useState(false);
   const [deathName,setDeathName]=useState("");
   const [notice,setNotice]=useState("");
@@ -70,14 +70,29 @@ export default function GenlockeHub() {
     await persist({...save,genlocke:changed});setDeathName("");
   });
   const doWheel=()=>run(async()=>{
-    if(!g.rules.wheel)return;
-    const options=activeHeirs.filter(h=>!h.dead);
+    if(!g.rules.wheel) return;
+    const previous=(g.wheelHistory||[]).filter(x=>x.stageIndex===g.currentIndex&&x.player===wheelPlayer);
+    const heirs=activeHeirs.filter(h=>h.player===wheelPlayer);
     let selectedMon=target;
-    if(!options.length && g.rules.wheelWithoutHeir) selectedMon=target;
-    else if(g.rules.wheelMode==="oneRandom")selectedMon=options[Math.floor(Math.random()*options.length)]?.pokemon;
-    if(!selectedMon)throw new Error("Bitte ein Pokémon für das Glücksrad auswählen.");
-    const {genlocke,record}=resolveWheel(g,selectedMon,0);
-    await persist({...save,genlocke});setWheelResult(record);setWheelSpun(true);
+    if(heirs.length) {
+      if(g.rules.wheelMode==="oneRandom") {
+        if(previous.length) throw new Error("Für diesen Spieler wurde bereits ein Erbe ausgelost.");
+        selectedMon=heirs[Math.floor(Math.random()*heirs.length)]?.pokemon;
+      } else if(g.rules.wheelMode==="oneChoose") {
+        if(previous.length) throw new Error("Die einmalige Drehung wurde bereits verwendet.");
+        if(!heirs.some(h=>h.pokemon===selectedMon)) throw new Error("Bitte einen gültigen Erben wählen.");
+      } else {
+        if(!heirs.some(h=>h.pokemon===selectedMon)) throw new Error("Bitte einen gültigen Erben wählen.");
+      }
+    } else {
+      if(!g.rules.wheelWithoutHeir) throw new Error("Keine Erben zum Drehen vorhanden.");
+      if(previous.length) throw new Error("Der Starter hat bereits einen Glücksrad-Effekt erhalten.");
+      if(!selectedMon) throw new Error("Bitte den neuen Starter eintragen.");
+    }
+    if(previous.some(x=>x.pokemon===selectedMon)) throw new Error("Dieses Pokémon wurde bereits gedreht.");
+    const {genlocke,record}=resolveWheel(g,selectedMon,wheelPlayer);
+    await persist({...save,genlocke});setWheelResult(record);
+    setWheelSpun(true);
   });
   return <div style={{minHeight:"100vh",background:"#091225",color:"#edf2ff",padding:"24px 14px"}}>
     <div style={{maxWidth:1050,margin:"auto",display:"grid",gap:15}}>
@@ -111,7 +126,38 @@ export default function GenlockeHub() {
             </div>
             <button style={{...btn,background:"#267855"}} onClick={finish}>Generation abschließen</button>
           </section>
-          <section style={frame}><h2>Glücksrad</h2>{g.rules.wheel?<><p>Effektrad (je nach Regelsatz). Das Ergebnis wird protokolliert.</p><input style={btn} placeholder="Pokémon / Starter" value={target} onChange={e=>setTarget(e.target.value)}/><button style={btn} disabled={wheelSpun} onClick={doWheel}>Drehen</button>{wheelResult&&<h3>{wheelResult.pokemon}: {wheelResult.effects.map(id=>WHEEL_RESULTS.find(x=>x.id===id)?.label).join(" + ")}</h3>}</>:<p>In den Regeln deaktiviert.</p>}</section>
+          <section style={frame}>
+            <h2>Glücksrad</h2>
+            {g.rules.wheel ? <>
+              <p>Pro Spieler gelten die konfigurierten Drehlimits. Alle Ergebnisse werden dauerhaft protokolliert.</p>
+              <style>{`@keyframes gl-wheel-spin {0% {transform: rotate(0deg) scale(.9)} 85% {transform: rotate(1400deg) scale(1.03)} 100% {transform: rotate(1440deg) scale(1)}}`}</style>
+              <div style={{display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}}>
+                <div style={{
+                  height:140,width:140,borderRadius:"50%",border:"7px solid #d9b66b",
+                  background:"conic-gradient(#7b476c 0 14%,#668ec4 14% 28%,#409f8b 28% 42%,#b47652 42% 56%,#b89d51 56% 70%,#755bac 70% 84%,#376b85 84% 100%)",
+                  boxShadow:"0 0 24px #9f8a5a66",
+                  animation: wheelSpun?"gl-wheel-spin 1.7s ease-out":"none"
+                }}/>
+                <div style={{display:"grid",gap:8,minWidth:240,flex:1}}>
+                  {playerCount>1&&<label>Spieler <select style={btn} value={wheelPlayer} onChange={e=>{setWheelPlayer(Number(e.target.value));setWheelSpun(false);setWheelResult(null);}}><option value={0}>Spieler 1</option><option value={1}>Spieler 2</option></select></label>}
+                  {activeHeirs.filter(h=>h.player===wheelPlayer).length?
+                    <label>Erbe
+                      <select style={btn} value={target} onChange={e=>{setTarget(e.target.value);setWheelSpun(false);}}>
+                        <option value="">Bitte wählen</option>
+                        {activeHeirs.filter(h=>h.player===wheelPlayer).map((h,i)=><option key={i} value={h.pokemon}>{h.pokemon}</option>)}
+                      </select>
+                    </label>:
+                    g.rules.wheelWithoutHeir?<input style={btn} placeholder="Starter der nächsten Edition" value={target} onChange={e=>setTarget(e.target.value)}/>:<p>Keine Erben verfügbar.</p>}
+                  <button style={{...btn,background:"#ae8140"}} onClick={doWheel}>Glücksrad drehen</button>
+                </div>
+              </div>
+              {wheelResult&&<div style={{...frame,marginTop:14,borderColor:"#e0be65"}}>
+                <h3>{wheelResult.pokemon}: {wheelResult.effects.map(id=>WHEEL_RESULTS.find(x=>x.id===id)?.label).join(" + ")}</h3>
+                <p>Bitte das Ergebnis im Spielstand entsprechend umsetzen.</p>
+              </div>}
+              {(g.wheelHistory||[]).filter(x=>x.stageIndex===g.currentIndex).map(h=><div key={h.id} style={{borderBottom:"1px solid #39455c",padding:"6px 0"}}>Spieler {h.player+1}: {h.pokemon} – {h.effects.join(", ")}</div>)}
+            </>:<p>In den Regeln deaktiviert.</p>}
+          </section>
           <section style={frame}><h2>Tod eintragen</h2><input style={btn} placeholder="Pokémon" value={deathName} onChange={e=>setDeathName(e.target.value)}/><button style={btn} onClick={recordDeath}>Als tot markieren</button></section>
           <section style={frame}>
             <h2>Spielstand verwalten</h2>
