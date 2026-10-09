@@ -889,6 +889,19 @@ function TeamManager() {
   const activeDuoRoomId = localStorage.getItem("activeDuoRoomId") || "";
   const { save: duoSave, patchSave: patchDuoSave, error: duoError } = useDuoSave(activeDuoRoomId);
   const isDuo = !!activeDuoRoomId;
+  const genlockeContext = (() => {
+    if (isDuo) return duoSave?.genlocke || null;
+    const saves = JSON.parse(localStorage.getItem("savegames") || "{}");
+    return saves[localStorage.getItem("activeSave")]?.genlocke || null;
+  })();
+  const currentGenStage = genlockeContext?.stages?.[genlockeContext.currentIndex];
+  const lockedGenlockeHeirs = (currentGenStage?.heirs || [])
+    .filter((heir) => heir.locked && !heir.dead);
+  const isLockedGenlockePokemon = (name, player) =>
+    !!name && lockedGenlockeHeirs.some((heir) => heir.player === player && heir.pokemon === name);
+  const isGenlockeHeir = (name, player) =>
+    !!name && (currentGenStage?.heirs || []).some((heir) => heir.player === player && heir.pokemon === name && !heir.dead);
+
 
   // ===== Local Save State =====
   const activeSave = localStorage.getItem("activeSave");
@@ -1084,14 +1097,19 @@ const teamAnalysis = useMemo(() => {
 
   // ===== Persist Teams helper =====
   const persistTeams = async (newTeams) => {
+    if (lockedGenlockeHeirs.some((heir) => !newTeams[heir.player]?.includes(heir.pokemon))) {
+      alert("Ein gelockter Champion-Erbe darf nicht aus dem Team entfernt werden.");
+      return false;
+    }
     if (isDuo) {
       await patchDuoSave({ teams: teamsArrayToObject(newTeams) });
-      return;
+      return true;
     }
     const saves = JSON.parse(localStorage.getItem("savegames") || "{}");
     if (!activeSave || !saves[activeSave]) return;
     saves[activeSave].teams = newTeams;
     localStorage.setItem("savegames", JSON.stringify(saves));
+    return true;
   };
 
   // ===== Load types for all Pokémon in teams (inkl. Mega-Form) =====
@@ -1157,8 +1175,8 @@ useEffect(() => {
   const updateTeam = async (index, newTeam) => {
     const newTeams = [...teams];
     newTeams[index] = newTeam;
+    if (await persistTeams(newTeams) === false) return;
     setTeams(newTeams);
-    await persistTeams(newTeams);
   };
 
   const findLinkedGroup = (name, teamIndex) => {
@@ -1192,8 +1210,8 @@ useEffect(() => {
     }
 
     newTeams[0] = team;
+    if (await persistTeams(newTeams) === false) return;
     setTeams(newTeams);
-    await persistTeams(newTeams);
     return;
   }
 
@@ -1222,8 +1240,8 @@ useEffect(() => {
     newTeams[i] = team;
   });
 
+  if (await persistTeams(newTeams) === false) return;
   setTeams(newTeams);
-  await persistTeams(newTeams);
 };
 
   const onDragEnd = (result, teamIndex) => {
@@ -1239,10 +1257,9 @@ useEffect(() => {
       .fill(null)
       .map(() => ["", "", "", "", "", ""]);
 
-    setTeams(emptyTeams);
-
     try {
-      await persistTeams(emptyTeams);
+      if (await persistTeams(emptyTeams) === false) return;
+      setTeams(emptyTeams);
       setShowHardResetModal(false);
     } catch (err) {
       console.error("Fehler beim Hard-Reset der Teams:", err);
@@ -1457,7 +1474,7 @@ useEffect(() => {
 
                                       <div className="team-slot-info" style={{ flex: 1 }}>
                                         <div className="team-slot-name-row" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                                          <div className="team-slot-name" style={{ fontWeight: 900 }}>{p}</div>
+                                          <div className="team-slot-name" style={{ fontWeight: 900 }}>{p}{isGenlockeHeir(p,i) && <span title={isLockedGenlockePokemon(p,i) ? "Gelockter Champion-Erbe" : "Champion-Erbe"} style={{ color: "#ffd76c", marginLeft: 8 }}>{isLockedGenlockePokemon(p,i) ? "★ 🔒" : "★"}</span>}</div>
 
                                           {!!formKey && (
                                             <span
