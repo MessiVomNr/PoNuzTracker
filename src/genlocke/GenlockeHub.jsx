@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { WHEEL_RESULTS, getCurrentStage, stageSnapshot, adjustHistoricalStage, finishStage, resolveWheel, archiveWipe, isGloballyBanned, registerDeath, cleanRules, copy } from "./core";
+import { WHEEL_RESULTS, getCurrentStage, stageSnapshot, adjustHistoricalStage, finishStage, resolveWheel, archiveWipe, clearCurrentList, clearAllLists, restartGenlocke, isGloballyBanned, registerDeath, cleanRules, copy } from "./core";
 import { versionToPokedex } from "../data/versionToPokedex";
 import { useDuoSave } from "../duo/useDuoSave";
+import HistoricalEditor from "./HistoricalEditor";
 
 const frame={background:"#121e32",border:"1px solid #354460",borderRadius:16,padding:16};
 const btn={border:"1px solid #5b7298",borderRadius:8,background:"#253b60",color:"#fff",padding:"9px 12px",cursor:"pointer"};
@@ -84,14 +85,14 @@ export default function GenlockeHub() {
         <div><small>GENLOCKE · VERSUCH {g.attempt}</small><h1 style={{margin:"4px 0"}}>{g.name}</h1><div>{stage?.edition} · Etappe {g.currentIndex+1}/{g.editions.length}</div></div>
         <button style={btn} onClick={()=>nav("/table")}>Zur Encounter-Tabelle</button>
       </div>
-      <nav style={{display:"flex",gap:8,flexWrap:"wrap"}}>{[["overview","Übersicht"],["hall","Ruhmeshalle"],["grave","Friedhof"],["history","Chronik"],["rules","Regeln"]].map(([id,text])=><button key={id} style={{...btn,background:tab===id?"#386a99":"#253b60"}} onClick={()=>setTab(id)}>{text}</button>)}</nav>
+      <nav style={{display:"flex",gap:8,flexWrap:"wrap"}}>{[["overview","Übersicht"],["hall","Ruhmeshalle"],["grave","Friedhof"],["history","Chronik"],["historical","Alte Generationen"],["rules","Regeln"]].map(([id,text])=><button key={id} style={{...btn,background:tab===id?"#386a99":"#253b60"}} onClick={()=>setTab(id)}>{text}</button>)}</nav>
       {notice&&<div style={{...frame,borderColor:"#e88181"}}>{notice}</div>}
       {tab==="overview"&&<>
         <section style={{...frame,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10}}>
           <div>Championsiege<h2>{completed}</h2></div><div>Tote<h2>{g.deaths.length}</h2></div><div>Erlöst<h2>{g.released.length}</h2></div>
           <div>Aktive Erben<div style={{display:"flex",gap:8,marginTop:8}}>{activeHeirs.length?activeHeirs.map((h,i)=><div key={i} title={h.pokemon}>{sprite(h.pokemon,stage.edition)?<img alt={h.pokemon} src={sprite(h.pokemon,stage.edition)} width="64" style={{filter:"drop-shadow(0 0 9px #ffd76c)"}}/>:h.pokemon}{h.locked?"🔒":""}</div>):"—"}</div></div>
         </section>
-        <section style={frame}><h2>Deine Etappen</h2>{g.editions.map((edition,i)=><div key={i} style={{padding:"9px 0",borderBottom:"1px solid #354460",color:i===g.currentIndex?"#a8d6ff":undefined}}>{i+1}. {edition} {i<g.currentIndex?"✓ Abgeschlossen":i===g.currentIndex?"● Aktuell":"🔒"}</div>)}</section>
+        <section style={frame}><h2>Deine Etappen</h2>{g.editions.map((edition,i)=><div key={i} style={{padding:"9px 0",borderBottom:"1px solid #354460",color:i===g.currentIndex?"#a8d6ff":undefined}}>{i+1}. {edition} {i<g.currentIndex?"✓ Abgeschlossen":i===g.currentIndex?"● Aktuell":"🔒"}{g.stages[i]?.issues?.length>0&&<span style={{color:"#ffab69",marginLeft:10}}>⚠ Nach Korrektur prüfen</span>}</div>)}</section>
         {!g.finishedAt&&<>
           <section style={frame}>
             <h2>Generation abschließen</h2>
@@ -112,10 +113,20 @@ export default function GenlockeHub() {
           </section>
           <section style={frame}><h2>Glücksrad</h2>{g.rules.wheel?<><p>Effektrad (je nach Regelsatz). Das Ergebnis wird protokolliert.</p><input style={btn} placeholder="Pokémon / Starter" value={target} onChange={e=>setTarget(e.target.value)}/><button style={btn} disabled={wheelSpun} onClick={doWheel}>Drehen</button>{wheelResult&&<h3>{wheelResult.pokemon}: {wheelResult.effects.map(id=>WHEEL_RESULTS.find(x=>x.id===id)?.label).join(" + ")}</h3>}</>:<p>In den Regeln deaktiviert.</p>}</section>
           <section style={frame}><h2>Tod eintragen</h2><input style={btn} placeholder="Pokémon" value={deathName} onChange={e=>setDeathName(e.target.value)}/><button style={btn} onClick={recordDeath}>Als tot markieren</button></section>
+          <section style={frame}>
+            <h2>Spielstand verwalten</h2>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button style={btn} onClick={()=>run(async()=>{if(window.confirm("Encounter-Liste der aktuellen Etappe leeren?"))await persist(clearCurrentList(save));})}>Liste leeren</button>
+              <button style={btn} onClick={()=>run(async()=>{if(window.confirm("Alle Encounter-Listen sämtlicher Generationen leeren?"))await persist(clearAllLists(save));})}>Alle Listen leeren</button>
+              <button style={{...btn,background:"#8b3c34"}} onClick={()=>run(async()=>{if(window.confirm("RESTART: Den Versuch mit allen Todeszahlen, Erben und Sperren zurücksetzen?")){await persist(restartGenlocke(save));setSelected([]);setLocked([]);setWheelSpun(false);}})}>Restart</button>
+              {!roomId&&<button style={{...btn,background:"#87262f"}} onClick={()=>run(async()=>{if(!window.confirm("Genlocke vollständig löschen?"))return;const saves=JSON.parse(localStorage.getItem("savegames")||"{}");delete saves[name];localStorage.setItem("savegames",JSON.stringify(saves));localStorage.removeItem("activeSave");nav("/solo");})}>Genlocke löschen</button>}
+            </div>
+          </section>
           <button style={{...btn,background:"#a82c34",padding:18,fontSize:22,fontWeight:900}} onClick={wipe}>FULLWIPE</button>
         </>}
         {g.finishedAt&&<section style={frame}><h2>Genlocke abgeschlossen!</h2><button style={btn} onClick={wipe}>Neuen Versuch beginnen</button></section>}
       </>}
+      {tab==="historical"&&<section style={frame}><HistoricalEditor genlocke={g} onUpdate={async(nextG)=>{await persist({...save,genlocke:nextG});setNotice("Korrektur gespeichert. Spätere Etappen wurden farbig als prüfbedürftig markiert.");}}/></section>}
       {tab==="hall"&&<section style={frame}><h2>Globale Ruhmeshalle</h2>{g.stages.filter(s=>s.completedAt).map((s,i)=><div key={s.id} style={{...frame,marginBottom:12}}><h3>{s.edition} · Etappe {i+1}</h3><div style={{display:"flex",gap:14,flexWrap:"wrap"}}>{s.hall.map((h,j)=><div key={j} style={{textAlign:"center",border:"1px solid #ad9569",padding:10,borderRadius:12}}>{h.pokemon.map((p,k)=><div key={k}>{sprite(p,s.edition)&&<img src={sprite(p,s.edition)} alt={p} width="70"/>}<div>{p}</div></div>)}{s.selectedSlots?.includes(h.slot)?"★ Erbe":""}</div>)}</div><p>MVP: {s.mvp.join(", ")||"—"} · Hater: {s.hater.join(", ")||"—"}</p></div>)}</section>}
       {tab==="grave"&&<section style={frame}><h2>Friedhof</h2>{g.deaths.map((d,i)=><div key={d.id||i} style={{padding:8,borderBottom:"1px solid #34405a"}}>{d.pokemon} · {g.editions[d.stageIndex]} · {d.note||"Tot"}</div>)}<h2>Erlöste Champions (keine Tode)</h2>{g.released.map((d,i)=><div key={i} style={{padding:8}}>{d.pokemon} · {g.editions[d.stageIndex]}</div>)}</section>}
       {tab==="history"&&<section style={frame}><h2>Chronik</h2>{g.archives.map((a,i)=><div key={i} style={{...frame,marginBottom:10}}>Versuch {a.attempt}: {a.reachedStage} Etappen · {a.deaths} Tote · {a.champions} Championsiege</div>)}<button style={btn} onClick={()=>run(async()=>{if(window.confirm("Chronik endgültig löschen?"))await persist({...save,genlocke:{...g,archives:[]}});})}>Chronik löschen</button></section>}
