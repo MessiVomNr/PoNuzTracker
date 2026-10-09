@@ -1,6 +1,6 @@
 import {
   CLASSIC_EDITIONS, createGenlocke, cleanRules, finishStage, getTeams,
-  isGloballyBanned, bannedEvolutionIds, inheritBasePokemon,
+  isGloballyBanned, bannedEvolutionIds, inheritBasePokemon, belongsToHeir,
   resolveWheel, killPokemonInSave, adjustHistoricalStage, archiveWipe, restartGenlocke
 } from "./core";
 
@@ -117,4 +117,12 @@ test("Solo manual death registers banned evolution family", () => {
   expect(getTeams(save,1)[0][0]).toBe("");
   expect(getTeams(save,1)[0][1]).toBe("Garados");
   expect(isGloballyBanned(save.genlocke,4)).toBe(true);
+});
+
+test("inherited heir retains identity after evolving and can be marked dead", () => {
+  const inherited = finishStage(makeSave(),[0],[0]);
+  const heir = inherited.genlocke.stages[1].heirs[0];
+  expect(belongsToHeir(heir,"Glutexo","Smaragd")).toBe(true);
+  expect(belongsToHeir(heir,"Glurak","Smaragd")).toBe(true);
+  expect(belongsToHeir(heir,"Garados","Smaragd")).toBe(false);
 });
