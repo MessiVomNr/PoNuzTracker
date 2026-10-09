@@ -4,6 +4,7 @@ import { WHEEL_RESULTS, getCurrentStage, stageSnapshot, adjustHistoricalStage, f
 import { versionToPokedex } from "../data/versionToPokedex";
 import { useDuoSave } from "../duo/useDuoSave";
 import HistoricalEditor from "./HistoricalEditor";
+import FullWipeModal from "../components/FullWipeModal";
 import { RULE_OPTIONS } from "./GenlockeSetup";
 
 const frame={background:"#121e32",border:"1px solid #354460",borderRadius:16,padding:16};
@@ -40,6 +41,7 @@ export default function GenlockeHub() {
   const [deathName,setDeathName]=useState("");
   const [notice,setNotice]=useState("");
   const [quote,setQuote]=useState(quotes[0]);
+  const [wipeModal,setWipeModal]=useState(false);
   const [rulesOpen,setRulesOpen]=useState(false);
   const [rules,setRules]=useState(cleanRules(save?.genlocke?.rules));
   const g=save?.genlocke, stage=getCurrentStage(g);
@@ -60,11 +62,15 @@ export default function GenlockeHub() {
     const next=finishStage(save,selected,locked,mvp?[mvp]:[],hater?[hater]:[],playerCount);
     await persist(next);setSelected([]);setLocked([]);setWheelResult(null);setWheelSpun(false);setTab("overview");
   });
-  const wipe=()=>run(async()=>{
-    if(!window.confirm("FULLWIPE: Den gesamten Versuch beenden und bei der ersten Edition neu beginnen?"))return;
-    const text=quotes[Math.floor(Math.random()*quotes.length)];
-    setQuote(text);await persist(archiveWipe(save));setTab("wipe");
-  });
+  const wipe=()=>setWipeModal(true);
+  const finalizeWipe=async(summary)=>{
+    await persist(archiveWipe(save,summary.reason||"FULLWIPE",summary));
+    setQuote(quotes[Math.floor(Math.random()*quotes.length)]);
+    setTab("wipe");
+    setSelected([]);
+    setLocked([]);
+    setWheelSpun(false);
+  };
   const recordDeath=()=>run(async()=>{
     if(!deathName.trim())return;
     const next=copy(g);const changed=registerDeath(next,{pokemon:deathName.trim(),dexId:dexId(deathName.trim(),stage.edition)});
@@ -96,6 +102,7 @@ export default function GenlockeHub() {
     setWheelSpun(true);
   });
   return <div style={{minHeight:"100vh",background:"#091225",color:"#edf2ff",padding:"24px 14px"}}>
+    <FullWipeModal open={wipeModal} title="Genlocke-Versuch beenden" save={save} playerCount={playerCount} onCancel={()=>setWipeModal(false)} onConfirm={finalizeWipe} />
     <div style={{maxWidth:1050,margin:"auto",display:"grid",gap:15}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
         <div><small>GENLOCKE · VERSUCH {g.attempt}</small><h1 style={{margin:"4px 0"}}>{g.name}</h1><div>{stage?.edition} · Etappe {g.currentIndex+1}/{g.editions.length}</div></div>
