@@ -99,7 +99,7 @@ export default function GenlockeHub() {
     <div style={{maxWidth:1050,margin:"auto",display:"grid",gap:15}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
         <div><small>GENLOCKE · VERSUCH {g.attempt}</small><h1 style={{margin:"4px 0"}}>{g.name}</h1><div>{stage?.edition} · Etappe {g.currentIndex+1}/{g.editions.length}</div></div>
-        <button style={btn} onClick={()=>nav("/table")}>Zur Encounter-Tabelle</button>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>{roomId&&<button style={btn} onClick={()=>navigator.clipboard.writeText(roomId)} title="Zum Einladen Roomcode kopieren">Room: {roomId} · Kopieren</button>}<button style={btn} onClick={()=>nav("/table")}>Zur Encounter-Tabelle</button></div>
       </div>
       <nav style={{display:"flex",gap:8,flexWrap:"wrap"}}>{[["overview","Übersicht"],["hall","Ruhmeshalle"],["grave","Friedhof"],["history","Chronik"],["historical","Alte Generationen"],["rules","Regeln"]].map(([id,text])=><button key={id} style={{...btn,background:tab===id?"#386a99":"#253b60"}} onClick={()=>setTab(id)}>{text}</button>)}</nav>
       {notice&&<div style={{...frame,borderColor:"#e88181"}}>{notice}</div>}
