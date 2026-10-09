@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CLASSIC_EDITIONS, DEFAULT_RULES, WHEEL_RESULTS, cleanRules, createGenlocke, getPresets, savePreset, deletePreset } from "./core";
 import editionData from "../data/editionData";
+import { createDuoRoom } from "../duo/duoService";
 
 const panel = { background:"rgba(12,20,39,.92)",color:"#e9efff",border:"1px solid #394765",borderRadius:16,padding:20 };
 const button = { cursor:"pointer",padding:"9px 14px",background:"#283b60",color:"#fff",border:"1px solid #6680aa",borderRadius:9 };
@@ -39,7 +40,7 @@ export default function GenlockeSetup() {
   const changeEdition=(i,value)=>setEditions(p=>p.map((e,j)=>i===j?value:e));
   const move=(i,delta)=>setEditions(p=>{const a=[...p],j=i+delta;if(j<0||j>=a.length)return p;[a[i],a[j]]=[a[j],a[i]];return a;});
   const editionsAvailable=[...new Set([...Object.keys(editionData),...CLASSIC_EDITIONS])].sort((a,b)=>a.localeCompare(b,"de"));
-  const create=()=>{setError("");const trimmed=name.trim();if(!trimmed)return setError("Bitte einen Namen eingeben.");if(!editions.length)return setError("Bitte ein Spiel hinzufügen.");
+  const create=async()=>{setError("");const trimmed=name.trim();if(!trimmed)return setError("Bitte einen Namen eingeben.");if(!editions.length)return setError("Bitte ein Spiel hinzufügen.");
     if(mode==="solo"){
       const saves=JSON.parse(localStorage.getItem("savegames")||"{}");
       if(saves[trimmed])return setError("Dieser Spielstand existiert bereits.");
@@ -47,7 +48,13 @@ export default function GenlockeSetup() {
       saves[trimmed]={encounters:{},teams:[["","","","","",""]],team:["","","","","",""],gymsDefeated:0,edition:editions[0],linkMode:"solo",genlocke:g};
       localStorage.setItem("savegames",JSON.stringify(saves));localStorage.removeItem("activeDuoRoomId");localStorage.setItem("activeSave",trimmed);navigate("/genlocke");return;
     }
-    setError("Duo-Genlocke wird im nächsten Integrationsschritt mit der Online-Lobby verbunden. Bitte noch keinen Duo-Run erstellen.");
+    try {
+      const genlocke=createGenlocke({name:trimmed,editions,rules,mode:"duo"});
+      const res=await createDuoRoom({displayName:localStorage.getItem("duoPlayerName")||"Spieler 1",edition:editions[0],linkMode:"duo",title:trimmed,genlocke});
+      localStorage.removeItem("activeSave");
+      localStorage.setItem("activeDuoRoomId",res.roomId);
+      navigate("/genlocke");
+    } catch (err) { setError(err.message||String(err)); }
   };
   return <div style={{minHeight:"100vh",background:"#091225",padding:"24px 14px",color:"#e9efff"}}>
     <div style={{maxWidth:1000,margin:"auto",display:"grid",gap:14}}>
