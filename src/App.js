@@ -32,6 +32,8 @@ import PokemonHigherLower from "./games/PokemonHigherLower";
 import OnlineGuessMenu from "./online/OnlineGuessMenu";
 import OnlineGuessLobby from "./online/OnlineGuessLobby";
 import OnlineGuessGame from "./online/OnlineGuessGame";
+import GenlockeSetup from "./genlocke/GenlockeSetup";
+import GenlockeHub from "./genlocke/GenlockeHub";
 
 // Hook für Theme-Verwaltung
 function useInitTheme() {
@@ -80,6 +82,8 @@ function AppContent() {
         <Route path="/games/pokemon-guess/online/:roomCode/game" element={<OnlineGuessGame />} />
 
         <Route path="/solo" element={<SaveGameManager />} />
+        <Route path="/genlocke/create" element={<GenlockeSetup />} />
+        <Route path="/genlocke" element={<GenlockeHub />} />
         <Route path="/table" element={<EncounterTable />} />
         <Route path="/team" element={<TeamManager />} />
         <Route path="/guide" element={<GuidePage />} />
