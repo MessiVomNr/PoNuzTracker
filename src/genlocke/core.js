@@ -200,6 +200,85 @@ export function registerDeath(g, { pokemon, dexId, player = 0, note = "", stageI
   return { ...g, deaths: [...(g.deaths || []), event] };
 }
 
+// Shared death handling for manual deaths and lethal wheel outcomes.
+// Encounters remain in the history while dead Pokémon leave the active teams.
+export function syncCurrentTeamWithDeaths(save) {
+  const next = copy(save);
+  const g = next.genlocke;
+  if (!g) return next;
+  const players = g.mode === "duo" ? 2 : 1;
+  const teams = getTeams(next, players);
+  const died = (g.deaths || []).filter(d => d.stageIndex === g.currentIndex);
+  const deadFor = (name, player) => died.some(d => d.player === player && d.pokemon === name);
+  const cleanedTeams = teams.map((team, player) =>
+    team.map(name => deadFor(name, player) ? "" : name)
+  );
+  next.teams = teamToStorage(cleanedTeams, next, players);
+  next.team = cleanedTeams[0];
+  const encounters = next.encounters || {};
+  Object.values(encounters).forEach(row => {
+    for (let player = 0; player < players; player++) {
+      if (deadFor(row["pokemon" + (player + 1)], player)) {
+        row["status" + (player + 1)] = "Besiegt";
+      }
+    }
+    if (Array.from({length:players},(_,player)=>row["pokemon"+(player+1)])
+      .filter(Boolean).every((name, player) => {
+        const actualPlayer = Array.from({length:players},(_,i)=>i).filter(i=>row["pokemon"+(i+1)])[player];
+        return deadFor(name, actualPlayer);
+      }) && Array.from({length:players},(_,i)=>row["pokemon"+(i+1)]).some(Boolean)) {
+      row.status = "Besiegt";
+    }
+  });
+  return next;
+}
+
+export function killPokemonInSave(save, { pokemon, player = 0, note = "" }) {
+  const g = save?.genlocke;
+  if (!g || !pokemon) throw new Error("Genlocke oder Pokémon fehlt.");
+  const players = g.mode === "duo" ? 2 : 1;
+  if (player < 0 || player >= players) throw new Error("Ungültiger Spieler.");
+  const before = getTeams(save, players);
+  const stageIndex = g.currentIndex;
+  const edition = g.editions[stageIndex];
+  const encounter = Object.values(save.encounters || {}).find(row =>
+    row?.["pokemon" + (player + 1)] === pokemon
+  );
+  const targets = [{pokemon, player}];
+  if (players > 1 && encounter) {
+    const partnerPlayer = player === 0 ? 1 : 0;
+    const partner = encounter["pokemon" + (partnerPlayer + 1)];
+    if (partner) targets.push({pokemon:partner, player:partnerPlayer});
+  }
+  let nextG = copy(g);
+  targets.forEach(target => {
+    const alreadyDead = nextG.deaths.some(d =>
+      d.stageIndex === stageIndex && d.player === target.player && d.pokemon === target.pokemon
+    );
+    if (alreadyDead) return;
+    nextG = registerDeath(nextG, {
+      ...target, dexId:dexIdFor(target.pokemon, edition), note,
+    });
+    (getCurrentStage(nextG)?.heirs || []).forEach(heir => {
+      if (heir.player === target.player && heir.pokemon === target.pokemon) heir.dead = true;
+    });
+  });
+  const updated = syncCurrentTeamWithDeaths({...save,genlocke:nextG});
+  const after = getTeams(updated, players);
+  const wipeMode = nextG.rules.wipeMode || "team";
+  let wipe = false;
+  if (wipeMode === "team") {
+    wipe = before.some((team,i) => team.some(Boolean) && after[i].every(n => !n));
+  } else {
+    wipe = !Object.values(updated.encounters || {}).some(row =>
+      row?.status === "Gefangen" && Array.from({length:players},(_,i) =>
+        row["pokemon"+(i+1)] && row["status"+(i+1)] !== "Besiegt"
+      ).some(Boolean)
+    );
+  }
+  return {save:updated, wipe, targets};
+}
+
 export function getHeirNames(g, player = 0) {
   return (getCurrentStage(g)?.heirs || []).filter((h) => h.player === player && !h.dead).map((h) => h.pokemon);
 }
