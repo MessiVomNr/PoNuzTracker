@@ -4,6 +4,7 @@ import { WHEEL_RESULTS, getCurrentStage, stageSnapshot, adjustHistoricalStage, f
 import { versionToPokedex } from "../data/versionToPokedex";
 import { useDuoSave } from "../duo/useDuoSave";
 import HistoricalEditor from "./HistoricalEditor";
+import { RULE_OPTIONS } from "./GenlockeSetup";
 
 const frame={background:"#121e32",border:"1px solid #354460",borderRadius:16,padding:16};
 const btn={border:"1px solid #5b7298",borderRadius:8,background:"#253b60",color:"#fff",padding:"9px 12px",cursor:"pointer"};
@@ -176,7 +177,29 @@ export default function GenlockeHub() {
       {tab==="hall"&&<section style={frame}><h2>Globale Ruhmeshalle</h2>{g.stages.filter(s=>s.completedAt).map((s,i)=><div key={s.id} style={{...frame,marginBottom:12}}><h3>{s.edition} · Etappe {i+1}</h3><div style={{display:"flex",gap:14,flexWrap:"wrap"}}>{s.hall.map((h,j)=><div key={j} style={{textAlign:"center",border:"1px solid #ad9569",padding:10,borderRadius:12}}>{h.pokemon.map((p,k)=><div key={k}>{sprite(p,s.edition)&&<img src={sprite(p,s.edition)} alt={p} width="70"/>}<div>{p}</div></div>)}{s.selectedSlots?.includes(h.slot)?"★ Erbe":""}</div>)}</div><p>MVP: {s.mvp.join(", ")||"—"} · Hater: {s.hater.join(", ")||"—"}</p></div>)}</section>}
       {tab==="grave"&&<section style={frame}><h2>Friedhof</h2>{g.deaths.map((d,i)=><div key={d.id||i} style={{padding:8,borderBottom:"1px solid #34405a"}}>{d.pokemon} · {g.editions[d.stageIndex]} · {d.note||"Tot"}</div>)}<h2>Erlöste Champions (keine Tode)</h2>{g.released.map((d,i)=><div key={i} style={{padding:8}}>{d.pokemon} · {g.editions[d.stageIndex]}</div>)}</section>}
       {tab==="history"&&<section style={frame}><h2>Chronik</h2>{g.archives.map((a,i)=><div key={i} style={{...frame,marginBottom:10}}>Versuch {a.attempt}: {a.reachedStage} Etappen · {a.deaths} Tote · {a.champions} Championsiege</div>)}<button style={btn} onClick={()=>run(async()=>{if(window.confirm("Chronik endgültig löschen?"))await persist({...save,genlocke:{...g,archives:[]}});})}>Chronik löschen</button></section>}
-      {tab==="rules"&&<section style={frame}><h2>Aktuelle Regeln</h2><button style={btn} onClick={()=>setRulesOpen(p=>!p)}>{rulesOpen?"Schließen":"Regeln bearbeiten"}</button>{rulesOpen&&<><p>Änderungen können den bisherigen Verlauf beeinflussen.</p><label>Erben <input style={btn} type="number" min="0" max="6" value={rules.heirs} onChange={e=>setRules(cleanRules({...rules,heirs:e.target.value}))}/></label><label>Gelockte Erben <input style={btn} type="number" min="0" max="6" value={rules.lockedHeirs} onChange={e=>setRules(cleanRules({...rules,lockedHeirs:e.target.value}))}/></label><button style={btn} onClick={()=>run(async()=>{if(window.confirm("Regeln wirklich während des Runs verändern?"))await persist({...save,genlocke:{...g,rules:cleanRules(rules)}});})}>Änderungen speichern</button></>}</section>}
+      {tab==="rules"&&<section style={frame}>
+        <h2>Aktuelle Regeln</h2>
+        <p>Regeln können nach einer Warnung geändert werden. Bereits ausgeführte Erbenauswahlen bleiben unverändert.</p>
+        <button style={btn} onClick={()=>setRulesOpen(p=>!p)}>{rulesOpen?"Bearbeitung schließen":"Regeln bearbeiten"}</button>
+        {rulesOpen&&<>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12,marginTop:16}}>
+            {RULE_OPTIONS.filter(([id])=>playerCount>1||!["crossPrimaryTypeUnique","linkPairPrimaryTypeUnique","sameAce"].includes(id)).map(([id,desc,type])=>
+              <label key={id} style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center",borderBottom:"1px solid #3d4b66",padding:8}}>
+                {desc}
+                {type==="check"?
+                  <input type="checkbox" checked={!!rules[id]} onChange={e=>setRules(cleanRules({...rules,[id]:e.target.checked}))}/>:
+                  <input type="number" style={{...btn,width:70}} min="0" max={["heirs","lockedHeirs","legendLimit","mythicalLimit","ultraLimit","pseudoLimit"].includes(id)?6:undefined} value={rules[id]} onChange={e=>setRules(cleanRules({...rules,[id]:e.target.value}))}/>}
+              </label>
+            )}
+            <label>Wipe-Art <select style={btn} value={rules.wipeMode} onChange={e=>setRules(cleanRules({...rules,wipeMode:e.target.value}))}><option value="team">Team-Wipe</option><option value="run">Run-Wipe</option></select></label>
+            <label>Glücksrad-Modus <select style={btn} value={rules.wheelMode} onChange={e=>setRules(cleanRules({...rules,wheelMode:e.target.value}))}><option value="each">Für jeden Erben</option><option value="oneChoose">Ein Erbe nach Wahl</option><option value="oneRandom">Ein zufälliger Erbe</option></select></label>
+          </div>
+          <details style={{marginTop:16}}><summary>Glücksrad-Gewichtungen</summary><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:10,marginTop:12}}>
+          {WHEEL_RESULTS.map(w=><label key={w.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{w.label}<input type="number" style={{...btn,width:75}} min="0" max="1000" value={rules.wheelWeights[w.id]} onChange={e=>setRules(cleanRules({...rules,wheelWeights:{...rules.wheelWeights,[w.id]:Number(e.target.value)}}))}/></label>)}
+          </div></details>
+          <button style={{...btn,background:"#2a7956",marginTop:14}} onClick={()=>run(async()=>{if(window.confirm("Regeln während des Runs ändern? Bisherige Erben und Ergebnisse bleiben erhalten."))await persist({...save,genlocke:{...g,rules:cleanRules(rules)}});})}>Änderungen speichern</button>
+        </>}
+      </section>
       {tab==="wipe"&&<section style={{...frame,textAlign:"center"}}><h1>GAME OVER</h1><h2>{quote}</h2><p>Versuch archiviert. Ein neuer Versuch beginnt bei der ersten Edition.</p><button style={btn} onClick={()=>setTab("overview")}>Weiter zum nächsten Versuch</button></section>}
     </div>
   </div>;
