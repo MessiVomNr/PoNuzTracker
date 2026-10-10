@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { WHEEL_RESULTS, getCurrentStage, stageSnapshot, adjustHistoricalStage, finishStage, resolveWheel, archiveWipe, clearCurrentList, clearAllLists, restartGenlocke, isGloballyBanned, registerDeath, killPokemonInSave, syncCurrentTeamWithDeaths, getTeams, cleanRules, copy } from "./core";
+import { WHEEL_RESULTS, getCurrentStage, stageSnapshot, adjustHistoricalStage, finishStage, drawWheelTarget, resolveWheel, archiveWipe, clearCurrentList, clearAllLists, restartGenlocke, isGloballyBanned, registerDeath, killPokemonInSave, syncCurrentTeamWithDeaths, getTeams, cleanRules, copy } from "./core";
 import { versionToPokedex } from "../data/versionToPokedex";
 import { useDuoSave } from "../duo/useDuoSave";
 import HistoricalEditor from "./HistoricalEditor";
@@ -93,6 +93,13 @@ export default function GenlockeHub() {
     setDeathName("");
     if(result.wipe) setWipeModal(true);
   });
+  const doWheelTarget=()=>run(async()=>{
+    const result=drawWheelTarget(g,wheelPlayer);
+    await persist({...save,genlocke:result.genlocke});
+    setTarget(result.pokemon);
+    setWheelResult(null);
+    setWheelSpun(false);
+  });
   const doWheel=()=>run(async()=>{
     if(!g.rules.wheel) return;
     const previous=(g.wheelHistory||[]).filter(x=>x.stageIndex===g.currentIndex&&x.player===wheelPlayer);
@@ -101,7 +108,9 @@ export default function GenlockeHub() {
     if(heirs.length) {
       if(g.rules.wheelMode==="oneRandom") {
         if(previous.length) throw new Error("Für diesen Spieler wurde bereits ein Erbe ausgelost.");
-        selectedMon=heirs[Math.floor(Math.random()*heirs.length)]?.pokemon;
+        selectedMon=heirs.length===1 ? heirs[0].pokemon : stage.wheelTargetDraws?.[wheelPlayer]?.pokemon;
+        if(!selectedMon) throw new Error("Bitte zunächst das Erbenrad drehen.");
+        if(!heirs.some(h=>h.pokemon===selectedMon)) throw new Error("Der ausgeloste Erbe ist nicht mehr verfügbar.");
       } else if(g.rules.wheelMode==="oneChoose") {
         if(previous.length) throw new Error("Die einmalige Drehung wurde bereits verwendet.");
         if(!heirs.some(h=>h.pokemon===selectedMon)) throw new Error("Bitte einen gültigen Erben wählen.");
@@ -181,15 +190,22 @@ export default function GenlockeHub() {
                 }}/>
                 <div style={{display:"grid",gap:8,minWidth:240,flex:1}}>
                   {playerCount>1&&<label>Spieler <select style={btn} value={wheelPlayer} onChange={e=>{setWheelPlayer(Number(e.target.value));setWheelSpun(false);setWheelResult(null);}}><option value={0}>Spieler 1</option><option value={1}>Spieler 2</option></select></label>}
-                  {activeHeirs.filter(h=>h.player===wheelPlayer).length?
+                  {g.rules.wheelMode==="oneRandom"&&activeHeirs.filter(h=>h.player===wheelPlayer).length>1?
+                    <div style={{display:"grid",gap:8}}>
+                      <button style={btn} disabled={!!stage.wheelTargetDraws?.[wheelPlayer]} onClick={doWheelTarget}>1. Erbenrad drehen</button>
+                      {stage.wheelTargetDraws?.[wheelPlayer]&&<div style={{color:"#ffd76c"}}>
+                        Ausgelost: <strong>{stage.wheelTargetDraws[wheelPlayer].pokemon}</strong>
+                      </div>}
+                    </div>:
+                    activeHeirs.filter(h=>h.player===wheelPlayer).length?
                     <label>Erbe
-                      <select style={btn} value={target} onChange={e=>{setTarget(e.target.value);setWheelSpun(false);}}>
+                      <select style={btn} value={target} disabled={g.rules.wheelMode==="oneRandom"} onChange={e=>{setTarget(e.target.value);setWheelSpun(false);}}>
                         <option value="">Bitte wählen</option>
                         {activeHeirs.filter(h=>h.player===wheelPlayer).map((h,i)=><option key={i} value={h.pokemon}>{h.pokemon}</option>)}
                       </select>
                     </label>:
                     g.rules.wheelWithoutHeir?<input style={btn} placeholder="Starter der nächsten Edition" value={target} onChange={e=>setTarget(e.target.value)}/>:<p>Keine Erben verfügbar.</p>}
-                  <button style={{...btn,background:"#ae8140"}} onClick={doWheel}>Glücksrad drehen</button>
+                  <button style={{...btn,background:"#ae8140"}} onClick={doWheel}>2. Effektrad drehen</button>
                 </div>
               </div>
               {wheelResult&&<div style={{...frame,marginTop:14,borderColor:"#e0be65"}}>
