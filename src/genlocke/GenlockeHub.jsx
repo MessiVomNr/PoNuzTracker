@@ -6,7 +6,7 @@ import { useDuoSave } from "../duo/useDuoSave";
 import { deleteGenlockeRoom } from "../duo/duoService";
 import HistoricalEditor from "./HistoricalEditor";
 import FullWipeModal from "../components/FullWipeModal";
-import { RULE_OPTIONS } from "./GenlockeSetup";
+import { RULE_OPTIONS, RULE_GROUPS } from "./GenlockeSetup";
 import GenlockeExtras from "./GenlockeExtras";
 import { validateTeamRules } from "./ruleValidation";
 
@@ -246,33 +246,91 @@ export default function GenlockeHub() {
       {tab==="history"&&<section style={frame}><h2>Chronik</h2>{g.archives.map((a,i)=><div key={i} style={{...frame,marginBottom:10}}>Versuch {a.attempt}: {a.reachedStage} Etappen · {a.deaths} Tote · {a.champions} Championsiege</div>)}<button style={btn} onClick={()=>run(async()=>{if(window.confirm("Chronik endgültig löschen?"))await persist({...save,genlocke:{...g,archives:[]}});})}>Chronik löschen</button></section>}
       {tab==="rules"&&<section style={frame}>
         <h2>Aktuelle Regeln</h2>
-        <p>Regeln können nach einer Warnung geändert werden. Bereits ausgeführte Erbenauswahlen bleiben unverändert.</p>
+        <p style={{color:"rgba(225,235,255,.72)"}}>Regeln können nach einer Warnung geändert werden. Bereits bestätigte Erben bleiben unverändert.</p>
         <button style={btn} onClick={()=>setRulesOpen(p=>!p)}>{rulesOpen?"Bearbeitung schließen":"Regeln bearbeiten"}</button>
-        {rulesOpen&&<>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12,marginTop:16}}>
-            {RULE_OPTIONS.filter(([id])=>playerCount>1||!["crossPrimaryTypeUnique","linkPairPrimaryTypeUnique","sameAce"].includes(id)).map(([id,desc,type])=>
-              <label key={id} style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center",borderBottom:"1px solid #3d4b66",padding:8}}>
-                {desc}
-                {type==="check"?
-                  <input type="checkbox" checked={!!rules[id]} onChange={e=>setRules(cleanRules({...rules,[id]:e.target.checked}))}/>:
-                  <input type="number" style={{...btn,width:70}} min="0" max={["heirs","lockedHeirs","legendLimit","mythicalLimit","ultraLimit","pseudoLimit"].includes(id)?6:undefined} value={rules[id]} onChange={e=>setRules(cleanRules({...rules,[id]:e.target.value}))}/>}
+        {rulesOpen&&<div style={{marginTop:16}}>
+          {RULE_GROUPS.map(group=><details className="genlocke-setup-rule-group" key={group.id}>
+            <summary>
+              <div style={{flex:1}}>
+                <strong>{group.title}</strong>
+                <span>{group.desc}</span>
+              </div>
+              <span className="genlocke-setup-chevron" aria-hidden="true"/>
+            </summary>
+            <div className="genlocke-setup-rule-body">
+              <div className="genlocke-setup-rule-grid">
+                {RULE_OPTIONS.filter(([key])=>group.keys.includes(key)&&(
+                  playerCount>1||!["crossPrimaryTypeUnique","linkPairPrimaryTypeUnique","sameAce"].includes(key)
+                )).map(([id,desc,type])=><label className="genlocke-setup-rule" key={id}>
+                  <span>{desc}</span>
+                  {type==="check"?
+                    <input type="checkbox" checked={!!rules[id]}
+                      onChange={e=>setRules(cleanRules({...rules,[id]:e.target.checked}))}/>:
+                    <input className="genlocke-setup-input" type="number"
+                      min={id==="aceDifference"?1:0}
+                      max={["heirs","lockedHeirs","legendLimit","mythicalLimit","ultraLimit","pseudoLimit"].includes(id)?6:id==="riskWinChance"?100:30}
+                      value={rules[id]}
+                      onChange={e=>setRules(cleanRules({...rules,[id]:e.target.value}))}/>}
+                </label>)}
+              </div>
+              {group.id==="wheel"&&<>
+                <label className="genlocke-setup-rule">
+                  <span>Glücksrad-Modus</span>
+                  <select className="genlocke-setup-select" style={{maxWidth:190}} value={rules.wheelMode}
+                    onChange={e=>setRules(cleanRules({...rules,wheelMode:e.target.value}))}>
+                    <option value="each">Für jeden Erben</option>
+                    <option value="oneChoose">Einen Erben wählen</option>
+                    <option value="oneRandom">Ein zufälliger Erbe</option>
+                  </select>
+                </label>
+                <details className="genlocke-setup-rule-group" style={{marginTop:10}}>
+                  <summary><div style={{flex:1}}><strong>Glücksrad-Gewichtungen</strong>
+                    <span>Gewinnchancen individuell anpassen</span></div>
+                    <span className="genlocke-setup-chevron" aria-hidden="true"/></summary>
+                  <div className="genlocke-setup-rule-body genlocke-setup-rule-grid">
+                    {WHEEL_RESULTS.map(w=><label className="genlocke-setup-rule" key={w.id}>
+                      <span>{w.label}</span>
+                      <input className="genlocke-setup-input" type="number" min={0} max={1000}
+                        value={rules.wheelWeights[w.id]}
+                        onChange={e=>setRules(cleanRules({...rules,wheelWeights:{...rules.wheelWeights,[w.id]:Number(e.target.value)}}))}/>
+                    </label>)}
+                  </div>
+                </details>
+                <details className="genlocke-setup-rule-group">
+                  <summary><div style={{flex:1}}><strong>Zufallspools</strong>
+                    <span>Fähigkeiten, Items und Attacken</span></div>
+                    <span className="genlocke-setup-chevron" aria-hidden="true"/></summary>
+                  <div className="genlocke-setup-rule-body">
+                    <p className="genlocke-setup-description">Pool-Einträge müssen im jeweiligen Spiel verfügbar sein.</p>
+                    {["ability","item","move"].map(kind=><label className="genlocke-setup-field" key={kind} style={{marginBottom:12}}>
+                      <span className="genlocke-setup-label">{({ability:"Zufallsfähigkeiten",item:"Zufallsitems",move:"Zufallsattacken"})[kind]}</span>
+                      <textarea className="genlocke-setup-textarea" rows={2} value={(rules.wheelPools?.[kind]||[]).join(", ")}
+                        onChange={e=>setRules(cleanRules({...rules,wheelPools:{...rules.wheelPools,[kind]:e.target.value.split(",").map(v=>v.trim()).filter(Boolean)}}))}/>
+                    </label>)}
+                  </div>
+                </details>
+              </>}
+            </div>
+          </details>)}
+          <details className="genlocke-setup-rule-group">
+            <summary><div style={{flex:1}}><strong>Wipe & Neustart</strong><span>Verlustbedingung des Runs</span></div>
+              <span className="genlocke-setup-chevron" aria-hidden="true"/></summary>
+            <div className="genlocke-setup-rule-body">
+              <label className="genlocke-setup-field">
+                <span className="genlocke-setup-label">Wipe-Art</span>
+                <select className="genlocke-setup-select" value={rules.wipeMode}
+                  onChange={e=>setRules(cleanRules({...rules,wipeMode:e.target.value}))}>
+                  <option value="team">Team-Wipe</option><option value="run">Run-Wipe</option>
+                </select>
               </label>
-            )}
-            <label>Wipe-Art <select style={btn} value={rules.wipeMode} onChange={e=>setRules(cleanRules({...rules,wipeMode:e.target.value}))}><option value="team">Team-Wipe</option><option value="run">Run-Wipe</option></select></label>
-            <label>Glücksrad-Modus <select style={btn} value={rules.wheelMode} onChange={e=>setRules(cleanRules({...rules,wheelMode:e.target.value}))}><option value="each">Für jeden Erben</option><option value="oneChoose">Ein Erbe nach Wahl</option><option value="oneRandom">Ein zufälliger Erbe</option></select></label>
-          </div>
-          <details style={{marginTop:16}}><summary>Glücksrad-Gewichtungen</summary><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:10,marginTop:12}}>
-          {WHEEL_RESULTS.map(w=><label key={w.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{w.label}<input type="number" style={{...btn,width:75}} min="0" max="1000" value={rules.wheelWeights[w.id]} onChange={e=>setRules(cleanRules({...rules,wheelWeights:{...rules.wheelWeights,[w.id]:Number(e.target.value)}}))}/></label>)}
-          </div>
-          {["ability","item","move"].map(kind=><label key={kind} style={{display:"grid",gap:5,marginTop:10}}>
-            {({ability:"Zufallsfähigkeiten",item:"Zufallsitems",move:"Zufallsattacken"})[kind]}
-            <textarea style={{...btn,width:"100%",minHeight:50}} value={(rules.wheelPools?.[kind]||[]).join(", ")}
-              onChange={e=>setRules(cleanRules({...rules,wheelPools:{...rules.wheelPools,[kind]:e.target.value.split(",").map(v=>v.trim()).filter(Boolean)}}))}/>
-          </label>)}
-          <p>Pool-Einträge müssen im jeweiligen Spiel verfügbar sein. Bei Gen 1 werden Item- und Fähigkeitsfelder automatisch entfernt.</p>
+            </div>
           </details>
-          <button style={{...btn,background:"#2a7956",marginTop:14}} onClick={()=>run(async()=>{if(window.confirm("Regeln während des Runs ändern? Bisherige Erben und Ergebnisse bleiben erhalten."))await persist({...save,genlocke:{...g,rules:cleanRules(rules)}});})}>Änderungen speichern</button>
-        </>}
+          <button style={{...btn,background:"#2a7956",marginTop:14}}
+            onClick={()=>run(async()=>{
+              if(window.confirm("Regeln während des Runs ändern? Bisherige Erben und Ergebnisse bleiben erhalten."))
+                await persist({...save,genlocke:{...g,rules:cleanRules(rules)}});
+            })}>Änderungen speichern</button>
+        </div>}
       </section>}
       {tab==="wipe"&&<section style={{...frame,textAlign:"center"}}><h1>GAME OVER</h1><h2>{quote}</h2><p>Versuch archiviert. Ein neuer Versuch beginnt bei der ersten Edition.</p><button style={btn} onClick={()=>setTab("overview")}>Weiter zum nächsten Versuch</button></section>}
     </div>
