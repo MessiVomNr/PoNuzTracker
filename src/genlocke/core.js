@@ -528,6 +528,19 @@ export function generationForEdition(edition) {
   return 9;
 }
 const IV_NAMES=["KP","Angriff","Verteidigung","Spezial-Angriff","Spezial-Verteidigung","Initiative"];
+export function drawWheelTarget(g, player = 0, random = Math.random) {
+  const next = copy(g);
+  const stage=getCurrentStage(next);
+  if (!next.rules.wheel || next.rules.wheelMode!=="oneRandom")
+    throw new Error("Erbenrad ist nicht eingeschaltet.");
+  if (stage.wheelTargetDraws?.[player]) throw new Error("Das Erbenrad wurde bereits gedreht.");
+  const candidates=(stage.heirs||[]).filter(h=>h.player===player && !h.dead);
+  if (candidates.length<2) throw new Error("Für diesen Modus sind mindestens zwei Erben erforderlich.");
+  const chosen=candidates[Math.floor(random()*candidates.length)].pokemon;
+  stage.wheelTargetDraws={...(stage.wheelTargetDraws||{}),[player]:{pokemon:chosen,at:Date.now()}};
+  return {genlocke:next,pokemon:chosen};
+}
+
 export function availableWheelResults(g) {
   const edition=g.editions[g.currentIndex];
   const gen=generationForEdition(edition);
