@@ -335,13 +335,109 @@ function freshStartSave(save, g, nextHeirs, players) {
   return next;
 }
 
+// The first draw is committed to the run immediately and cannot be rerolled.
+export function drawChampionLottery(save, players = 1, random = Math.random) {
+  const g = copy(save.genlocke);
+  const stage = getCurrentStage(g);
+  if (!g.rules.heirLottery) throw new Error("Erben-Lotterie ist deaktiviert.");
+  if (stage.completedAt) throw new Error("Diese Etappe wurde bereits abgeschlossen.");
+  if (stage.lotterySlots) throw new Error("Die Erben wurden bereits ausgelost.");
+  const roster = championRoster(save, players).filter(row =>
+    row.pokemon.length === players && row.pokemon.every(Boolean));
+  const count = Math.min(g.rules.heirs, roster.length);
+  if (!roster.length && count) throw new Error("Keine vollständigen Champion-Slots vorhanden.");
+  const chosen = [...roster];
+  for (let i=chosen.length-1; i>0; i--) {
+    const j=Math.floor(random()*(i+1));
+    [chosen[i],chosen[j]]=[chosen[j],chosen[i]];
+  }
+  stage.lotterySlots=chosen.slice(0,count).map(row=>row.slot);
+  return {...save,genlocke:g};
+}
+
+export function drawStarterLottery(save, player, candidates, random = Math.random) {
+  const g=copy(save.genlocke);
+  if(!g.rules.starterLottery) throw new Error("Starter-Lotterie ist deaktiviert.");
+  if(g.finishedAt) throw new Error("Genlocke ist bereits abgeschlossen.");
+  const stage=getCurrentStage(g);
+  const players=g.mode==="duo"?2:1;
+  if(player<0||player>=players) throw new Error("Ungültiger Spieler.");
+  if(stage.starterDraws?.[player]) throw new Error("Starter wurde bereits ausgelost.");
+  const options=(candidates||[]).map(x=>String(x||"").trim()).filter(Boolean);
+  if(options.length!==3||new Set(options).size!==3) throw new Error("Bitte genau drei unterschiedliche Starter eingeben.");
+  const chosen=options[Math.floor(random()*options.length)];
+  stage.starterDraws={...(stage.starterDraws||{}),[player]:{options,chosen,at:Date.now()}};
+  return {save:{...save,genlocke:g},chosen};
+}
+
+export function recordArenaChoice(save,{name, aceSlot = null, participatingSlots = []}){
+  const g=copy(save.genlocke);
+  const stage=getCurrentStage(g);
+  if(!stage||stage.completedAt) throw new Error("Diese Etappe ist abgeschlossen.");
+  const key=String(name||"").trim();
+  if(!key) throw new Error("Bitte eine Arena oder ihren Namen eintragen.");
+  if((stage.arenas||[]).some(a=>a.name.toLocaleLowerCase("de")===key.toLocaleLowerCase("de")))
+    throw new Error("Diese Arena wurde bereits dokumentiert.");
+  if(g.rules.sameAce&&g.mode==="duo" && !(Number.isInteger(aceSlot) && aceSlot>=0 && aceSlot<6))
+    throw new Error("Bitte für Same Ace das gemeinsame Ace-Paar wählen.");
+  const participants=[...new Set(participatingSlots.map(Number))];
+  if(g.rules.heirGym && (stage.heirs||[]).some(h=>!h.dead)){
+    const alive=(stage.heirs||[]).filter(h=>!h.dead);
+    const keys=alive.filter(h=>participants.includes(h.sourceSlot));
+    if(!keys.length || (g.rules.heirGymAll && keys.length!==alive.length))
+      throw new Error(g.rules.heirGymAll?"Alle lebenden Erben müssen teilnehmen.":"Mindestens ein Erbe muss teilnehmen.");
+  }
+  stage.arenas=[...(stage.arenas||[]),{
+    name:key,aceSlot:g.rules.sameAce&&g.mode==="duo"?aceSlot:null,
+    participatingSlots:participants,at:Date.now()
+  }];
+  return {...save,genlocke:g};
+}
+
+export function setWheelEffectDetail(save, recordId, effectIndex, value) {
+  const g=copy(save.genlocke);
+  const record=g.wheelHistory.find(r=>r.id===recordId);
+  if(!record) throw new Error("Glücksrad-Ergebnis nicht gefunden.");
+  if(effectIndex<0||effectIndex>=record.effects.length) throw new Error("Unbekanntes Bonusfeld.");
+  const kind=record.effects[effectIndex];
+  if(kind==="death"||kind==="nothing"||kind==="risk"||kind==="jackpot")
+    throw new Error("Dieses Feld benötigt keine Auswahl.");
+  const detail=String(value||"").trim();
+  if(!detail) throw new Error("Bitte den Bonus vollständig angeben.");
+  record.details={...(record.details||{}),[effectIndex]:detail};
+  return {...save,genlocke:g};
+}
+
 export function finishStage(save, pickedSlots, lockedSlots, mvp = [], hater = [], players = 1) {
   const g = copy(save.genlocke);
   const stage = getCurrentStage(g);
   if (!stage || stage.completedAt) throw new Error("Diese Etappe ist bereits abgeschlossen.");
   const hall = championRoster(save, players);
-  const limit = Math.min(g.rules.heirs, hall.length);
-  const picks = [...new Set(pickedSlots)].filter((s) => hall.some((r) => r.slot === s));
+  const usable=hall.filter(r=>r.pokemon.length===players && r.pokemon.every(Boolean));
+  const limit = Math.min(g.rules.heirs, usable.length);
+  const picks = g.rules.heirLottery
+    ? (stage.lotterySlots || [])
+    : [...new Set(pickedSlots)].filter((slot) => usable.some(row => row.slot===slot));
+  if (g.rules.heirLottery && !stage.lotterySlots && g.currentIndex<g.editions.length-1)
+    throw new Error("Bitte zuerst die Erben-Lotterie drehen.");
+  if (g.rules.heirInHall && stage.heirs?.some(h=>!h.dead)) {
+    const active=stage.heirs.filter(h=>!h.dead);
+    const stillInHall=active.some(h=>hall.some(row=>row.pokemon[h.player] &&
+      belongsToHeir(h,row.pokemon[h.player],stage.edition)));
+    if(!stillInHall) throw new Error("Mindestens ein lebender Erbe muss im Champion-Team stehen.");
+  }
+  for(const slot of picks) {
+    const roster=usable.find(row=>row.slot===slot);
+    if(!roster) throw new Error("Ausgewählter Erbe ist kein vollständiges Champion-Paar.");
+    for(let player=0;player<players;player++){
+      const prev=(stage.heirs||[]).find(h=>h.player===player && !h.dead &&
+        belongsToHeir(h,roster.pokemon[player],stage.edition));
+      if(prev && !g.rules.allowRepeatHeir)
+        throw new Error(roster.pokemon[player]+" wurde bereits vererbt und darf nicht erneut Erbe werden.");
+      if(prev && g.rules.maxRepeatHeir>0 && (prev.chain||1)+1>g.rules.maxRepeatHeir)
+        throw new Error(roster.pokemon[player]+" hat sein konfiguriertes Erben-Limit erreicht.");
+    }
+  }
   if (picks.length !== limit && g.currentIndex < g.editions.length - 1) {
     throw new Error("Bitte genau " + limit + " Erben-Slots auswählen.");
   }
@@ -364,7 +460,12 @@ export function finishStage(save, pickedSlots, lockedSlots, mvp = [], hater = []
       if (!pokemon) return [];
       const base = inheritBasePokemon(pokemon, stage.edition, g.editions[nextIndex]);
       if (!base.available) throw new Error("Der Erbe " + pokemon + " ist in " + g.editions[nextIndex] + " nicht verfügbar. Bitte die Erbenauswahl oder Reihenfolge prüfen.");
-      return [{ pokemon: base.pokemon, originalPokemon: pokemon, dexId: base.dexId, level: 5, player, fromStage: g.currentIndex, locked: lockedSlots.includes(slot), dead: false, sourceSlot: slot }];
+      const prev=(stage.heirs||[]).find(h=>h.player===player && !h.dead &&
+        belongsToHeir(h,pokemon,stage.edition));
+      return [{ pokemon: base.pokemon, originalPokemon: pokemon, dexId: base.dexId,
+        level: 5, player, fromStage: g.currentIndex,
+        locked: lockedSlots.includes(slot), dead: false, sourceSlot: slot,
+        chain:prev?(prev.chain||1)+1:1 }];
     });
   });
   if (g.rules.releaseChampions) {
