@@ -183,11 +183,11 @@ export default function GenlockeHub() {
               <p>Pro Spieler gelten die konfigurierten Drehlimits. Alle Ergebnisse werden dauerhaft protokolliert.</p>
               <style>{`@keyframes gl-wheel-spin {0% {transform: rotate(0deg) scale(.9)} 85% {transform: rotate(1400deg) scale(1.03)} 100% {transform: rotate(1440deg) scale(1)}}`}</style>
               <div style={{display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}}>
-                <div style={{
+                <div key={wheelResult?.id||stage.wheelTargetDraws?.[wheelPlayer]?.at||"idle"} style={{
                   height:140,width:140,borderRadius:"50%",border:"7px solid #d9b66b",
                   background:"conic-gradient(#7b476c 0 14%,#668ec4 14% 28%,#409f8b 28% 42%,#b47652 42% 56%,#b89d51 56% 70%,#755bac 70% 84%,#376b85 84% 100%)",
                   boxShadow:"0 0 24px #9f8a5a66",
-                  animation: wheelSpun?"gl-wheel-spin 1.7s ease-out":"none"
+                  animation: wheelSpun||stage.wheelTargetDraws?.[wheelPlayer]?"gl-wheel-spin 1.7s ease-out":"none"
                 }}/>
                 <div style={{display:"grid",gap:8,minWidth:240,flex:1}}>
                   {playerCount>1&&<label>Spieler <select style={btn} value={wheelPlayer} onChange={e=>{setWheelPlayer(Number(e.target.value));setWheelSpun(false);setWheelResult(null);}}><option value={0}>Spieler 1</option><option value={1}>Spieler 2</option></select></label>}
