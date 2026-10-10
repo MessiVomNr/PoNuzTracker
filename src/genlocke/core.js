@@ -153,12 +153,13 @@ export function getTeams(save, players = 1) {
     if (typeof src[0] === "string") return [Array.from({ length: 6 }, (_, i) => src[i] || ""), ...initial.slice(1)];
     return initial.map((blank, i) => blank.map((_, j) => src[i]?.[j] || ""));
   }
-  return initial.map((blank, i) => blank.map((_, j) => src[i]?.[j] || src[String(i)]?.[j] || ""));
+  return initial.map((blank, i) => blank.map((_, j) =>
+    src["team" + (i + 1)]?.[j] || src[i]?.[j] || src[String(i)]?.[j] || ""));
 }
 
 export function teamToStorage(teams, oldSave, players) {
   return players > 1 || (!Array.isArray(oldSave?.teams) && oldSave?.teams)
-    ? Object.fromEntries(teams.map((team, i) => [i, team]))
+    ? Object.fromEntries(teams.map((team, i) => ["team" + (i + 1), team]))
     : teams;
 }
 
