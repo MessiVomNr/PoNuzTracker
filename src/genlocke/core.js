@@ -97,19 +97,28 @@ export function makeStage(edition, number) {
 }
 
 export function createGenlocke({ name, editions = CLASSIC_EDITIONS, rules = DEFAULT_RULES, mode = "solo" }) {
-  if (!editions.length) throw new Error("Bitte mindestens eine Edition auswählen.");
+  if (!Array.isArray(editions) || !editions.length) {
+    throw new Error("Bitte mindestens eine Edition auswählen.");
+  }
+  const selected = editions.map(edition => String(edition || "").trim());
+  if (selected.some(edition => !edition)) {
+    throw new Error("Editionen dürfen nicht leer sein.");
+  }
+  if (new Set(selected.map(edition => edition.toLocaleLowerCase("de"))).size !== selected.length) {
+    throw new Error("Jede Edition darf nur einmal in deiner Genlocke vorkommen.");
+  }
   return {
     schemaVersion: 1,
     revision: 0,
     name: String(name || "Genlocke").trim(),
     mode,
-    editions: [...editions],
+    editions: [...selected],
     rules: cleanRules(rules),
     currentIndex: 0,
     attempt: 1,
     startedAt: Date.now(),
     finishedAt: null,
-    stages: [makeStage(editions[0], 1)],
+    stages: [makeStage(selected[0], 1)],
     deaths: [],
     released: [],
     wheelHistory: [],
