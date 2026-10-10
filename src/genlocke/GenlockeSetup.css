@@ -113,7 +113,22 @@
   border-color: rgba(141, 185, 255, .8);
   box-shadow: 0 0 0 3px rgba(115, 155, 235, .13);
 }
-.genlocke-setup-select option { background: #121c31; color: #fff; }
+/* Keep the edition selectors consistent with the navy Run Center panels.
+   Global app form styles have higher specificity than the base select rule. */
+.genlocke-setup-shell select.genlocke-setup-select {
+  background: linear-gradient(135deg, #233653 0%, #1b2d48 100%) !important;
+  background-color: #1b2d48 !important;
+  border-color: rgba(169, 199, 249, .25);
+  color: #f4f7ff !important;
+  color-scheme: dark;
+}
+.genlocke-setup-shell select.genlocke-setup-select option {
+  color: #f4f7ff;
+  background: #20334f;
+}
+.genlocke-setup-shell select.genlocke-setup-select:disabled {
+  opacity: .6;
+}
 .genlocke-setup-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .genlocke-setup-mode button {
   border: 1px solid var(--gl-border);
@@ -201,22 +216,53 @@
   margin-bottom: 8px;
 }
 .genlocke-setup-stage-index { text-align: center; color: rgba(221, 232, 255, .65); font-weight: 900; }
-.genlocke-setup-small-button {
-  display: grid;
-  place-items: center;
-  min-height: 38px;
-  min-width: 35px;
-  border-radius: 10px;
-  border: 1px solid rgba(169, 196, 248, 0.20);
-  background: rgba(125, 160, 230, .08);
-  color: #e6eeff;
+.genlocke-setup-shell button.genlocke-setup-small-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  width: 36px;
+  height: 36px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  border-radius: 50%;
+  border: 1px solid rgba(169, 196, 248, .17);
+  background: rgba(132, 161, 218, .13);
+  color: #d6e4ff;
   cursor: pointer;
-  font: inherit;
-  font-size: 17px;
+  box-shadow: none;
+  vertical-align: middle;
+  transition: background 140ms ease, border-color 140ms ease;
 }
-.genlocke-setup-small-button:hover:not(:disabled) { background: rgba(125, 160, 230, .20); }
+.genlocke-setup-small-button:hover:not(:disabled) {
+  background: rgba(125, 160, 230, .24);
+  border-color: rgba(185, 212, 255, .4);
+}
 .genlocke-setup-small-button:disabled { opacity: .28; cursor: not-allowed; }
-.genlocke-setup-small-button.danger { color: #f2b4b8; }
+.genlocke-setup-small-button.danger { color: #efc0c9; }
+.genlocke-setup-small-button.danger:hover:not(:disabled) { background: rgba(195, 75, 95, .19); }
+.genlocke-setup-move-chevron {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  border-radius: 1px;
+  pointer-events: none;
+}
+.genlocke-setup-move-chevron.up { transform: translateY(2px) rotate(225deg); }
+.genlocke-setup-move-chevron.down { transform: translateY(-2px) rotate(45deg); }
+.genlocke-setup-small-button svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  margin: 0;
+  pointer-events: none;
+}
 .genlocke-setup-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; margin-top: 15px; }
 .genlocke-setup-button {
   border: 1px solid rgba(163, 190, 248, .26);
