@@ -1,7 +1,7 @@
 import {
   CLASSIC_EDITIONS, createGenlocke, cleanRules, finishStage, getTeams,
   isGloballyBanned, bannedEvolutionIds, inheritBasePokemon, belongsToHeir,
-  resolveWheel, killPokemonInSave, adjustHistoricalStage, archiveWipe, restartGenlocke, drawChampionLottery, drawStarterLottery, recordArenaChoice, setWheelEffectDetail
+  resolveWheel, availableWheelResults, killPokemonInSave, adjustHistoricalStage, archiveWipe, restartGenlocke, drawChampionLottery, drawStarterLottery, recordArenaChoice, setWheelEffectDetail
 } from "./core";
 
 const makeSave = (editions = ["Feuerrot", "Smaragd"], overrides = {}) => {
@@ -154,10 +154,25 @@ test("Same Ace and heir gym attendance is recorded",()=>{
 });
 
 test("Wheel details are stored on the original immutable spin record",()=>{
-  const g=createGenlocke({name:"T",editions:["Rot"],rules:{wheelWeights:{ability:1}}});
+  const g=createGenlocke({name:"T",editions:["Smaragd"],rules:{wheelWeights:{ability:1}}});
   const {genlocke,record}=resolveWheel(g,"Bisasam",0,()=>0);
-  const save={genlocke,edition:"Rot",teams:[],encounters:{}};
+  const save={genlocke,edition:"Smaragd",teams:[],encounters:{}};
   const result=setWheelEffectDetail(save,record.id,0,"Erzwinger");
   expect(result.genlocke.wheelHistory[0].details[0]).toBe("Erzwinger");
   expect(result.genlocke.wheelHistory[0].effects[0]).toBe("ability");
+});
+
+test("wheel does not produce abilities or held items in Gen 1",()=>{
+  const g=createGenlocke({name:"Old",editions:["Rot"],rules:{wheel:true}});
+  const results=availableWheelResults(g);
+  expect(results.find(x=>x.id==="ability").weight).toBe(0);
+  expect(results.find(x=>x.id==="item").weight).toBe(0);
+  expect(results.find(x=>x.id==="nature").weight).toBe(0);
+  expect(results.find(x=>x.id==="randomMove").weight).toBeGreaterThan(0);
+});
+test("random IV records a real randomly chosen stat",()=>{
+  const g=createGenlocke({name:"Test",editions:["Smaragd"],rules:{wheelWeights:{randomIv:1}}});
+  const {record}=resolveWheel(g,"Glumanda",0,()=>0);
+  expect(record.effects).toEqual(["randomIv"]);
+  expect(record.details[0]).toBe("KP = 31 IV");
 });
