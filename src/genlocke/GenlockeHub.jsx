@@ -48,7 +48,13 @@ export default function GenlockeHub() {
   const [rules,setRules]=useState(cleanRules(save?.genlocke?.rules));
   const g=save?.genlocke, stage=getCurrentStage(g);
   const persist=async(next)=>{
-    if (roomId) { await patchSave(next); return; }
+    if (roomId) {
+      const patch = Object.fromEntries(Object.keys(next).filter(key =>
+        JSON.stringify(next[key]) !== JSON.stringify(save?.[key])
+      ).map(key => [key, next[key]]));
+      if (Object.keys(patch).length) await patchSave(patch);
+      return;
+    }
     const saves=JSON.parse(localStorage.getItem("savegames")||"{}");
     if(!saves[name])throw new Error("Spielstand fehlt");
     saves[name]=next;localStorage.setItem("savegames",JSON.stringify(saves));setLocalSave(next);
