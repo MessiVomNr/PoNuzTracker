@@ -14,10 +14,16 @@ const makeSave = (editions = ["Feuerrot", "Smaragd"], overrides = {}) => {
   };
 };
 
-test("classic sequence is preselected but arbitrary stages are possible", () => {
+test("classic sequence is preselected and editions can be freely ordered without repeats", () => {
   expect(CLASSIC_EDITIONS).toHaveLength(7);
-  const g = createGenlocke({ name: "Repeat", editions: ["Gelb", "Rot", "Feuerrot", "Rot"] });
-  expect(g.editions).toEqual(["Gelb", "Rot", "Feuerrot", "Rot"]);
+  const g = createGenlocke({ name: "Verschieden", editions: ["Gelb", "Rot", "Feuerrot"] });
+  expect(g.editions).toEqual(["Gelb", "Rot", "Feuerrot"]);
+});
+
+test("Genlocke creation rejects duplicate editions, regardless of spelling or whitespace", () => {
+  expect(() => createGenlocke({ name: "Doppelt", editions: ["Rot", "Rot"] })).toThrow(/nur einmal/);
+  expect(() => createGenlocke({ name: "Doppelt", editions: ["Feuerrot", " feuerrot "] })).toThrow(/nur einmal/);
+  expect(() => createGenlocke({ name: "Leer", editions: ["Rot", "  "] })).toThrow(/nicht leer/);
 });
 
 test("heir and lock counts are bounded, default Ace gap is two", () => {
