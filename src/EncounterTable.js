@@ -755,6 +755,7 @@ function EncounterTable() {
   }, [duoRoom]);
 
   const gen = getGenFromEdition(effectiveEdition);
+  const currentGenlockeStageId = genlocke?.stages?.[genlocke.currentIndex]?.id;
   const genData = editionData[effectiveEdition] || null;
   const pokedex = versionToPokedex[effectiveEdition] || {};
 
@@ -781,9 +782,12 @@ const nameToDexId = useMemo(() => {
 
   const levelCapsProgressKey = useMemo(() => {
     if (!gen) return "";
+    if (currentGenlockeStageId) return isDuo
+      ? `guidecheck_duo_${activeDuoRoomId}_stage_${currentGenlockeStageId}_gen_${gen}`
+      : `guidecheck_save_${activeSave}_stage_${currentGenlockeStageId}_gen_${gen}`;
     if (isDuo) return `guidecheck_duo_${activeDuoRoomId}_gen_${gen}`;
     return `guidecheck_save_${activeSave}_gen_${gen}`;
-  }, [isDuo, activeDuoRoomId, activeSave, gen]);
+  }, [isDuo, activeDuoRoomId, activeSave, gen, currentGenlockeStageId]);
 
   const idForLevelCap = (cap) => `${cap.order}|${cap.name}|${cap.level}`;
 
