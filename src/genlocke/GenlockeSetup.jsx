@@ -40,7 +40,7 @@ export const RULE_OPTIONS = [
   ["riskWinChance", "Risiko-Dreh: Gewinnchance in %", "number"],
 ];
 
-const RULE_GROUPS = [
+export const RULE_GROUPS = [
   {
     id: "pokemon",
     title: "Pokémon & Begegnungen",
