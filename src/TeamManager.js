@@ -4,6 +4,7 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { versionToPokedex } from "./data/versionToPokedex";
 import { useDuoSave } from "./duo/useDuoSave";
 import { belongsToHeir } from "./genlocke/core";
+import { validateTeamRules } from "./genlocke/ruleValidation";
 
 function getDexIdFromName(name, fullDex) {
   const entry = Object.entries(fullDex).find(([, n]) => n === name);
@@ -1100,6 +1101,13 @@ const teamAnalysis = useMemo(() => {
 
   // ===== Persist Teams helper =====
   const persistTeams = async (newTeams) => {
+    if (genlockeContext) {
+      const violations = await validateTeamRules(newTeams, effectiveEdition, genlockeContext.rules);
+      if (violations.length) {
+        alert("Team verstößt gegen Genlocke-Regeln:\n\n" + violations.join("\n"));
+        return false;
+      }
+    }
     if (lockedGenlockeHeirs.some((heir) => !newTeams[heir.player]?.some((mon) => belongsToHeir(heir, mon, effectiveEdition)))) {
       alert("Ein gelockter Champion-Erbe darf nicht aus dem Team entfernt werden.");
       return false;
