@@ -1,7 +1,7 @@
 import {
   CLASSIC_EDITIONS, createGenlocke, cleanRules, finishStage, getTeams,
   isGloballyBanned, bannedEvolutionIds, inheritBasePokemon, belongsToHeir,
-  resolveWheel, killPokemonInSave, adjustHistoricalStage, archiveWipe, restartGenlocke
+  resolveWheel, killPokemonInSave, adjustHistoricalStage, archiveWipe, restartGenlocke, drawChampionLottery, drawStarterLottery, recordArenaChoice, setWheelEffectDetail
 } from "./core";
 
 const makeSave = (editions = ["Feuerrot", "Smaragd"], overrides = {}) => {
@@ -125,4 +125,39 @@ test("inherited heir retains identity after evolving and can be marked dead", ()
   expect(belongsToHeir(heir,"Glutexo","Smaragd")).toBe(true);
   expect(belongsToHeir(heir,"Glurak","Smaragd")).toBe(true);
   expect(belongsToHeir(heir,"Garados","Smaragd")).toBe(false);
+});
+
+test("heir lottery persists drawn slots and cannot be rerolled",()=>{
+  const original=makeSave(["Feuerrot","Smaragd"],{heirLottery:true});
+  const drawn=drawChampionLottery(original,1,()=>0);
+  expect(drawn.genlocke.stages[0].lotterySlots).toHaveLength(1);
+  expect(()=>drawChampionLottery(drawn,1,()=>0)).toThrow(/bereits ausgelost/);
+  const next=finishStage(drawn,[],[drawn.genlocke.stages[0].lotterySlots[0]]);
+  expect(next.genlocke.currentIndex).toBe(1);
+});
+
+test("starter lottery runs once per player and records choice",()=>{
+  const save=makeSave(["Feuerrot","Smaragd"],{starterLottery:true});
+  const {save:updated,chosen}=drawStarterLottery(save,0,["Bisasam","Glumanda","Schiggy"],()=>0.4);
+  expect(chosen).toBe("Glumanda");
+  expect(()=>drawStarterLottery(updated,0,["Bisasam","Glumanda","Schiggy"])).toThrow(/bereits ausgelost/);
+});
+
+test("Same Ace and heir gym attendance is recorded",()=>{
+  const g=createGenlocke({name:"Duo",editions:["Feuerrot","Smaragd"],mode:"duo",rules:{sameAce:true,heirGym:true,heirGymAll:true}});
+  const base={genlocke:g,edition:"Feuerrot",teams:{team1:["Glurak"],team2:["Garados"]},encounters:{}};
+  const next=finishStage(base,[0],[0],[],[],2);
+  expect(()=>recordArenaChoice(next,{name:"Roxanne",aceSlot:0})).toThrow(/Alle lebenden Erben/);
+  const logged=recordArenaChoice(next,{name:"Roxanne",aceSlot:0,participatingSlots:[0]});
+  expect(logged.genlocke.stages[1].arenas[0].aceSlot).toBe(0);
+  expect(()=>recordArenaChoice(logged,{name:"Roxanne",aceSlot:0,participatingSlots:[0]})).toThrow(/bereits dokumentiert/);
+});
+
+test("Wheel details are stored on the original immutable spin record",()=>{
+  const g=createGenlocke({name:"T",editions:["Rot"],rules:{wheelWeights:{ability:1}}});
+  const {genlocke,record}=resolveWheel(g,"Bisasam",0,()=>0);
+  const save={genlocke,edition:"Rot",teams:[],encounters:{}};
+  const result=setWheelEffectDetail(save,record.id,0,"Erzwinger");
+  expect(result.genlocke.wheelHistory[0].details[0]).toBe("Erzwinger");
+  expect(result.genlocke.wheelHistory[0].effects[0]).toBe("ability");
 });
