@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { WHEEL_RESULTS, getCurrentStage, stageSnapshot, adjustHistoricalStage, finishStage, resolveWheel, archiveWipe, clearCurrentList, clearAllLists, restartGenlocke, isGloballyBanned, registerDeath, killPokemonInSave, syncCurrentTeamWithDeaths, getTeams, cleanRules, copy } from "./core";
 import { versionToPokedex } from "../data/versionToPokedex";
@@ -47,6 +47,7 @@ export default function GenlockeHub() {
   const [rulesOpen,setRulesOpen]=useState(false);
   const [rules,setRules]=useState(cleanRules(save?.genlocke?.rules));
   const g=save?.genlocke, stage=getCurrentStage(g);
+  useEffect(()=>{if(g?.rules)setRules(cleanRules(g.rules));},[g?.rules]);
   const persist=async(next)=>{
     if (roomId) {
       const patch = Object.fromEntries(Object.keys(next).filter(key =>
@@ -108,13 +109,18 @@ export default function GenlockeHub() {
       if(!selectedMon) throw new Error("Bitte den neuen Starter eintragen.");
     }
     if(previous.some(x=>x.pokemon===selectedMon)) throw new Error("Dieses Pokémon wurde bereits gedreht.");
+    if(!heirs.length && !getTeams(save,playerCount)[wheelPlayer].includes(selectedMon))
+      throw new Error("Den Starter bitte zuerst in Encounter-Tabelle und aktivem Team eintragen.");
     const {genlocke,record}=resolveWheel(g,selectedMon,wheelPlayer);
-    const next=syncCurrentTeamWithDeaths({...save,genlocke});
-    await persist(next);
-    if (record.effects.includes("death")) {
-      const remaining=getTeams(next,playerCount);
-      if (remaining.some((team,i)=>getTeams(save,playerCount)[i].some(Boolean)&&team.every(n=>!n))) setWipeModal(true);
+    let next={...save,genlocke};
+    let autoWipe=false;
+    if(record.effects.includes("death")) {
+      const result=killPokemonInSave(next,{pokemon:selectedMon,player:wheelPlayer,note:"Glücksrad"});
+      next=result.save;
+      autoWipe=result.wipe;
     }
+    await persist(next);
+    if(autoWipe) setWipeModal(true);
     setWheelResult(record);
     setWheelSpun(true);
   });
@@ -229,7 +235,14 @@ export default function GenlockeHub() {
           </div>
           <details style={{marginTop:16}}><summary>Glücksrad-Gewichtungen</summary><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:10,marginTop:12}}>
           {WHEEL_RESULTS.map(w=><label key={w.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{w.label}<input type="number" style={{...btn,width:75}} min="0" max="1000" value={rules.wheelWeights[w.id]} onChange={e=>setRules(cleanRules({...rules,wheelWeights:{...rules.wheelWeights,[w.id]:Number(e.target.value)}}))}/></label>)}
-          </div></details>
+          </div>
+          {["ability","item","move"].map(kind=><label key={kind} style={{display:"grid",gap:5,marginTop:10}}>
+            {({ability:"Zufallsfähigkeiten",item:"Zufallsitems",move:"Zufallsattacken"})[kind]}
+            <textarea style={{...btn,width:"100%",minHeight:50}} value={(rules.wheelPools?.[kind]||[]).join(", ")}
+              onChange={e=>setRules(cleanRules({...rules,wheelPools:{...rules.wheelPools,[kind]:e.target.value.split(",").map(v=>v.trim()).filter(Boolean)}}))}/>
+          </label>)}
+          <p>Pool-Einträge müssen im jeweiligen Spiel verfügbar sein. Bei Gen 1 werden Item- und Fähigkeitsfelder automatisch entfernt.</p>
+          </details>
           <button style={{...btn,background:"#2a7956",marginTop:14}} onClick={()=>run(async()=>{if(window.confirm("Regeln während des Runs ändern? Bisherige Erben und Ergebnisse bleiben erhalten."))await persist({...save,genlocke:{...g,rules:cleanRules(rules)}});})}>Änderungen speichern</button>
         </>}
       </section>}
