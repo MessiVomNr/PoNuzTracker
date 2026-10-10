@@ -154,7 +154,8 @@ test("Same Ace and heir gym attendance is recorded",()=>{
 });
 
 test("Wheel details are stored on the original immutable spin record",()=>{
-  const g=createGenlocke({name:"T",editions:["Smaragd"],rules:{wheelWeights:{ability:1}}});
+  const g=createGenlocke({name:"T",editions:["Smaragd"]});
+  g.rules.wheelWeights=Object.fromEntries(Object.keys(g.rules.wheelWeights).map(k=>[k,k==="ability"?1:0]));
   const {genlocke,record}=resolveWheel(g,"Bisasam",0,()=>0);
   const save={genlocke,edition:"Smaragd",teams:[],encounters:{}};
   const result=setWheelEffectDetail(save,record.id,0,"Erzwinger");
@@ -171,7 +172,8 @@ test("wheel does not produce abilities or held items in Gen 1",()=>{
   expect(results.find(x=>x.id==="randomMove").weight).toBeGreaterThan(0);
 });
 test("random IV records a real randomly chosen stat",()=>{
-  const g=createGenlocke({name:"Test",editions:["Smaragd"],rules:{wheelWeights:{randomIv:1}}});
+  const g=createGenlocke({name:"Test",editions:["Smaragd"]});
+  g.rules.wheelWeights=Object.fromEntries(Object.keys(g.rules.wheelWeights).map(k=>[k,k==="randomIv"?1:0]));
   const {record}=resolveWheel(g,"Glumanda",0,()=>0);
   expect(record.effects).toEqual(["randomIv"]);
   expect(record.details[0]).toBe("KP = 31 IV");
