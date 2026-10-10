@@ -71,6 +71,7 @@ export async function createDuoRoom({ displayName, edition, linkMode, title, gen
     players: {
       [user.uid]: player,
     },
+    createdByUid: user.uid,
     createdAt: serverTimestamp(),
     createdAtMs: nowMs(),
     updatedAt: serverTimestamp(),
@@ -179,4 +180,20 @@ export async function touchDuoPresence(roomId, { online, displayName } = {}) {
   }
 
   await updateDoc(ref, patch);
+}
+
+export async function deleteGenlockeRoom(roomId) {
+  if (!db) throw new Error("Firestore-Verbindung fehlt.");
+  const user=await ensureAnonAuth();
+  const id=String(roomId||"").trim().toUpperCase();
+  if(!id) throw new Error("Ungültige Room-ID.");
+  const ref=roomRef(id);
+  await runTransaction(db,async tx=>{
+    const snapshot=await tx.get(ref);
+    if(!snapshot.exists())throw new Error("Room existiert nicht mehr.");
+    const data=snapshot.data();
+    if(!data.save?.genlocke)throw new Error("Dies ist keine Genlocke-Room.");
+    if(data.createdByUid!==user.uid)throw new Error("Nur der Host kann die gemeinsame Genlocke löschen.");
+    tx.delete(ref);
+  });
 }
