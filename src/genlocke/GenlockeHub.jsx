@@ -7,6 +7,7 @@ import HistoricalEditor from "./HistoricalEditor";
 import FullWipeModal from "../components/FullWipeModal";
 import { RULE_OPTIONS } from "./GenlockeSetup";
 import GenlockeExtras from "./GenlockeExtras";
+import { validateTeamRules } from "./ruleValidation";
 
 const frame={background:"#121e32",border:"1px solid #354460",borderRadius:16,padding:16};
 const btn={border:"1px solid #5b7298",borderRadius:8,background:"#253b60",color:"#fff",padding:"9px 12px",cursor:"pointer"};
@@ -70,6 +71,10 @@ export default function GenlockeHub() {
     if(!window.confirm("Generation abschließen? Die Erbenauswahl kann danach nicht mehr geändert werden."))return;
     const picks=g.rules.heirLottery ? (stage.lotterySlots||[]) : selected;
     const next=finishStage(save,picks,locked,mvp.slice(0,playerCount),hater.slice(0,playerCount),playerCount);
+    if (!next.genlocke.finishedAt) {
+      const errors=await validateTeamRules(getTeams(next,playerCount),next.edition,g.rules);
+      if(errors.length) throw new Error("Übernommene Erben verletzen Teamregeln: "+errors.join(" | "));
+    }
     await persist(next);setSelected([]);setLocked([]);setWheelResult(null);setWheelSpun(false);setTab("overview");
   });
   const wipe=()=>setWipeModal(true);
