@@ -12,8 +12,8 @@ const jokes=[
 const ui={background:"#131f35",border:"1px solid #465d7d",borderRadius:14,padding:14,color:"#eef2ff"};
 const button={...ui,cursor:"pointer",padding:"10px 14px"};
 export default function FullWipeModal({ open, title="Run abgeschlossen", save, playerCount=1, onCancel, onConfirm }) {
-  const [mvp,setMvp]=useState("");
-  const [hater,setHater]=useState("");
+  const [mvp,setMvp]=useState(["","",""]);
+  const [hater,setHater]=useState(["","",""]);
   const [reason,setReason]=useState("");
   const [busy,setBusy]=useState(false);
   const [ended,setEnded]=useState(false);
@@ -23,8 +23,9 @@ export default function FullWipeModal({ open, title="Run abgeschlossen", save, p
   const captures=encounters.filter(x=>x?.status==="Gefangen").length;
   const escaped=encounters.filter(x=>x?.status==="Entkommen").length;
   const defeated=encounters.filter(x=>x?.status==="Besiegt").length;
-  const pokemon=[...new Set(encounters.flatMap(row=>Array.from({length:playerCount},(_,i)=>row?.["pokemon"+(i+1)]||"")).filter(Boolean))];
-  const summary={at:Date.now(),mvp,hater,reason,captures,escaped,defeated,edition:save?.edition,runCounter:Number(save?.runCounter||0),playerCount};
+  const pokemonByPlayer=Array.from({length:playerCount},(_,i)=>[...new Set(encounters
+    .map(row=>row?.["pokemon"+(i+1)]||"").filter(Boolean))]);
+  const summary={at:Date.now(),mvp:mvp.slice(0,playerCount),hater:hater.slice(0,playerCount),reason,captures,escaped,defeated,edition:save?.edition,runCounter:Number(save?.runCounter||0),playerCount};
   const confirm=async()=>{
     if(!window.confirm("Diesen Run endgültig als FULLWIPE archivieren und Team und Encounter-Liste leeren?"))return;
     setBusy(true);
@@ -38,19 +39,26 @@ export default function FullWipeModal({ open, title="Run abgeschlossen", save, p
   return <div role="dialog" aria-modal="true" aria-label="Fullwipe-Auswertung" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.82)",zIndex:9999999,display:"grid",placeItems:"center",padding:14}}>
     <div style={{...ui,maxWidth:600,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 90px #0009"}}>
       <h1 style={{color:"#ff9696"}}>{ended?"GAME OVER":"FULLWIPE"}</h1>
-      {ended?<><h2>{quote}</h2><p>Dein Versuch wurde in der Chronik gespeichert. Der neue Run kann beginnen.</p><button style={button} onClick={()=>{setEnded(false);setMvp("");setHater("");setReason("");onCancel();}}>Nächster Run</button></>:<>
+      {ended?<><h2>{quote}</h2><p>Dein Versuch wurde in der Chronik gespeichert. Der neue Run kann beginnen.</p><button style={button} onClick={()=>{setEnded(false);setMvp(["","",""]);setHater(["","",""]);setReason("");onCancel();}}>Nächster Run</button></>:<>
         <p>{title}</p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
           {[["Gefangen",captures],["Geflohen",escaped],["Besiegt",defeated]].map(([label,value])=><div key={label} style={{...ui,textAlign:"center"}}><strong style={{fontSize:24}}>{value}</strong><div>{label}</div></div>)}
         </div>
         <p style={{opacity:.75}}>Die Zahlen beziehen sich auf Encounter-Status, nicht auf die tatsächliche Anzahl verstorbener Team-Pokémon.</p>
         <div style={{display:"grid",gap:12}}>
-          <label>MVP / Favorit
-            <select value={mvp} onChange={e=>setMvp(e.target.value)} style={{...ui,display:"block",width:"100%"}}><option value="">Bitte auswählen</option>{pokemon.map(p=><option key={p}>{p}</option>)}</select>
-          </label>
-          <label>Hater
-            <select value={hater} onChange={e=>setHater(e.target.value)} style={{...ui,display:"block",width:"100%"}}><option value="">Bitte auswählen</option>{pokemon.map(p=><option key={p}>{p}</option>)}</select>
-          </label>
+          {pokemonByPlayer.map((pokemon,i)=><div key={i} style={{display:"grid",gap:8}}>
+            {playerCount>1&&<h3 style={{margin:0}}>Spieler {i+1}</h3>}
+            <label>MVP / Favorit
+              <select value={mvp[i]} onChange={e=>setMvp(prev=>prev.map((v,j)=>i===j?e.target.value:v))} style={{...ui,display:"block",width:"100%"}}>
+                <option value="">Bitte auswählen</option>{pokemon.map(p=><option key={p}>{p}</option>)}
+              </select>
+            </label>
+            <label>Hater
+              <select value={hater[i]} onChange={e=>setHater(prev=>prev.map((v,j)=>i===j?e.target.value:v))} style={{...ui,display:"block",width:"100%"}}>
+                <option value="">Bitte auswählen</option>{pokemon.map(p=><option key={p}>{p}</option>)}
+              </select>
+            </label>
+          </div>)}
           <label>Warum ist der Run gescheitert?
             <input value={reason} onChange={e=>setReason(e.target.value)} style={{...ui,display:"block",width:"100%"}} placeholder="Optionaler Grund"/>
           </label>
