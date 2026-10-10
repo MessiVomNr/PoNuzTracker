@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { WHEEL_RESULTS, getCurrentStage, stageSnapshot, adjustHistoricalStage, finishStage, drawWheelTarget, resolveWheel, archiveWipe, clearCurrentList, clearAllLists, restartGenlocke, isGloballyBanned, registerDeath, killPokemonInSave, syncCurrentTeamWithDeaths, getTeams, cleanRules, copy } from "./core";
 import { versionToPokedex } from "../data/versionToPokedex";
 import { useDuoSave } from "../duo/useDuoSave";
+import { deleteGenlockeRoom } from "../duo/duoService";
 import HistoricalEditor from "./HistoricalEditor";
 import FullWipeModal from "../components/FullWipeModal";
 import { RULE_OPTIONS } from "./GenlockeSetup";
@@ -226,7 +227,13 @@ export default function GenlockeHub() {
               <button style={btn} onClick={()=>run(async()=>{if(window.confirm("Encounter-Liste der aktuellen Etappe leeren?"))await persist(clearCurrentList(save));})}>Liste leeren</button>
               <button style={btn} onClick={()=>run(async()=>{if(window.confirm("Alle Encounter-Listen sämtlicher Generationen leeren?"))await persist(clearAllLists(save));})}>Alle Listen leeren</button>
               <button style={{...btn,background:"#8b3c34"}} onClick={()=>run(async()=>{if(window.confirm("RESTART: Den Versuch mit allen Todeszahlen, Erben und Sperren zurücksetzen?")){await persist(restartGenlocke(save));setSelected([]);setLocked([]);setWheelSpun(false);}})}>Restart</button>
-              {!roomId&&<button style={{...btn,background:"#87262f"}} onClick={()=>run(async()=>{if(!window.confirm("Genlocke vollständig löschen?"))return;const saves=JSON.parse(localStorage.getItem("savegames")||"{}");delete saves[name];localStorage.setItem("savegames",JSON.stringify(saves));localStorage.removeItem("activeSave");nav("/solo");})}>Genlocke löschen</button>}
+              {!roomId?<button style={{...btn,background:"#87262f"}} onClick={()=>run(async()=>{if(!window.confirm("Genlocke vollständig löschen?"))return;const saves=JSON.parse(localStorage.getItem("savegames")||"{}");delete saves[name];localStorage.setItem("savegames",JSON.stringify(saves));localStorage.removeItem("activeSave");nav("/solo");})}>Genlocke löschen</button>:
+                <button style={{...btn,background:"#87262f"}} onClick={()=>run(async()=>{
+                  if(!window.confirm("Duo-Genlocke für ALLE Spieler vollständig löschen? Nur der Host darf dies ausführen."))return;
+                  await deleteGenlockeRoom(roomId);
+                  localStorage.removeItem("activeDuoRoomId");
+                  nav("/duo");
+                })}>Duo-Genlocke löschen (Host)</button>}}
             </div>
           </section>
           <button style={{...btn,background:"#a82c34",padding:18,fontSize:22,fontWeight:900}} onClick={wipe}>FULLWIPE</button>
