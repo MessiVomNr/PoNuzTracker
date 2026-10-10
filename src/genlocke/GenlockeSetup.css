@@ -237,13 +237,13 @@
   vertical-align: middle;
   transition: background 140ms ease, border-color 140ms ease;
 }
-.genlocke-setup-small-button:hover:not(:disabled) {
+.genlocke-setup-shell button.genlocke-setup-small-button:hover:not(:disabled) {
   background: rgba(125, 160, 230, .24);
   border-color: rgba(185, 212, 255, .4);
 }
 .genlocke-setup-small-button:disabled { opacity: .28; cursor: not-allowed; }
 .genlocke-setup-small-button.danger { color: #efc0c9; }
-.genlocke-setup-small-button.danger:hover:not(:disabled) { background: rgba(195, 75, 95, .19); }
+.genlocke-setup-shell button.genlocke-setup-small-button.danger:hover:not(:disabled) { background: rgba(195, 75, 95, .19); }
 .genlocke-setup-move-chevron {
   display: block;
   width: 10px;
