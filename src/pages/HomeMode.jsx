@@ -675,6 +675,24 @@ export default function HomeMode() {
             rgba(14, 18, 34, 0.28);
         }
 
+        .home-mode-accent-genlocke {
+          background:
+            linear-gradient(135deg, rgba(123, 149, 208, 0.23), rgba(68, 100, 160, 0.10)),
+            rgba(14, 18, 34, 0.28);
+        }
+
+        .home-mode-genlocke-mark {
+          display: grid;
+          place-items: center;
+          width: 100%;
+          height: 100%;
+          font-size: 34px;
+          font-weight: 1000;
+          line-height: 1;
+          color: rgba(238, 244, 255, 0.94);
+          text-shadow: 0 2px 10px rgba(105, 158, 255, 0.25);
+        }
+
         .home-mode-accent-friends {
           background:
             linear-gradient(135deg, rgba(126, 150, 210, 0.21), rgba(72, 94, 142, 0.11)),
@@ -1096,6 +1114,25 @@ export default function HomeMode() {
             <div className="home-mode-button-text">
               <strong>Pokémon Games</strong>
               <span>Starte Guess-Modi, Challenges und spätere Minispiele.</span>
+            </div>
+
+            <div className="home-mode-arrow">
+              <span className="home-mode-chevron home-mode-chevron-right" />
+            </div>
+          </button>
+
+          <button
+            className="home-mode-main-button home-mode-accent-genlocke"
+            type="button"
+            onClick={() => nav("/genlocke/create")}
+          >
+            <div className="home-mode-button-icon">
+              <span className="home-mode-genlocke-mark" aria-hidden="true">∞</span>
+            </div>
+
+            <div className="home-mode-button-text">
+              <strong>Genlocke</strong>
+              <span>Mehrere Editionen, Erben und eigene Regeln – solo oder als Soullink.</span>
             </div>
 
             <div className="home-mode-arrow">
