@@ -137,8 +137,17 @@ export async function updateDuoSave(roomId, patch) {
     if (!snap.exists()) throw new Error("Room nicht gefunden.");
     const data = snap.data();
     const save = data.save || {};
+    const incoming = { ...(patch || {}) };
+    if (incoming.genlocke) {
+      const currentRevision = Number(save.genlocke?.revision || 0);
+      const suppliedRevision = Number(incoming.genlocke.revision || 0);
+      if (currentRevision !== suppliedRevision) {
+        throw new Error("Dein Mitspieler hat den Genlocke-Spielstand inzwischen aktualisiert. Bitte kurz warten und den Schritt erneut durchführen.");
+      }
+      incoming.genlocke = { ...incoming.genlocke, revision: currentRevision + 1 };
+    }
     tx.update(ref, {
-      save: { ...save, ...(patch || {}) },
+      save: { ...save, ...incoming },
       updatedAt: serverTimestamp(),
       updatedAtMs: nowMs(),
     });
