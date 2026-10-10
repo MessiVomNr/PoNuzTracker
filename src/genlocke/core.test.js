@@ -1,7 +1,7 @@
 import {
   CLASSIC_EDITIONS, createGenlocke, cleanRules, finishStage, getTeams,
   isGloballyBanned, bannedEvolutionIds, inheritBasePokemon, belongsToHeir,
-  resolveWheel, availableWheelResults, killPokemonInSave, adjustHistoricalStage, archiveWipe, restartGenlocke, drawChampionLottery, drawStarterLottery, recordArenaChoice, setWheelEffectDetail
+  resolveWheel, availableWheelResults, killPokemonInSave, adjustHistoricalStage, archiveWipe, restartGenlocke, drawChampionLottery, drawStarterLottery, drawWheelTarget, recordArenaChoice, setWheelEffectDetail, clearCurrentList, clearAllLists
 } from "./core";
 
 const makeSave = (editions = ["Feuerrot", "Smaragd"], overrides = {}) => {
@@ -177,4 +177,22 @@ test("random IV records a real randomly chosen stat",()=>{
   const {record}=resolveWheel(g,"Glumanda",0,()=>0);
   expect(record.effects).toEqual(["randomIv"]);
   expect(record.details[0]).toBe("KP = 31 IV");
+});
+
+test("the heir target wheel picks once among multiple inherited Champions",()=>{
+  const save=makeSave(["Feuerrot","Smaragd"],{heirs:2,lockedHeirs:0,wheel:true,wheelMode:"oneRandom"});
+  const next=finishStage(save,[0,1],[]);
+  expect(next.genlocke.stages[1].heirs).toHaveLength(2);
+  const picked=drawWheelTarget(next.genlocke,0,()=>0);
+  expect(picked.pokemon).toBe("Glumanda");
+  expect(()=>drawWheelTarget(picked.genlocke,0,()=>0.9)).toThrow(/bereits gedreht/);
+});
+
+test("clearing lists preserves active inherited Pokémon but removes normal encounters",()=>{
+  const next=finishStage(makeSave(),[0],[0]);
+  const withRoute={...next,encounters:{...next.encounters,"Route 2":{pokemon1:"Taubsi",status:"Gefangen"}}};
+  const cleared=clearCurrentList(withRoute);
+  expect(cleared.encounters["Erbe 1"]).toBeDefined();
+  expect(cleared.encounters["Route 2"]).toBeUndefined();
+  expect(clearAllLists(withRoute).genlocke.stages[0].snapshot.encounters).toEqual({});
 });
