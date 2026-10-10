@@ -91,7 +91,16 @@ export default function GenlockeSetup() {
           <label style={label}>Wipe-Bedingung <select style={input} value={rules.wipeMode} onChange={e=>change("wipeMode",e.target.value)}><option value="team">Team-Wipe</option><option value="run">Run-Wipe</option></select></label>
         </div>
         <button style={{...button,marginTop:14}} onClick={()=>setShowWheel(p=>!p)}>{showWheel?"Glücksrad-Details schließen":"Glücksrad-Details öffnen"}</button>
-        {showWheel&&<div style={{marginTop:14,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:8}}>{WHEEL_RESULTS.map(r=><label key={r.id} style={{...label,justifyContent:"space-between"}}>{r.label}<input type="number" min={0} max={1000} style={{...input,width:75}} value={rules.wheelWeights[r.id]} onChange={e=>change("wheelWeights",{...rules.wheelWeights,[r.id]:Number(e.target.value)})}/></label>)}</div>}
+        {showWheel&&<>
+          <div style={{marginTop:14,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:8}}>{WHEEL_RESULTS.map(r=><label key={r.id} style={{...label,justifyContent:"space-between"}}>{r.label}<input type="number" min={0} max={1000} style={{...input,width:75}} value={rules.wheelWeights[r.id]} onChange={e=>change("wheelWeights",{...rules.wheelWeights,[r.id]:Number(e.target.value)})}/></label>)}</div>
+          <h3>Eigene Zufallspools</h3>
+          <p>Einträge mit Kommas trennen. Für ältere Editionen nur verfügbare Fähigkeiten, Items und Attacken verwenden. Die Pool-Zulässigkeit muss im jeweiligen Spiel geprüft werden.</p>
+          {["ability","item","move"].map(kind=><label key={kind} style={{display:"grid",gap:6,marginBottom:10}}>
+            {({ability:"Zufallsfähigkeiten",item:"Zufallsitems",move:"Zufallsattacken"})[kind]}
+            <textarea style={{...input,width:"100%",minHeight:52}} value={(rules.wheelPools?.[kind]||[]).join(", ")}
+              onChange={e=>change("wheelPools",{...rules.wheelPools,[kind]:e.target.value.split(",").map(v=>v.trim()).filter(Boolean)})}/>
+          </label>)}
+        </>}
       </section>
       {error&&<p role="alert" style={{color:"#ff8e94"}}>{error}</p>}
       <button style={{...button,background:"#176e57",padding:16,fontWeight:800}} onClick={create}>Genlocke erstellen</button>
