@@ -52,6 +52,7 @@ export const DEFAULT_RULES = {
   wheelOnlyLegal: true,
   wheelWeights: Object.fromEntries(WHEEL_RESULTS.map((r) => [r.id, r.weight])),
   riskWinChance: 70,
+  wheelPools: {ability:["Bedroher","Erzwinger","Schwebe"],item:["Überreste","Wahlband"],move:["Erdbeben","Donnerblitz","Eisstrahl"]},
   wipeMode: "team",
 };
 
@@ -70,6 +71,10 @@ export function cleanRules(raw = {}) {
   });
   next.wheelWeights = Object.fromEntries(WHEEL_RESULTS.map((r) => [
     r.id, whole(next.wheelWeights?.[r.id] ?? r.weight, 0, 1000)
+  ]));
+  next.wheelPools=Object.fromEntries(["ability","item","move"].map(key=>[
+    key,(Array.isArray(next.wheelPools?.[key]) ? next.wheelPools[key] : copy(DEFAULT_RULES.wheelPools[key]))
+      .map(value=>String(value||"").trim()).filter(Boolean).slice(0,200)
   ]));
   if (!["each", "oneChoose", "oneRandom"].includes(next.wheelMode)) next.wheelMode = "oneRandom";
   if (!["team", "run"].includes(next.wipeMode)) next.wipeMode = "team";
@@ -510,9 +515,32 @@ export function spinWeighted(results, random = Math.random) {
   return available[available.length - 1];
 }
 
+export function generationForEdition(edition) {
+  const name=String(edition||"");
+  if(["Rot","Blau","Gelb"].includes(name))return 1;
+  if(["Gold","Silber","Kristall"].includes(name))return 2;
+  if(["Rubin","Saphir","Smaragd","Feuerrot","Blattgrün"].includes(name))return 3;
+  if(["Diamant","Perl","Platin","HeartGold","SoulSilver"].includes(name))return 4;
+  if(["Schwarz","Weiß","Schwarz 2","Weiß 2"].includes(name))return 5;
+  if(["X","Y","Omega Rubin","Alpha Saphir"].includes(name))return 6;
+  if(["Sonne","Mond","Ultrasonne","Ultramond"].includes(name))return 7;
+  return 9;
+}
+const IV_NAMES=["KP","Angriff","Verteidigung","Spezial-Angriff","Spezial-Verteidigung","Initiative"];
+export function availableWheelResults(g) {
+  const edition=g.editions[g.currentIndex];
+  const gen=generationForEdition(edition);
+  return WHEEL_RESULTS.map(r=>{
+    let enabled=true;
+    if(gen<2 && ["item","randomItem"].includes(r.id))enabled=false;
+    if(gen<3 && ["ability","randomAbility","nature"].includes(r.id))enabled=false;
+    return {...r,weight:enabled?Number(g.rules?.wheelWeights?.[r.id]??r.weight):0};
+  });
+}
+
 export function resolveWheel(g, pokemon, player = 0, random = Math.random) {
   const next = copy(g);
-  const results = WHEEL_RESULTS.map((r) => ({ ...r, weight: next.rules.wheelWeights[r.id] || 0 }));
+  const results = availableWheelResults(next);
   const result = spinWeighted(results, random);
   let effects = [result.id];
   const positive = results.filter((r) => r.positive && r.id !== "jackpot");
@@ -522,7 +550,20 @@ export function resolveWheel(g, pokemon, player = 0, random = Math.random) {
   } else if (result.id === "jackpot") {
     effects = [spinWeighted(positive, random).id, spinWeighted(positive, random).id];
   }
-  const record = { id: "spin-" + Date.now() + "-" + Math.random(), at: Date.now(), stageIndex: next.currentIndex, player, pokemon, result: result.id, effects };
+  const details={};
+  effects.forEach((id,index)=>{
+    if(id==="randomIv"||id==="ivCurse"){
+      details[index]=IV_NAMES[Math.floor(random()*IV_NAMES.length)]+(id==="ivCurse"?" = 0 IV":" = 31 IV");
+    }
+    const poolKey={randomAbility:"ability",randomItem:"item",randomMove:"move"}[id];
+    if(poolKey) {
+      const available=next.rules.wheelPools?.[poolKey]||[];
+      if(!available.length) throw new Error("Kein Zufallspool für "+poolKey+" konfiguriert.");
+      details[index]=available[Math.floor(random()*available.length)];
+    }
+  });
+  const record = { id: "spin-" + Date.now() + "-" + Math.random(), at: Date.now(),
+    stageIndex: next.currentIndex, player, pokemon, result: result.id, effects, details };
   if (next.wheelHistory.some((entry) => entry.stageIndex === next.currentIndex && entry.player === player && entry.pokemon === pokemon)) {
     throw new Error("Für dieses Pokémon wurde in dieser Etappe bereits gedreht.");
   }
