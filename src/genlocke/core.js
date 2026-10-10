@@ -615,12 +615,18 @@ export function archiveWipe(save, reason = "FULLWIPE", feedback = {}) {
 }
 
 export function clearCurrentList(save) {
-  return { ...save, encounters: {} };
+  // Inherited pairs are not route encounters. Preserve them to avoid silently
+  // removing locked heirs from team eligibility.
+  return { ...save, encounters:Object.fromEntries(
+    Object.entries(save.encounters||{}).filter(([,row])=>row?.inherited)
+  ) };
 }
 
 export function clearAllLists(save) {
   const next = copy(save);
-  next.encounters = {};
+  next.encounters = Object.fromEntries(
+    Object.entries(next.encounters||{}).filter(([,row])=>row?.inherited)
+  );
   if (next.genlocke) {
     next.genlocke.stages.forEach(stage => {
       if (stage.snapshot) stage.snapshot.encounters = {};
