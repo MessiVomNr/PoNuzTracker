@@ -384,8 +384,13 @@ export function recordArenaChoice(save,{name, aceSlot = null, participatingSlots
   if(!key) throw new Error("Bitte eine Arena oder ihren Namen eintragen.");
   if((stage.arenas||[]).some(a=>a.name.toLocaleLowerCase("de")===key.toLocaleLowerCase("de")))
     throw new Error("Diese Arena wurde bereits dokumentiert.");
-  if(g.rules.sameAce&&g.mode==="duo" && !(Number.isInteger(aceSlot) && aceSlot>=0 && aceSlot<6))
-    throw new Error("Bitte für Same Ace das gemeinsame Ace-Paar wählen.");
+  if(g.rules.sameAce&&g.mode==="duo") {
+    if(!(Number.isInteger(aceSlot) && aceSlot>=0 && aceSlot<6))
+      throw new Error("Bitte für Same Ace das gemeinsame Ace-Paar wählen.");
+    const [left,right]=getTeams(save,2);
+    if(!left[aceSlot]||!right[aceSlot])
+      throw new Error("Das gewählte Ace-Paar muss auf beiden Seiten aktiv im Team sein.");
+  }
   const participants=[...new Set(participatingSlots.map(Number))];
   if(g.rules.heirGym && (stage.heirs||[]).some(h=>!h.dead)){
     const alive=(stage.heirs||[]).filter(h=>!h.dead);
