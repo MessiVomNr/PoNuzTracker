@@ -266,14 +266,24 @@ export default function GenlockeSetup() {
                   </select>
                   <button type="button" className="genlocke-setup-small-button"
                     aria-label={edition + " nach oben"} title="Nach oben"
-                    disabled={index === 0} onClick={() => moveEdition(index, -1)}>↑</button>
+                    disabled={index === 0} onClick={() => moveEdition(index, -1)}>
+                    <span className="genlocke-setup-move-chevron up" aria-hidden="true" />
+                  </button>
                   <button type="button" className="genlocke-setup-small-button"
                     aria-label={edition + " nach unten"} title="Nach unten"
                     disabled={index === editions.length - 1}
-                    onClick={() => moveEdition(index, 1)}>↓</button>
+                    onClick={() => moveEdition(index, 1)}>
+                    <span className="genlocke-setup-move-chevron down" aria-hidden="true" />
+                  </button>
                   <button type="button" className="genlocke-setup-small-button danger"
                     aria-label={edition + " entfernen"} title="Entfernen"
-                    onClick={() => setEditions((prev) => prev.filter((_, i) => i !== index))}>×</button>
+                    onClick={() => setEditions((prev) => prev.filter((_, i) => i !== index))}>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+                      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                      aria-hidden="true" focusable="false">
+                      <path d="M5 5l14 14M19 5 5 19" />
+                    </svg>
+                  </button>
                 </div>
               );
             })}
