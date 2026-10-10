@@ -26,6 +26,8 @@ function GuidePage() {
   // ===== Effektive Edition/Gen (Duo gewinnt) =====
   const effectiveEdition = isDuo ? (duoSave?.edition || "") : currentSave.edition || "";
   const gen = getGenFromEdition(effectiveEdition);
+  const genlocke = isDuo ? duoSave?.genlocke : currentSave?.genlocke;
+  const currentStageId = genlocke?.stages?.[genlocke.currentIndex]?.id;
 
   // ===== Guide/LevelCaps =====
   const guide = guideByGen[gen] || [];
@@ -50,9 +52,12 @@ function GuidePage() {
 
   // ===== Checklist Storage Keys =====
   const storageBaseKey = useMemo(() => {
+    if (currentStageId) return isDuo
+      ? `guidecheck_duo_${activeDuoRoomId}_stage_${currentStageId}_gen_${gen}`
+      : `guidecheck_save_${activeSave}_stage_${currentStageId}_gen_${gen}`;
     if (isDuo) return `guidecheck_duo_${activeDuoRoomId}_gen_${gen}`;
     return `guidecheck_save_${activeSave}_gen_${gen}`;
-  }, [isDuo, activeDuoRoomId, activeSave, gen]);
+  }, [isDuo, activeDuoRoomId, activeSave, gen, currentStageId]);
 
   // ===== Checklists (Sets) =====
   const [checkedLevelCaps, setCheckedLevelCaps] = useState(() => new Set());
@@ -61,7 +66,7 @@ function GuidePage() {
 
   // ===== Load saved progress (Guide steps + checklists) =====
   useEffect(() => {
-    const keySteps = isDuo ? `guideProgress_duo_${activeDuoRoomId}` : `guideProgress_${activeSave}`;
+    const keySteps = currentStageId ? `guideProgress_${isDuo?"duo_"+activeDuoRoomId:"save_"+activeSave}_stage_${currentStageId}` : (isDuo ? `guideProgress_duo_${activeDuoRoomId}` : `guideProgress_${activeSave}`);
     const saved = localStorage.getItem(keySteps);
     if (saved) setCompletedSteps(JSON.parse(saved));
 
@@ -82,7 +87,7 @@ function GuidePage() {
       setCheckedVMs(new Set());
       setCheckedTMs(new Set());
     }
-  }, [isDuo, activeDuoRoomId, activeSave, storageBaseKey]);
+  }, [isDuo, activeDuoRoomId, activeSave, storageBaseKey, currentStageId]);
 
   const persistChecks = (next) => {
     localStorage.setItem(storageBaseKey, JSON.stringify(next));
@@ -95,7 +100,7 @@ function GuidePage() {
 
     setCompletedSteps(newSteps);
 
-    const keySteps = isDuo ? `guideProgress_duo_${activeDuoRoomId}` : `guideProgress_${activeSave}`;
+    const keySteps = currentStageId ? `guideProgress_${isDuo?"duo_"+activeDuoRoomId:"save_"+activeSave}_stage_${currentStageId}` : (isDuo ? `guideProgress_duo_${activeDuoRoomId}` : `guideProgress_${activeSave}`);
     localStorage.setItem(keySteps, JSON.stringify(newSteps));
   };
 
