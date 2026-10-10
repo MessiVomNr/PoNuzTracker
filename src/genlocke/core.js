@@ -100,6 +100,7 @@ export function createGenlocke({ name, editions = CLASSIC_EDITIONS, rules = DEFA
   if (!editions.length) throw new Error("Bitte mindestens eine Edition auswählen.");
   return {
     schemaVersion: 1,
+    revision: 0,
     name: String(name || "Genlocke").trim(),
     mode,
     editions: [...editions],
