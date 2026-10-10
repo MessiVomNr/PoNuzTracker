@@ -6,6 +6,7 @@ import { useDuoSave } from "../duo/useDuoSave";
 import HistoricalEditor from "./HistoricalEditor";
 import FullWipeModal from "../components/FullWipeModal";
 import { RULE_OPTIONS } from "./GenlockeSetup";
+import GenlockeExtras from "./GenlockeExtras";
 
 const frame={background:"#121e32",border:"1px solid #354460",borderRadius:16,padding:16};
 const btn={border:"1px solid #5b7298",borderRadius:8,background:"#253b60",color:"#fff",padding:"9px 12px",cursor:"pointer"};
@@ -32,8 +33,8 @@ export default function GenlockeHub() {
   const [stageEdit,setStageEdit]=useState(0);
   const [selected,setSelected]=useState([]);
   const [locked,setLocked]=useState([]);
-  const [mvp,setMvp]=useState("");
-  const [hater,setHater]=useState("");
+  const [mvp,setMvp]=useState(["",""]);
+  const [hater,setHater]=useState(["",""]);
   const [target,setTarget]=useState("");
   const [wheelPlayer,setWheelPlayer]=useState(0);
   const [wheelResult,setWheelResult]=useState(null);
@@ -56,11 +57,12 @@ export default function GenlockeHub() {
   if(!g)return <div style={{padding:40}}><h2>{remoteError||"Genlocke wird geladen ..."}</h2><button onClick={()=>nav("/solo")}>Spielstände</button></div>;
   const completed=g.stages.filter(s=>s.completedAt).length;
   const playerCount=g.mode==="duo"?2:1;
-  const teams=save.teams||[];
+  const teams=getTeams(save,playerCount);
   const activeHeirs=(stage?.heirs||[]).filter(h=>!h.dead);
   const finish=()=>run(async()=>{
     if(!window.confirm("Generation abschließen? Die Erbenauswahl kann danach nicht mehr geändert werden."))return;
-    const next=finishStage(save,selected,locked,mvp?[mvp]:[],hater?[hater]:[],playerCount);
+    const picks=g.rules.heirLottery ? (stage.lotterySlots||[]) : selected;
+    const next=finishStage(save,picks,locked,mvp.slice(0,playerCount),hater.slice(0,playerCount),playerCount);
     await persist(next);setSelected([]);setLocked([]);setWheelResult(null);setWheelSpun(false);setTab("overview");
   });
   const wipe=()=>setWipeModal(true);
@@ -126,20 +128,25 @@ export default function GenlockeHub() {
         </section>
         <section style={frame}><h2>Deine Etappen</h2>{g.editions.map((edition,i)=><div key={i} style={{padding:"9px 0",borderBottom:"1px solid #354460",color:i===g.currentIndex?"#a8d6ff":undefined}}>{i+1}. {edition} {i<g.currentIndex?"✓ Abgeschlossen":i===g.currentIndex?"● Aktuell":"🔒"}{g.stages[i]?.issues?.length>0&&<span style={{color:"#ffab69",marginLeft:10}}>⚠ Nach Korrektur prüfen</span>}</div>)}</section>
         {!g.finishedAt&&<>
+          <GenlockeExtras save={save} persist={persist} run={run}/>
           <section style={frame}>
             <h2>Generation abschließen</h2>
             <p>Die Ruhmeshalle wird aus dem aktuellen Team übernommen. Wähle die Erben vor dem Abschluss.</p>
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              {Array.from({length:6},(_,i)=>({slot:i,pokemon:Array.isArray(teams[0])?teams[0][i]:teams["0"]?.[i]})).map(({slot,pokemon})=>pokemon&&<div key={slot} style={{...frame,minWidth:120,textAlign:"center"}}>
-                {sprite(pokemon,stage.edition)&&<img src={sprite(pokemon,stage.edition)} alt={pokemon} width="70"/>}
-                <div>{pokemon}</div>
-                <label><input type="checkbox" checked={selected.includes(slot)} disabled={!selected.includes(slot)&&selected.length>=g.rules.heirs} onChange={e=>{setSelected(p=>e.target.checked?[...p,slot]:p.filter(x=>x!==slot));setLocked(p=>p.filter(x=>x!==slot));}}/> Erbe</label>
-                {selected.includes(slot)&&<label style={{display:"block"}}><input type="checkbox" checked={locked.includes(slot)} disabled={!locked.includes(slot)&&locked.length>=g.rules.lockedHeirs} onChange={e=>setLocked(p=>e.target.checked?[...p,slot]:p.filter(x=>x!==slot))}/> Teamlock</label>}
+              {Array.from({length:6},(_,slot)=>({slot,pokemon:teams.map(t=>t[slot]||"")})).map(({slot,pokemon})=>pokemon.some(Boolean)&&<div key={slot} style={{...frame,minWidth:145,textAlign:"center"}}>
+                {pokemon.map((name,i)=>name&&<div key={i}>{sprite(name,stage.edition)&&<img src={sprite(name,stage.edition)} alt={name} width="60"/>}<div>{playerCount>1?"P"+(i+1)+": ":""}{name}</div></div>)}
+                <label><input type="checkbox" checked={(g.rules.heirLottery?stage.lotterySlots||[]:selected).includes(slot)}
+                  disabled={g.rules.heirLottery||(!selected.includes(slot)&&selected.length>=g.rules.heirs)}
+                  onChange={e=>{setSelected(p=>e.target.checked?[...p,slot]:p.filter(x=>x!==slot));setLocked(p=>p.filter(x=>x!==slot));}}/> Erbe</label>
+                {(g.rules.heirLottery?stage.lotterySlots||[]:selected).includes(slot)&&<label style={{display:"block"}}><input type="checkbox" checked={locked.includes(slot)} disabled={!locked.includes(slot)&&locked.length>=g.rules.lockedHeirs} onChange={e=>setLocked(p=>e.target.checked?[...p,slot]:p.filter(x=>x!==slot))}/> Teamlock</label>}
               </div>)}
             </div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap",margin:"12px 0"}}>
-              <label>MVP <input style={btn} value={mvp} onChange={e=>setMvp(e.target.value)} placeholder="Pokémon"/></label>
-              <label>Hater <input style={btn} value={hater} onChange={e=>setHater(e.target.value)} placeholder="Pokémon"/></label>
+              {Array.from({length:playerCount},(_,i)=><div key={i} style={{display:"grid",gap:7}}>
+                {playerCount>1&&<b>Spieler {i+1}</b>}
+                <label>MVP <input style={btn} value={mvp[i]||""} onChange={e=>setMvp(a=>a.map((v,j)=>i===j?e.target.value:v))} placeholder="Pokémon"/></label>
+                <label>Hater <input style={btn} value={hater[i]||""} onChange={e=>setHater(a=>a.map((v,j)=>i===j?e.target.value:v))} placeholder="Pokémon"/></label>
+              </div>)}
             </div>
             <button style={{...btn,background:"#267855"}} onClick={finish}>Generation abschließen</button>
           </section>
