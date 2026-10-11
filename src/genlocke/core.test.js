@@ -1,7 +1,7 @@
 import {
   CLASSIC_EDITIONS, createGenlocke, cleanRules, finishStage, getTeams,
   isGloballyBanned, bannedEvolutionIds, inheritBasePokemon, belongsToHeir,
-  resolveWheel, availableWheelResults, killPokemonInSave, adjustHistoricalStage, archiveWipe, restartGenlocke, drawChampionLottery, drawStarterLottery, drawWheelTarget, recordArenaChoice, setWheelEffectDetail, clearCurrentList, clearAllLists
+  resolveWheel, wheelCatalogOptions, availableWheelResults, killPokemonInSave, adjustHistoricalStage, archiveWipe, restartGenlocke, drawChampionLottery, drawStarterLottery, drawWheelTarget, recordArenaChoice, setWheelEffectDetail, clearCurrentList, clearAllLists
 } from "./core";
 
 const makeSave = (editions = ["Feuerrot", "Smaragd"], overrides = {}) => {
@@ -201,4 +201,60 @@ test("clearing lists preserves active inherited Pokémon but removes normal enco
   expect(cleared.encounters["Erbe 1"]).toBeDefined();
   expect(cleared.encounters["Route 2"]).toBeUndefined();
   expect(clearAllLists(withRoute).genlocke.stages[0].snapshot.encounters).toEqual({});
+});
+
+test("complete offline wheel catalogs include German moves, abilities and all 25 natures",()=>{
+  const genlocke=createGenlocke({name:"All data",editions:["Smaragd"],rules:{
+    wheelGenerations:[1,2,3,4,5,6,7,8,9],wheelOnlyLegal:false
+  }});
+  expect(wheelCatalogOptions(genlocke,"ability").length).toBeGreaterThan(300);
+  expect(wheelCatalogOptions(genlocke,"move").length).toBeGreaterThan(850);
+  expect(wheelCatalogOptions(genlocke,"nature")).toHaveLength(25);
+  expect(wheelCatalogOptions(genlocke,"item").length).toBeGreaterThan(300);
+  expect(wheelCatalogOptions(genlocke,"ability").some(([,name])=>name==="Bedroher")).toBe(true);
+  expect(wheelCatalogOptions(genlocke,"move").some(([,name])=>name==="Donnerblitz")).toBe(true);
+});
+
+test("selected introduced generations restrict all four automatic reward pools",()=>{
+  const g=createGenlocke({name:"Filtered",editions:["Smaragd"],rules:{
+    wheelGenerations:[1,2],wheelOnlyLegal:false
+  }});
+  expect(wheelCatalogOptions(g,"move").every(([, ,gen])=>gen<=2)).toBe(true);
+  expect(wheelCatalogOptions(g,"ability")).toHaveLength(0);
+  expect(wheelCatalogOptions(g,"nature")).toHaveLength(0);
+  expect(availableWheelResults(g).find(x=>x.id==="randomAbility").weight).toBe(0);
+  expect(availableWheelResults(g).find(x=>x.id==="randomNature").weight).toBe(0);
+  expect(wheelCatalogOptions(g,"item").length).toBeGreaterThan(0);
+});
+
+test("edition filter suppresses future-generation attacks unless explicitly allowed",()=>{
+  const restricted=createGenlocke({name:"Restricted",editions:["Feuerrot"],rules:{
+    wheelGenerations:[9],wheelOnlyLegal:true
+  }});
+  expect(wheelCatalogOptions(restricted,"move")).toHaveLength(0);
+  const relaxed={...restricted,rules:{...restricted.rules,wheelOnlyLegal:false}};
+  expect(wheelCatalogOptions(relaxed,"move").length).toBeGreaterThan(0);
+});
+
+test("random move and random nature pick a real catalog entry without input",()=>{
+  const g=createGenlocke({name:"Roll",editions:["Smaragd"],rules:{
+    wheelGenerations:[1,2,3],wheelOnlyLegal:true
+  }});
+  g.rules.wheelWeights=Object.fromEntries(Object.keys(g.rules.wheelWeights).map(k=>[k,k==="randomMove"?1:0]));
+  const move=resolveWheel(g,"Glumanda",0,()=>0);
+  expect(move.record.effects).toEqual(["randomMove"]);
+  expect(move.record.details[0]).toBe("Klaps");
+  g.rules.wheelWeights=Object.fromEntries(Object.keys(g.rules.wheelWeights).map(k=>[k,k==="randomNature"?1:0]));
+  const nature=resolveWheel(g,"Glumanda",0,()=>0);
+  expect(nature.record.effects).toEqual(["randomNature"]);
+  expect(nature.record.details[0]).toBe("Robust");
+});
+
+test("chosen bonuses are restricted to the listed generation catalog",()=>{
+  const g=createGenlocke({name:"Pick",editions:["Smaragd"],rules:{wheelGenerations:[3]}});
+  g.rules.wheelWeights=Object.fromEntries(Object.keys(g.rules.wheelWeights).map(k=>[k,k==="ability"?1:0]));
+  const {genlocke,record}=resolveWheel(g,"Schiggy",0,()=>0);
+  const save={edition:"Smaragd",genlocke,encounters:{},teams:[]};
+  expect(()=>setWheelEffectDetail(save,record.id,0,"NICHT EXISTENT")).toThrow(/gültiges Ergebnis/);
+  expect(setWheelEffectDetail(save,record.id,0,"Bedroher").genlocke.wheelHistory[0].details[0]).toBe("Bedroher");
 });
