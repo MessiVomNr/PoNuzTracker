@@ -7,6 +7,7 @@ import {
 import editionData from "../data/editionData";
 import { createDuoRoom } from "../duo/duoService";
 import "./GenlockeSetup.css";
+import WheelGenerationSettings from "./WheelGenerationSettings";
 
 export const RULE_OPTIONS = [
   ["legendLimit", "Legendäre Pokémon im Team", "number"],
@@ -36,7 +37,7 @@ export const RULE_OPTIONS = [
   ["starterLottery", "Starter-Lotterie aktivieren", "check"],
   ["wheel", "Glücksrad aktivieren", "check"],
   ["wheelWithoutHeir", "Ohne Erben für den Starter drehen", "check"],
-  ["wheelOnlyLegal", "Nur regulär mögliche Attacken / Fähigkeiten", "check"],
+  ["wheelOnlyLegal", "Nur Boni bis zur Spielgeneration (keine Pokémon-Einzelprüfung)", "check"],
   ["riskWinChance", "Risiko-Dreh: Gewinnchance in %", "number"],
 ];
 
@@ -373,29 +374,16 @@ export default function GenlockeSetup() {
                         <details className="genlocke-setup-rule-group">
                           <summary>
                             <div style={{ flex: 1 }}>
-                              <strong>Zufallspools</strong>
-                              <span>Fähigkeiten, Items und Attacken für zufällige Boni</span>
+                              <strong>Generationen & automatische Pools</strong>
+                              <span>Alle Fähigkeiten, Wesen, Attacken und geeigneten Items – ohne manuelle Listen</span>
                             </div>
                             <span className="genlocke-setup-chevron" aria-hidden="true" />
                           </summary>
                           <div className="genlocke-setup-rule-body">
-                            <p className="genlocke-setup-description">
-                              Mehrere Einträge durch Kommas trennen. Verfügbarkeit im jeweiligen
-                              Pokémon-Spiel selbst prüfen.
-                            </p>
-                            {["ability", "item", "move"].map((kind) => (
-                              <label key={kind} className="genlocke-setup-field" style={{ marginBottom: 12 }}>
-                                <span className="genlocke-setup-label">
-                                  {({ ability: "Fähigkeiten", item: "Items", move: "Attacken" })[kind]}
-                                </span>
-                                <textarea className="genlocke-setup-textarea" rows={2}
-                                  value={(rules.wheelPools?.[kind] || []).join(", ")}
-                                  onChange={(e) => changeRule("wheelPools", {
-                                    ...rules.wheelPools,
-                                    [kind]: e.target.value.split(",").map((v) => v.trim()).filter(Boolean),
-                                  })} />
-                              </label>
-                            ))}
+                            <WheelGenerationSettings
+                              rules={rules} edition={editions[0] || "Feuerrot"}
+                              onChange={setRules}
+                            />
                           </div>
                         </details>
                       </>
