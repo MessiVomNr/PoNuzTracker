@@ -1,6 +1,7 @@
 import React, {useState} from "react";
 import {championRoster, drawChampionLottery, drawStarterLottery, recordArenaChoice,
-  setWheelEffectDetail, WHEEL_RESULTS} from "./core";
+  setWheelEffectDetail, WHEEL_RESULTS, WHEEL_REWARD_KINDS} from "./core";
+import WheelRewardChoice from "./WheelRewardChoice";
 
 const panel={background:"#14223b",border:"1px solid #3c5070",borderRadius:12,padding:14};
 const field={background:"#182a46",color:"#edf4ff",border:"1px solid #7188ab",padding:"8px 10px",borderRadius:8,maxWidth:"100%"};
@@ -32,8 +33,7 @@ export default function GenlockeExtras({save,persist,run}){
     await persist(updated);
     setArena("");setAceSlot("");setParticipants([]);
   });
-  const setDetail=(recordId,number)=>run(async()=>{
-    const value=editBonuses[recordId+":"+number];
+  const setDetail=(recordId,number,value)=>run(async()=>{
     await persist(setWheelEffectDetail(save,recordId,number,value));
   });
   return <div style={{display:"grid",gap:12}}>
@@ -76,21 +76,30 @@ export default function GenlockeExtras({save,persist,run}){
     </section>}
     {(g.wheelHistory||[]).some(rec=>rec.stageIndex===g.currentIndex)&&
       <section style={panel}>
-        <h3>Glücksrad-Belohnungen dokumentieren</h3>
-        <p>Gewonnene Boni werden protokolliert. Fähigkeiten, Items und Attacken musst du anschließend im ROM-Spielstand umsetzen.</p>
+        <h3>Glücksrad-Ergebnisse</h3>
+        <p>Bei Zufallsergebnissen wird der Name direkt gezogen. Bei „Wählen“ suchst du ihn in der vollständigen Liste. Anschließend setzt du den Bonus selbst im ROM-Spielstand um.</p>
         {(g.wheelHistory||[]).filter(rec=>rec.stageIndex===g.currentIndex).map(rec=><div key={rec.id} style={{borderTop:"1px solid #425371",padding:"10px 0"}}>
           <b>Spieler {rec.player+1} · {rec.pokemon}</b>
           {rec.effects.map((id,i)=>{
             const kind=WHEEL_RESULTS.find(x=>x.id===id);
             const fixed=rec.details?.[i];
-            if(id==="death"||id==="nothing") return <p key={i}>{kind?.label||id}</p>;
-            return <div key={i} style={{marginTop:7}}>
-              <span>{kind?.label||id}: </span>
-              {fixed?<strong style={{color:"#b8eecc"}}>{fixed}</strong>:
-                <span><input style={field} aria-label={"Bonus "+id} value={editBonuses[rec.id+":"+i]||""}
-                  onChange={e=>setEditBonuses(d=>({...d,[rec.id+":"+i]:e.target.value}))}
-                  placeholder={["iv","randomIv","ivCurse"].includes(id)?"HP / Angriff / etc.":"Name / Ergebnis"}/>
-                  <button style={action} onClick={()=>setDetail(rec.id,i)}>Speichern</button></span>}
+            if(id==="death"||id==="nothing"||id==="risk"||id==="jackpot")
+              return <p key={i}>{kind?.label||id}</p>;
+            return <div key={i} style={{marginTop:10}}>
+              <div style={{color:"#d7e6ff",fontWeight:850}}>{kind?.label||id}</div>
+              {fixed
+                ?<div style={{color:"#b8eecc",fontWeight:950,fontSize:17,marginTop:5}}>{fixed}</div>
+                :WHEEL_REWARD_KINDS[id]
+                  ?<WheelRewardChoice genlocke={g} effectId={id}
+                      onSave={value=>setDetail(rec.id,i,value)}/>
+                  :<div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:6}}>
+                    <input style={field} aria-label={"Bonus "+id}
+                      value={editBonuses[rec.id+":"+i]||""}
+                      onChange={e=>setEditBonuses(d=>({...d,[rec.id+":"+i]:e.target.value}))}
+                      placeholder="IV / gewünschter Wert"/>
+                    <button style={action}
+                      onClick={()=>setDetail(rec.id,i,editBonuses[rec.id+":"+i])}>Speichern</button>
+                  </div>}
             </div>;
           })}
         </div>)}
