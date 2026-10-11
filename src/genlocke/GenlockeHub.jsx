@@ -8,6 +8,7 @@ import HistoricalEditor from "./HistoricalEditor";
 import FullWipeModal from "../components/FullWipeModal";
 import { RULE_OPTIONS, RULE_GROUPS } from "./GenlockeSetup";
 import GenlockeExtras from "./GenlockeExtras";
+import WheelGenerationSettings from "./WheelGenerationSettings";
 import { validateTeamRules } from "./ruleValidation";
 
 const frame={background:"#121e32",border:"1px solid #354460",borderRadius:16,padding:16};
@@ -297,16 +298,12 @@ export default function GenlockeHub() {
                   </div>
                 </details>
                 <details className="genlocke-setup-rule-group">
-                  <summary><div style={{flex:1}}><strong>Zufallspools</strong>
-                    <span>Fähigkeiten, Items und Attacken</span></div>
+                  <summary><div style={{flex:1}}><strong>Generationen & automatische Pools</strong>
+                    <span>Alle deutschen Fähigkeiten, Wesen, Attacken und Items</span></div>
                     <span className="genlocke-setup-chevron" aria-hidden="true"/></summary>
                   <div className="genlocke-setup-rule-body">
-                    <p className="genlocke-setup-description">Pool-Einträge müssen im jeweiligen Spiel verfügbar sein.</p>
-                    {["ability","item","move"].map(kind=><label className="genlocke-setup-field" key={kind} style={{marginBottom:12}}>
-                      <span className="genlocke-setup-label">{({ability:"Zufallsfähigkeiten",item:"Zufallsitems",move:"Zufallsattacken"})[kind]}</span>
-                      <textarea className="genlocke-setup-textarea" rows={2} value={(rules.wheelPools?.[kind]||[]).join(", ")}
-                        onChange={e=>setRules(cleanRules({...rules,wheelPools:{...rules.wheelPools,[kind]:e.target.value.split(",").map(v=>v.trim()).filter(Boolean)}}))}/>
-                    </label>)}
+                    <WheelGenerationSettings rules={rules} edition={stage?.edition||"Feuerrot"}
+                      onChange={setRules}/>
                   </div>
                 </details>
               </>}
