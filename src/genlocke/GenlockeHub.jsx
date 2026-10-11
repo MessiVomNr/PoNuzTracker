@@ -9,6 +9,7 @@ import FullWipeModal from "../components/FullWipeModal";
 import { RULE_OPTIONS, RULE_GROUPS } from "./GenlockeSetup";
 import GenlockeExtras from "./GenlockeExtras";
 import WheelGenerationSettings from "./WheelGenerationSettings";
+import WheelRewardReveal from "./WheelRewardReveal";
 import { validateTeamRules } from "./ruleValidation";
 
 const frame={background:"#121e32",border:"1px solid #354460",borderRadius:16,padding:16};
@@ -211,8 +212,9 @@ export default function GenlockeHub() {
                 </div>
               </div>
               {wheelResult&&<div style={{...frame,marginTop:14,borderColor:"#e0be65"}}>
-                <h3>{wheelResult.pokemon}: {wheelResult.effects.map(id=>WHEEL_RESULTS.find(x=>x.id===id)?.label).join(" + ")}</h3>
-                <p>Bitte das Ergebnis im Spielstand entsprechend umsetzen.</p>
+                <h3 style={{margin:"0 0 10px"}}>{wheelResult.pokemon} – Glücksrad-Ergebnis</h3>
+                <WheelRewardReveal record={wheelResult} genlocke={g}/>
+                <p style={{fontSize:13,color:"#b4c6e5"}}>Zufallsergebnisse werden automatisch gespeichert. Selbst gewählte Boni findest du unter „Glücksrad-Ergebnisse“.</p>
               </div>}
               {(g.wheelHistory||[]).filter(x=>x.stageIndex===g.currentIndex).map(h=><div key={h.id} style={{borderBottom:"1px solid #39455c",padding:"6px 0"}}>Spieler {h.player+1}: {h.pokemon} – {h.effects.join(", ")}</div>)}
             </>:<p>In den Regeln deaktiviert.</p>}
