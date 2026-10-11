@@ -1,5 +1,6 @@
 import { evolutionFamiliesByDex } from "../data/evolutionFamilies";
 import { versionToPokedex } from "../data/versionToPokedex";
+import { WHEEL_CATALOG } from "./wheelCatalog";
 
 export const CLASSIC_EDITIONS = ["Feuerrot", "Smaragd", "HeartGold", "Platin", "Schwarz 2", "X", "Ultrasonne"];
 export const GENLOCKE_PRESETS_KEY = "genlocke-rule-presets-v1";
@@ -16,6 +17,7 @@ export const WHEEL_RESULTS = [
   { id: "nothing", label: "Niete", weight: 8, positive: false },
   { id: "risk", label: "Risiko-Dreh", weight: 5, positive: false },
   { id: "nature", label: "Wesen wählen", weight: 8, positive: true },
+  { id: "randomNature", label: "Zufallswesen", weight: 8, positive: true },
   { id: "ivCurse", label: "IV-Fluch", weight: 5, positive: false },
   { id: "jackpot", label: "Jackpot", weight: 5, positive: true },
 ];
@@ -52,7 +54,7 @@ export const DEFAULT_RULES = {
   wheelOnlyLegal: true,
   wheelWeights: Object.fromEntries(WHEEL_RESULTS.map((r) => [r.id, r.weight])),
   riskWinChance: 70,
-  wheelPools: {ability:["Bedroher","Erzwinger","Schwebe"],item:["Überreste","Wahlband"],move:["Erdbeben","Donnerblitz","Eisstrahl"]},
+  wheelGenerations: [1,2,3,4,5,6,7,8,9],
   wipeMode: "team",
 };
 
@@ -72,10 +74,12 @@ export function cleanRules(raw = {}) {
   next.wheelWeights = Object.fromEntries(WHEEL_RESULTS.map((r) => [
     r.id, whole(next.wheelWeights?.[r.id] ?? r.weight, 0, 1000)
   ]));
-  next.wheelPools=Object.fromEntries(["ability","item","move"].map(key=>[
-    key,(Array.isArray(next.wheelPools?.[key]) ? next.wheelPools[key] : copy(DEFAULT_RULES.wheelPools[key]))
-      .map(value=>String(value||"").trim()).filter(Boolean).slice(0,200)
-  ]));
+  // Convert old saves/presets to the new built-in catalogs without deleting other rules.
+  delete next.wheelPools;
+  const generations = Array.isArray(next.wheelGenerations)
+    ? next.wheelGenerations : DEFAULT_RULES.wheelGenerations;
+  next.wheelGenerations = [...new Set(generations.map(Number)
+    .filter(gen=>Number.isInteger(gen)&&gen>=1&&gen<=9))].sort((a,b)=>a-b);
   if (!["each", "oneChoose", "oneRandom"].includes(next.wheelMode)) next.wheelMode = "oneRandom";
   if (!["team", "run"].includes(next.wipeMode)) next.wipeMode = "team";
   return next;
@@ -424,6 +428,10 @@ export function setWheelEffectDetail(save, recordId, effectIndex, value) {
     throw new Error("Dieses Feld benötigt keine Auswahl.");
   const detail=String(value||"").trim();
   if(!detail) throw new Error("Bitte den Bonus vollständig angeben.");
+  const eligible=WHEEL_REWARD_KINDS[kind] ? wheelCatalogOptions(g,kind):[];
+  if(eligible.length && !eligible.some(([,name])=>name===detail)) {
+    throw new Error("Bitte ein gültiges Ergebnis aus den ausgewählten Generationen auswählen.");
+  }
   record.details={...(record.details||{}),[effectIndex]:detail};
   return {...save,genlocke:g};
 }
@@ -555,14 +563,32 @@ export function drawWheelTarget(g, player = 0, random = Math.random) {
   return {genlocke:next,pokemon:chosen};
 }
 
+export const WHEEL_REWARD_KINDS = {
+  ability:"abilities", randomAbility:"abilities",
+  item:"items", randomItem:"items",
+  move:"moves", randomMove:"moves",
+  nature:"natures", randomNature:"natures",
+};
+
+export function wheelCatalogOptions(g, effectId) {
+  const kind=WHEEL_REWARD_KINDS[effectId] || effectId;
+  const entries=WHEEL_CATALOG[kind] || [];
+  const selected=new Set(cleanRules(g?.rules).wheelGenerations);
+  const maxGeneration=g?.rules?.wheelOnlyLegal
+    ? generationForEdition(g?.editions?.[g.currentIndex]) : 9;
+  return entries.filter(([, ,gen])=>selected.has(gen)&&gen<=maxGeneration);
+}
+
 export function availableWheelResults(g) {
-  const edition=g.editions[g.currentIndex];
-  const gen=generationForEdition(edition);
+  const weights=g.rules?.wheelWeights || {};
+  const editionGeneration=generationForEdition(g.editions[g.currentIndex]);
   return WHEEL_RESULTS.map(r=>{
-    let enabled=true;
-    if(gen<2 && ["item","randomItem"].includes(r.id))enabled=false;
-    if(gen<3 && ["ability","randomAbility","nature"].includes(r.id))enabled=false;
-    return {...r,weight:enabled?Number(g.rules?.wheelWeights?.[r.id]??r.weight):0};
+    const catalogKind=WHEEL_REWARD_KINDS[r.id];
+    const hasEntries=!catalogKind || wheelCatalogOptions(g,r.id).length>0;
+    const allowedByMechanics=!(editionGeneration<2 && ["item","randomItem"].includes(r.id)) &&
+      !(editionGeneration<3 && ["ability","randomAbility","nature","randomNature"].includes(r.id));
+    return {...r, weight:allowedByMechanics&&hasEntries
+      ? Number(weights[r.id]??r.weight):0};
   });
 }
 
@@ -583,11 +609,10 @@ export function resolveWheel(g, pokemon, player = 0, random = Math.random) {
     if(id==="randomIv"||id==="ivCurse"){
       details[index]=IV_NAMES[Math.floor(random()*IV_NAMES.length)]+(id==="ivCurse"?" = 0 IV":" = 31 IV");
     }
-    const poolKey={randomAbility:"ability",randomItem:"item",randomMove:"move"}[id];
-    if(poolKey) {
-      const available=next.rules.wheelPools?.[poolKey]||[];
-      if(!available.length) throw new Error("Kein Zufallspool für "+poolKey+" konfiguriert.");
-      details[index]=available[Math.floor(random()*available.length)];
+    if(["randomAbility","randomItem","randomMove","randomNature"].includes(id)){
+      const pool=wheelCatalogOptions(next,id);
+      if(!pool.length) throw new Error("Keine passenden Ergebnisse für die ausgewählten Generationen.");
+      details[index]=pool[Math.floor(random()*pool.length)][1];
     }
   });
   const record = { id: "spin-" + Date.now() + "-" + Math.random(), at: Date.now(),
