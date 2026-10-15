@@ -32,10 +32,10 @@ export default function GenlockePokemonSelect({
     placeholder: base => ({ ...base, color: "#afc1df" }),
     menu: base => ({
       ...base, background: "#16253f", border: "1px solid #506790",
-      borderRadius: 10, overflow: "hidden", zIndex: 1000020,
+      borderRadius: 10, overflow: "hidden", zIndex: 10000050,
       boxShadow: "0 18px 45px #0007",
     }),
-    menuPortal: base => ({ ...base, zIndex: 1000020 }),
+    menuPortal: base => ({ ...base, zIndex: 10000050 }),
     option: (base, state) => ({
       ...base, cursor: "pointer", fontWeight: 720,
       color: "#f1f5ff",
