@@ -15,6 +15,7 @@ import { getFossilPoolForRunGen } from "./data/fossilsByGen";
 import { evolutionFamiliesByDex } from "./data/evolutionFamilies";
 import { isGloballyBanned } from "./genlocke/core";
 import FullWipeModal from "./components/FullWipeModal";
+import GenlockeHub from "./genlocke/GenlockeHub";
 import GeflohenIconImg from "./assets/Geflohen.png";
 import PokeballIconImg from "./assets/Pokeball.png";
 import BesiegtIconImg from "./assets/Besiegt.png";
@@ -718,6 +719,8 @@ function EncounterSinnerSelect({ value, disabled, options, onChange }) {
 
 function EncounterTable() {
   const navigate = useNavigate();
+  const [genlockeSettingsOpen, setGenlockeSettingsOpen] = useState(false);
+  const [genlockeRefresh, setGenlockeRefresh] = useState(0);
 
   // ===== Duo/Online State =====
   const activeDuoRoomId = (localStorage.getItem("activeDuoRoomId") || "").trim().toUpperCase();
@@ -951,7 +954,7 @@ const saveSlotName = async () => {
   useEffect(() => {
     if (isDuo) return;
     setEncounters(currentSave?.encounters || {});
-  }, [isDuo, activeSave]);
+  }, [isDuo, activeSave, genlockeRefresh]);
 
   // ===== Filter/Sort/Theme =====
   const defaultFilters = { Gefangen: true, Entkommen: true, Besiegt: true, Offen: true };
@@ -1864,6 +1867,12 @@ const usedFossilsBySlot = useMemo(() => {
       {dark && <div style={bgOverlay} />}
 
       <FullWipeModal open={showFullWipe} save={isDuo?duoSave:currentSave} playerCount={slotCount} onCancel={()=>setShowFullWipe(false)} onConfirm={commitFullWipe} />
+      {genlocke && genlockeSettingsOpen && (
+        <GenlockeHub embedded
+          onClose={() => setGenlockeSettingsOpen(false)}
+          onSave={() => setGenlockeRefresh(value => value + 1)}
+        />
+      )}
       <div className="encounter-content-card" style={contentCard(dark)}>
         <style>{tableCss(dark)}</style>
 
@@ -1961,6 +1970,16 @@ const usedFossilsBySlot = useMemo(() => {
           <div className="encounter-top-actions" style={topRightActions}>
             <button onClick={() => navigate("/team")}>Zum Team</button>
             <button onClick={() => navigate("/guide")}>Story-Guide öffnen</button>
+            {genlocke && (
+              <button type="button" onClick={() => setGenlockeSettingsOpen(true)}
+                style={{
+                  border:"1px solid rgba(152,190,247,.58)",
+                  background:"linear-gradient(130deg,#304f80,#21395d)",
+                  color:"#f7faff",fontWeight:900
+                }}>
+                Genlocke Einstellungen
+              </button>
+            )}
           </div>
         </div>
 
