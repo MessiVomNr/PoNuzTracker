@@ -13,7 +13,7 @@ import { upsertRecentRoom } from "./duo/recentRooms";
 import levelCapsByGen from "./guides/level_caps";
 import { getFossilPoolForRunGen } from "./data/fossilsByGen";
 import { evolutionFamiliesByDex } from "./data/evolutionFamilies";
-import { isGloballyBanned } from "./genlocke/core";
+import { isGloballyBanned, clearCurrentList } from "./genlocke/core";
 import FullWipeModal from "./components/FullWipeModal";
 import GenlockeHub from "./genlocke/GenlockeHub";
 import GeflohenIconImg from "./assets/Geflohen.png";
@@ -666,7 +666,7 @@ function EncounterCustomSelect({
   );
 }
 
-function EncounterStatusSelect({ value, allFilled, onChange }) {
+function EncounterStatusSelect({ value, allFilled, onChange, disabled = false }) {
   const options = useMemo(() => {
     const next = [{ value: "", label: "-" }];
 
@@ -686,6 +686,7 @@ function EncounterStatusSelect({ value, allFilled, onChange }) {
       options={options}
       onChange={onChange}
       className="encounter-status-select"
+      disabled={disabled}
       dotPrefix="encounter-status-dot"
     />
   );
@@ -1144,6 +1145,10 @@ useEffect(() => {
 
   const handleChange = async (location, field, value) => {
     const prev = encounters[location] || {};
+    if (genlocke && prev.inherited && (field.startsWith("pokemon") || field === "status")) {
+      alert("Diese Erben-Zeile ist geschützt. Tode kannst du unter Genlocke Einstellungen eintragen.");
+      return;
+    }
     let giftOverride = prev.giftOverride || false;
     if (genlocke && field.startsWith("pokemon") && value && isGloballyBanned(genlocke, nameToDexId.get(value))) {
       if (!genlocke.rules?.giftException) {
@@ -1242,13 +1247,16 @@ useEffect(() => {
   setConfirmModal("clear");
 };
 const confirmAction = async () => {
+  // A list reset must never silently delete inherited Soul-Link pairs.
+  const clearedEncounters = genlocke
+    ? clearCurrentList({ encounters }).encounters : {};
   if (confirmModal === "reset") {
-    setEncounters({});
+    setEncounters(clearedEncounters);
     setGlobalSinnerStats({});
     setRunCounter(0);
 
     try {
-      await persistEncounters({});
+      await persistEncounters(clearedEncounters);
       await persistMetaStats({
         updatedStats: {},
         updatedRunCounter: 0,
@@ -1279,10 +1287,10 @@ const confirmAction = async () => {
 
     setGlobalSinnerStats(nextTotals);
     setRunCounter(nextRunCounter);
-    setEncounters({});
+    setEncounters(clearedEncounters);
 
     try {
-      await persistEncounters({});
+      await persistEncounters(clearedEncounters);
       await persistMetaStats({
         updatedStats: nextTotals,
         updatedRunCounter: nextRunCounter,
@@ -1453,6 +1461,14 @@ function getOwnedStatusIcon(statuses = []) {
       const hasDataB = [...Array(slotCount)].some((_, i) => !!dataB[`pokemon${i + 1}`]) || !!dataB.status;
       return hasDataA === hasDataB ? 0 : hasDataA ? -1 : 1;
     });
+  }
+
+  // Show inherited champions in the same encounter table, ahead of routes.
+  // They are stored as encounters but are not part of the edition's static location list.
+  if (genlocke) {
+    const inheritedRows = Object.keys(encounters || {}).filter(loc => encounters[loc]?.inherited);
+    filteredLocations = [...inheritedRows, ...filteredLocations.filter(loc => !inheritedRows.includes(loc))]
+      .filter(loc => filters[encounters[loc]?.status || "Offen"]);
   }
 
   const fossilPool = useMemo(() => getFossilPoolForRunGen(gen), [gen]);
