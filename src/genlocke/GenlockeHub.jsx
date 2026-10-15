@@ -11,6 +11,7 @@ import GenlockeExtras from "./GenlockeExtras";
 import WheelGenerationSettings from "./WheelGenerationSettings";
 import WheelRewardReveal from "./WheelRewardReveal";
 import { validateTeamRules } from "./ruleValidation";
+import GenlockePokemonSelect from "./GenlockePokemonSelect";
 
 const frame={background:"#121e32",border:"1px solid #354460",borderRadius:16,padding:16};
 const btn={border:"1px solid #5b7298",borderRadius:8,background:"#253b60",color:"#fff",padding:"9px 12px",cursor:"pointer"};
@@ -25,7 +26,7 @@ function dexId(pokemon, edition) {
   return Number((Object.keys(dex).find(k=>dex[k]===pokemon)||"").replace("pokedex",""))||null;
 }
 const quotes=["Nicht mal Karpador hätte das so gemacht.","Ein weiterer Run für die Geschichtsbücher. Leider das Kapitel mit den Fehlern.","Der nächste Versuch wird bestimmt besser. Vielleicht.","Game Over. Deine Pokémon verlangen eine Gewerkschaft.","Der Champ wartet noch. Sehr geduldig.","Das war kein Wipe. Das war ein strategischer Rückzug zu Gen 1."];
-export default function GenlockeHub() {
+export default function GenlockeHub({ embedded = false, onClose, onSave }) {
   const nav=useNavigate();
   const roomId=localStorage.getItem("activeDuoRoomId")||"";
   const {save:remoteSave,patchSave, error:remoteError}=useDuoSave(roomId);
@@ -57,12 +58,15 @@ export default function GenlockeHub() {
       const patch = Object.fromEntries(Object.keys(next).filter(key =>
         JSON.stringify(next[key]) !== JSON.stringify(save?.[key])
       ).map(key => [key, next[key]]));
-      if (Object.keys(patch).length) await patchSave(patch);
+      if (Object.keys(patch).length) {
+        await patchSave(patch);
+        onSave?.(next);
+      }
       return;
     }
     const saves=JSON.parse(localStorage.getItem("savegames")||"{}");
     if(!saves[name])throw new Error("Spielstand fehlt");
-    saves[name]=next;localStorage.setItem("savegames",JSON.stringify(saves));setLocalSave(next);
+    saves[name]=next;localStorage.setItem("savegames",JSON.stringify(saves));setLocalSave(next);onSave?.(next);
   };
   const run=async(fn)=>{try{setNotice("");await fn();}catch(e){setNotice(e.message||String(e));}};
   if(!g)return <div style={{padding:40}}><h2>{remoteError||"Genlocke wird geladen ..."}</h2><button onClick={()=>nav("/solo")}>Spielstände</button></div>;
@@ -141,12 +145,24 @@ export default function GenlockeHub() {
     setWheelResult(record);
     setWheelSpun(true);
   });
-  return <div style={{minHeight:"100vh",background:"#091225",color:"#edf2ff",padding:"24px 14px"}}>
+  return <div role={embedded ? "dialog" : undefined} aria-modal={embedded ? "true" : undefined}
+    aria-label={embedded ? "Genlocke Einstellungen" : undefined}
+    onClick={embedded ? (event) => { if (event.target === event.currentTarget) onClose?.(); } : undefined}
+    style={embedded ? {
+      position:"fixed",inset:0,zIndex:1000050,overflowY:"auto",
+      background:"rgba(3,8,20,.87)",backdropFilter:"blur(9px)",
+      color:"#edf2ff",padding:"22px 14px"
+    } : {minHeight:"100vh",background:"#091225",color:"#edf2ff",padding:"24px 14px"}}>
     <FullWipeModal open={wipeModal} title="Genlocke-Versuch beenden" save={save} playerCount={playerCount} onCancel={()=>setWipeModal(false)} onConfirm={finalizeWipe} />
-    <div style={{maxWidth:1050,margin:"auto",display:"grid",gap:15}}>
+    <div style={{
+      maxWidth:1050,margin:"auto",display:"grid",gap:15,
+      ...(embedded ? {border:"1px solid #455a7d",borderRadius:20,
+        background:"linear-gradient(140deg,#172840,#0c172b)",padding:20,
+        boxShadow:"0 25px 100px #0009"} : {})
+    }}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-        <div><small>GENLOCKE · VERSUCH {g.attempt}</small><h1 style={{margin:"4px 0"}}>{g.name}</h1><div>{stage?.edition} · Etappe {g.currentIndex+1}/{g.editions.length}</div></div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>{roomId&&<button style={btn} onClick={()=>navigator.clipboard.writeText(roomId)} title="Zum Einladen Roomcode kopieren">Room: {roomId} · Kopieren</button>}<button style={btn} onClick={()=>nav("/table")}>Zur Encounter-Tabelle</button></div>
+        <div><small>GENLOCKE · VERSUCH {g.attempt}</small><h2 style={{margin:"4px 0",fontSize:26}}>{embedded ? "Genlocke Einstellungen" : g.name}</h2><div>{g.name} · {stage?.edition} · Etappe {g.currentIndex+1}/{g.editions.length}</div></div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>{roomId&&<button style={btn} onClick={()=>navigator.clipboard.writeText(roomId)} title="Zum Einladen Roomcode kopieren">Room: {roomId} · Kopieren</button>}{embedded ? <button type="button" style={btn} onClick={onClose}>✕ Schließen</button> : <button style={btn} onClick={()=>nav("/table")}>Zur Encounter-Tabelle</button>}</div>
       </div>
       <nav style={{display:"flex",gap:8,flexWrap:"wrap"}}>{[["overview","Übersicht"],["hall","Ruhmeshalle"],["grave","Friedhof"],["history","Chronik"],["historical","Alte Generationen"],["rules","Regeln"]].map(([id,text])=><button key={id} style={{...btn,background:tab===id?"#386a99":"#253b60"}} onClick={()=>setTab(id)}>{text}</button>)}</nav>
       {notice&&<div style={{...frame,borderColor:"#e88181"}}>{notice}</div>}
@@ -173,8 +189,20 @@ export default function GenlockeHub() {
             <div style={{display:"flex",gap:8,flexWrap:"wrap",margin:"12px 0"}}>
               {Array.from({length:playerCount},(_,i)=><div key={i} style={{display:"grid",gap:7}}>
                 {playerCount>1&&<b>Spieler {i+1}</b>}
-                <label>MVP <input style={btn} value={mvp[i]||""} onChange={e=>setMvp(a=>a.map((v,j)=>i===j?e.target.value:v))} placeholder="Pokémon"/></label>
-                <label>Hater <input style={btn} value={hater[i]||""} onChange={e=>setHater(a=>a.map((v,j)=>i===j?e.target.value:v))} placeholder="Pokémon"/></label>
+                <label style={{display:"grid",gap:5}}>MVP
+                  <div style={{width:245,maxWidth:"100%"}}>
+                    <GenlockePokemonSelect edition={stage.edition} value={mvp[i]||""}
+                      onChange={value=>setMvp(a=>a.map((v,j)=>i===j?value:v))} placeholder="MVP suchen …"
+                      ariaLabel={"MVP für Spieler "+(i+1)}/>
+                  </div>
+                </label>
+                <label style={{display:"grid",gap:5}}>Hater
+                  <div style={{width:245,maxWidth:"100%"}}>
+                    <GenlockePokemonSelect edition={stage.edition} value={hater[i]||""}
+                      onChange={value=>setHater(a=>a.map((v,j)=>i===j?value:v))} placeholder="Hater suchen …"
+                      ariaLabel={"Hater für Spieler "+(i+1)}/>
+                  </div>
+                </label>
               </div>)}
             </div>
             <button style={{...btn,background:"#267855"}} onClick={finish}>Generation abschließen</button>
