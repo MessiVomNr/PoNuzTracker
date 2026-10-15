@@ -1145,7 +1145,7 @@ useEffect(() => {
 
   const handleChange = async (location, field, value) => {
     const prev = encounters[location] || {};
-    if (genlocke && prev.inherited && (field.startsWith("pokemon") || field === "status")) {
+    if (genlocke && prev.inherited && (field.startsWith("pokemon") || field.startsWith("form") || field === "status")) {
       alert("Diese Erben-Zeile ist geschützt. Tode kannst du unter Genlocke Einstellungen eintragen.");
       return;
     }
@@ -1779,6 +1779,7 @@ const usedFossilsBySlot = useMemo(() => {
                             formatOptionLabel={(option) => option.customLabel || option.label}
                             value={selected ? { label: selected, value: selected } : null}
                             onChange={(sel) => handleChange(loc, slotName, sel?.value || "")}
+                            isDisabled={!!data.inherited}
                             isClearable
                             isSearchable
                             placeholder={slotLabel}
@@ -1854,11 +1855,12 @@ const usedFossilsBySlot = useMemo(() => {
                   <EncounterStatusSelect
                     value={status || ""}
                     allFilled={allFilled}
+                    disabled={!!data.inherited}
                     onChange={(nextStatus) => handleChange(loc, "status", nextStatus)}
                   />
                 </div>
 
-                <div className="encounter-mobile-field">
+                {slotCount > 1 && <div className="encounter-mobile-field">
                   <span>Sündiger</span>
                   <EncounterSinnerSelect
                     value={sinnerKey || ""}
@@ -1866,7 +1868,7 @@ const usedFossilsBySlot = useMemo(() => {
                     options={sinnerOptions}
                     onChange={(nextSinner) => handleChange(loc, "sinner", nextSinner)}
                   />
-                </div>
+                </div>}
               </div>
             </section>
           );
@@ -2252,6 +2254,7 @@ const dexId = selected ? nameToDexId.get(selected) : null;
               formatOptionLabel={(option) => option.customLabel || option.label}
               value={selected ? { label: selected, value: selected } : null}
               onChange={(sel) => handleChange(loc, slotName, sel?.value || "")}
+              isDisabled={!!data.inherited}
               isClearable
               isSearchable
               placeholder={`Pokémon ${i + 1}`}
@@ -2341,6 +2344,7 @@ const dexId = selected ? nameToDexId.get(selected) : null;
             formatOptionLabel={(option) => option.customLabel || option.label}
             value={selected ? { label: selected, value: selected } : null}
             onChange={(sel) => handleChange(loc, slotName, sel?.value || "")}
+            isDisabled={!!data.inherited}
             isClearable
             isSearchable
             placeholder={`Pokémon ${i + 1}`}
@@ -2400,6 +2404,7 @@ const dexId = selected ? nameToDexId.get(selected) : null;
                       <EncounterStatusSelect
                         value={status || ""}
                         allFilled={allFilled}
+                        disabled={!!data.inherited}
                         onChange={(nextStatus) => handleChange(loc, "status", nextStatus)}
                       />
 
