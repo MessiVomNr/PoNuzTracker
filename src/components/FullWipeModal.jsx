@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import GenlockePokemonSelect from "../genlocke/GenlockePokemonSelect";
 
 const jokes=[
   "Nicht jeder Held trägt einen Umhang. Manche verlieren gegen ein Rattfratz.",
@@ -48,15 +49,27 @@ export default function FullWipeModal({ open, title="Run abgeschlossen", save, p
         <div style={{display:"grid",gap:12}}>
           {pokemonByPlayer.map((pokemon,i)=><div key={i} style={{display:"grid",gap:8}}>
             {playerCount>1&&<h3 style={{margin:0}}>Spieler {i+1}</h3>}
-            <label>MVP / Favorit
-              <select value={mvp[i]} onChange={e=>setMvp(prev=>prev.map((v,j)=>i===j?e.target.value:v))} style={{...ui,display:"block",width:"100%"}}>
-                <option value="">Bitte auswählen</option>{pokemon.map(p=><option key={p}>{p}</option>)}
-              </select>
+            <label style={{display:"grid",gap:7}}>MVP / Favorit
+              {save?.genlocke ? (
+                <GenlockePokemonSelect edition={save.edition} value={mvp[i]}
+                  onChange={value=>setMvp(prev=>prev.map((v,j)=>i===j?value:v))}
+                  placeholder="MVP suchen …" ariaLabel={"Wipe-MVP Spieler "+(i+1)}/>
+              ) : (
+                <select value={mvp[i]} onChange={e=>setMvp(prev=>prev.map((v,j)=>i===j?e.target.value:v))} style={{...ui,display:"block",width:"100%"}}>
+                  <option value="">Bitte auswählen</option>{pokemon.map(p=><option key={p}>{p}</option>)}
+                </select>
+              )}
             </label>
-            <label>Hater
-              <select value={hater[i]} onChange={e=>setHater(prev=>prev.map((v,j)=>i===j?e.target.value:v))} style={{...ui,display:"block",width:"100%"}}>
-                <option value="">Bitte auswählen</option>{pokemon.map(p=><option key={p}>{p}</option>)}
-              </select>
+            <label style={{display:"grid",gap:7}}>Hater
+              {save?.genlocke ? (
+                <GenlockePokemonSelect edition={save.edition} value={hater[i]}
+                  onChange={value=>setHater(prev=>prev.map((v,j)=>i===j?value:v))}
+                  placeholder="Hater suchen …" ariaLabel={"Wipe-Hater Spieler "+(i+1)}/>
+              ) : (
+                <select value={hater[i]} onChange={e=>setHater(prev=>prev.map((v,j)=>i===j?e.target.value:v))} style={{...ui,display:"block",width:"100%"}}>
+                  <option value="">Bitte auswählen</option>{pokemon.map(p=><option key={p}>{p}</option>)}
+                </select>
+              )}
             </label>
           </div>)}
           <label>Warum ist der Run gescheitert?
