@@ -2,6 +2,7 @@ import React, {useState} from "react";
 import {championRoster, drawChampionLottery, drawStarterLottery, recordArenaChoice,
   setWheelEffectDetail, WHEEL_RESULTS, WHEEL_REWARD_KINDS} from "./core";
 import WheelRewardChoice from "./WheelRewardChoice";
+import GenlockePokemonSelect from "./GenlockePokemonSelect";
 
 const panel={background:"#14223b",border:"1px solid #3c5070",borderRadius:12,padding:14};
 const field={background:"#182a46",color:"#edf4ff",border:"1px solid #7188ab",padding:"8px 10px",borderRadius:8,maxWidth:"100%"};
@@ -53,7 +54,11 @@ export default function GenlockeExtras({save,persist,run}){
         {stage.starterDraws?.[lotteryPlayer]
           ?<p style={{color:"#ffdc8c"}}>Ausgelost: <strong>{stage.starterDraws[lotteryPlayer].chosen}</strong></p>
           :<div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
-            {starters.map((mon,i)=><input key={i} style={field} value={mon} onChange={e=>setStarters(arr=>arr.map((v,j)=>j===i?e.target.value:v))} placeholder={"Starter "+(i+1)}/>)}
+            {starters.map((mon,i)=><div key={i} style={{flex:"1 1 190px",minWidth:175}}>
+              <GenlockePokemonSelect edition={stage.edition} value={mon}
+                onChange={value=>setStarters(arr=>arr.map((v,j)=>j===i?value:v))}
+                placeholder={"Starter "+(i+1)+" suchen …"} ariaLabel={"Starter "+(i+1)}/>
+            </div>)}
             <button style={action} onClick={doStarter}>Starter auslosen</button>
           </div>}
       </section>}
