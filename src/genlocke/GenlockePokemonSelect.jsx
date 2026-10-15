@@ -5,15 +5,17 @@ import { versionToPokedex } from "../data/versionToPokedex";
 // Same searchable, creatable Select component as the normal encounter table.
 // The options come from the same edition-specific Pokédex, including randomizer
 // Pokémon beyond the vanilla regional Pokédex when supplied by the version map.
+export function genlockePokemonOptionsForEdition(edition) {
+  const dex = versionToPokedex[edition] || {};
+  return [...new Set(Object.values(dex).filter(Boolean))]
+    .map(name => ({ value: name, label: name }));
+}
+
 export default function GenlockePokemonSelect({
   edition, value = "", onChange, placeholder = "Pokémon eingeben …",
   disabled = false, ariaLabel = "Pokémon auswählen",
 }) {
-  const options = useMemo(() => {
-    const dex = versionToPokedex[edition] || {};
-    return [...new Set(Object.values(dex).filter(Boolean))]
-      .map(name => ({ value: name, label: name }));
-  }, [edition]);
+  const options = useMemo(() => genlockePokemonOptionsForEdition(edition), [edition]);
   const selected = value ? options.find(option => option.value === value)
     || { value, label: value } : null;
 
