@@ -121,7 +121,7 @@ export default function TypeEffectivenessGame() {
   }
   function effectiveRuleGen() {
     if (settings.ruleGen !== "auto") return Number(settings.ruleGen);
-    return Math.max(1, ...settings.pokemonGens);
+    return settings.questionMode === "types" ? 9 : Math.max(1, ...settings.pokemonGens);
   }
 
   function buildQueue(ruleGen) {
