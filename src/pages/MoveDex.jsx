@@ -1,5 +1,6 @@
 // src/pages/MoveDex.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { GenerationStarter } from "../games/GenerationFilter";
 import { useNavigate, useLocation } from "react-router-dom";
 import dexBg from "../assets/DexBackground.png";
 
@@ -562,6 +563,8 @@ if (allowedSet && allowedSet.size > 0) {
               Generation
             </div>
 
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <GenerationStarter gen={gen === 72 ? 7 : gen} />
             <select
               className="mdx-select"
               value={gen}
@@ -573,6 +576,7 @@ if (allowedSet && allowedSet.size > 0) {
                 </option>
               ))}
             </select>
+            </div>
           </div>
 
           <div>
