@@ -91,6 +91,11 @@ export default function TypeEffectivenessGame() {
   function updateSetting(key, value) {
     setSettings((previous) => {
       const updated = { ...previous, [key]: value };
+      // 4× und ¼× sind nur mit zwei Verteidigungstypen möglich.
+      if (updated.targetKind === "single" && ["4", "0.25"].includes(updated.multiplier)) {
+        if (key === "targetKind") updated.multiplier = "mixed";
+        else updated.targetKind = "dual";
+      }
       try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated)); } catch { /* optional */ }
       return updated;
     });
@@ -188,7 +193,10 @@ export default function TypeEffectivenessGame() {
                 <select value={settings.multiplier} onChange={(event) => updateSetting("multiplier", event.target.value)}>
                   <option value="mixed">Gemischt (alle Multiplikatoren)</option>
                   {DAMAGE_OPTIONS.map((item) => (
-                    <option key={item.key} value={item.key}>{item.label}</option>
+                    <option key={item.key} value={item.key}
+                      disabled={settings.targetKind === "single" && (item.multiplier === 4 || item.multiplier === 0.25)}>
+                      {item.label}
+                    </option>
                   ))}
                 </select>
               </span>
@@ -219,6 +227,7 @@ export default function TypeEffectivenessGame() {
               passende Verteidigungstypen. Bei „Verteidigung“ siehst du die Typen eines
               Pokémon und wählst alle Angriffstypen mit dem angegebenen Schaden.
               Bei Zweier-Kombinationen stehen übersichtliche Antwortmöglichkeiten zur Auswahl.
+              4× und ¼× Schaden sind nur bei zwei Verteidigungstypen möglich.
             </div>
             {setupError ? <p className="type-trainer-settings-error type-trainer-wide" role="alert">{setupError}</p> : null}
             <div className="type-trainer-setup-footer">
