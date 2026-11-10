@@ -1,5 +1,6 @@
 // src/pages/PokemonInfo.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import { GenerationStarter } from "../games/GenerationFilter";
 import { useParams, useNavigate } from "react-router-dom";
 import dexBg from "../assets/DexBackground.png";
 
@@ -1870,6 +1871,8 @@ useEffect(() => {
                     <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
                       <div style={{ opacity: 0.82, fontWeight: 950, fontSize: 13 }}>Generation</div>
 
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <GenerationStarter gen={selectedGen} />
                       <label className="pinfo-gen-select-wrap">
                         <select
                           className="pinfo-gen-select"
@@ -1889,6 +1892,7 @@ useEffect(() => {
 
                         <span className="pinfo-gen-chevron">▼</span>
                       </label>
+                      </div>
                     </div>
 
                     {/* Level Simulation */}
