@@ -162,3 +162,130 @@ export function buildPokemonIdDeck(generations) {
   });
   return shuffleItems(ids);
 }
+
+
+// Generation-aware effectiveness (Gen 1, Gen 2–5, Gen 6+).
+export function getGenerationTypes(gen) {
+  return POKEMON_TYPES.filter((type) =>
+    Number(gen) >= 6 || (Number(gen) >= 2
+      ? type.key !== "fairy"
+      : !["fairy", "dark", "steel"].includes(type.key)));
+}
+
+export function getTypeMultiplierForGeneration(attackingType, defendingTypes, generation = 9) {
+  const gen = Math.max(1, Math.min(9, Number(generation) || 9));
+  const types = Array.isArray(defendingTypes) ? defendingTypes : [defendingTypes];
+  const valid = new Set(getGenerationTypes(gen).map((type) => type.key));
+  if (!valid.has(attackingType) || types.some((t) => !valid.has(t))) return null;
+  return types.reduce((multiplier, defendingType) => {
+    let value = getTypeMultiplier(attackingType, defendingType);
+    if (gen <= 5 && defendingType === "steel" && ["dark", "ghost"].includes(attackingType)) value = 0.5;
+    if (gen === 1) {
+      if (attackingType === "bug" && defendingType === "poison") value = 2;
+      if (attackingType === "poison" && defendingType === "bug") value = 2;
+      if (attackingType === "ghost" && defendingType === "psychic") value = 0;
+      if (attackingType === "ice" && defendingType === "fire") value = 1;
+    }
+    return multiplier * value;
+  }, 1);
+}
+
+const ROMAN_GEN = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9 };
+export function getPokemonTypesForGeneration(pokemonData, generation = 9) {
+  const gen = Math.max(1, Math.min(9, Number(generation) || 9));
+  const versions = (pokemonData?.past_types || [])
+    .map((entry) => ({
+      gen: ROMAN_GEN[String(entry?.generation?.name || "").replace("generation-", "")] || 0,
+      types: entry.types,
+    }))
+    .filter((entry) => entry.gen >= gen && Array.isArray(entry.types) && entry.types.length)
+    .sort((a, b) => a.gen - b.gen);
+  const source = versions[0]?.types || pokemonData?.types || [];
+  return [...source].sort((a, b) => a.slot - b.slot)
+    .map((item) => item.type?.name)
+    .filter((name) => getGenerationTypes(gen).some((item) => item.key === name));
+}
+
+function defenseChoices(ruleGen, count) {
+  const types = getGenerationTypes(ruleGen);
+  if (count === "single") return types.map((t) => ({ key: t.key, types: [t.key] }));
+  return types.flatMap((left, i) => types.slice(i + 1).map((right) => ({
+    key: left.key + "/" + right.key, types: [left.key, right.key],
+  })));
+}
+
+export function createTrainingDeck({ direction = "mixed", targetKind = "mixed", multiplier = "mixed", ruleGen = 9 } = {}) {
+  const directions = direction === "mixed" ? ["attack", "defend"] : [direction];
+  const kinds = targetKind === "mixed" ? ["single", "dual"] : [targetKind];
+  const damages = multiplier === "mixed"
+    ? [0, .25, .5, 1, 2, 4]
+    : [Number(multiplier)];
+  const attackers = getGenerationTypes(ruleGen).map((type) => type.key);
+  const deck = [];
+  directions.forEach((dir) => kinds.forEach((kind) => {
+    const defenses = defenseChoices(ruleGen, kind);
+    if (dir === "attack") {
+      attackers.forEach((attackType) => damages.forEach((damage) => {
+        if (defenses.some((option) => getTypeMultiplierForGeneration(attackType, option.types, ruleGen) === damage)) {
+          deck.push({ direction: dir, attackType, targetKind: kind, multiplier: damage, ruleGen });
+        }
+      }));
+    } else {
+      defenses.forEach((defense) => damages.forEach((damage) => {
+        if (attackers.some((attackType) => getTypeMultiplierForGeneration(attackType, defense.types, ruleGen) === damage)) {
+          deck.push({ direction: dir, defendingTypes: defense.types, targetKind: kind, multiplier: damage, ruleGen });
+        }
+      }));
+    }
+  }));
+  return shuffleItems(deck);
+}
+
+export function createTrainingChoices(question, { answerMode = "classic", difficulty = "normal" } = {}) {
+  const ruleGen = question.ruleGen || 9;
+  const candidates = question.pokemonTypes
+    ? defenseChoices(ruleGen, "single")
+    : question.direction === "attack"
+      ? defenseChoices(ruleGen, question.targetKind)
+      : defenseChoices(ruleGen, "single");
+  const effect = (candidate) => question.pokemonTypes
+    ? getTypeMultiplierForGeneration(candidate.types[0], question.pokemonTypes, ruleGen)
+    : question.direction === "attack"
+      ? getTypeMultiplierForGeneration(question.attackType, candidate.types, ruleGen)
+      : getTypeMultiplierForGeneration(candidate.types[0], question.defendingTypes, ruleGen);
+  const isRight = (option) => question.pokemonTypes
+    ? effect(option) >= 2
+    : effect(option) === question.multiplier;
+  const good = shuffleItems(candidates.filter(isRight));
+  const wrong = shuffleItems(candidates.filter((item) => !isRight(item)));
+  if (!good.length) return { choices: [], answers: [] };
+  const count = difficulty === "easy" ? 6 : difficulty === "hard" ? 12 : 9;
+  let rightCount = answerMode === "all"
+    ? Math.min(good.length, difficulty === "hard" ? 8 : difficulty === "normal" ? 6 : 4)
+    : answerMode === "one" ? 1 : answerMode === "two" ? 2 : (difficulty === "easy" ? 1 : Math.random() < .5 ? 1 : 2);
+  rightCount = Math.max(1, Math.min(rightCount, good.length, count - 2));
+  if (answerMode === "all" && question.direction === "defend" && !question.pokemonTypes) {
+    // If all single-type choices are shown, they should all be judged.
+    rightCount = Math.min(good.length, count - 2);
+  }
+  const chosenRight = good.slice(0, rightCount);
+  let chosenWrong;
+  const wrongCount = Math.min(wrong.length, count - rightCount);
+  if (difficulty === "easy") {
+    chosenWrong = wrong.slice(0, wrongCount);
+  } else {
+    // Prefer plausible near-misses, e.g. 2x candidates in a 4x question.
+    const target = question.pokemonTypes ? 2 : question.multiplier;
+    const closeness = (value) => {
+      if (value === 0) return target === 0 ? 0 : 5;
+      if (target === 0) return 4;
+      return Math.abs(Math.log2(value) - Math.log2(target));
+    };
+    const sorted = [...wrong].sort((a, b) => closeness(effect(a)) - closeness(effect(b)));
+    const trickyCount = difficulty === "hard" ? Math.ceil(wrongCount * .85) : Math.ceil(wrongCount * .55);
+    chosenWrong = sorted.slice(0, trickyCount);
+    chosenWrong.push(...wrong.filter((candidate) => !chosenWrong.includes(candidate)).slice(0, wrongCount - chosenWrong.length));
+  }
+  const choices = shuffleItems([...chosenRight, ...chosenWrong]);
+  return { choices, answers: chosenRight.map((choice) => choice.key) };
+}
