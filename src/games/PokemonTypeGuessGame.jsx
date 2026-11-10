@@ -1,11 +1,22 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { POKEMON_TYPES, buildPokemonIdDeck, getTypeColor, getTypeLabel } from "./typeTrainerData";
+import { POKEMON_TYPES, buildPokemonIdDeck, getTypeColor, getTypeLabel, getTypeIconUrl } from "./typeTrainerData";
 import "./typeTrainer.css";
 
 const CACHE_PREFIX = "ponuz-type-trainer-pokemon-v1-";
 const HIGHSCORE_KEY = "ponuz-type-trainer-pokemon-best-v1";
 const ALL_GENS = [1,2,3,4,5,6,7,8,9];
+const SETTINGS_KEY = "ponuz-type-trainer-pokemon-settings-v1";
+function readSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+    const generations = Array.isArray(saved?.generations)
+      ? [...new Set(saved.generations.map(Number).filter((gen) => ALL_GENS.includes(gen)))].sort((a, b) => a - b)
+      : [1, 2, 3];
+    const rounds = [0, 10, 20, 30].includes(Number(saved?.rounds)) ? Number(saved.rounds) : 10;
+    return { generations, rounds };
+  } catch { return { generations: [1, 2, 3], rounds: 10 }; }
+}
 
 function readBest() {
   try { return Number(localStorage.getItem(HIGHSCORE_KEY)) || 0; }
@@ -47,8 +58,8 @@ async function fetchPokemon(id) {
 
 export default function PokemonTypeGuessGame() {
   const navigate = useNavigate();
-  const [generations, setGenerations] = useState([1, 2, 3]);
-  const [roundLimit, setRoundLimit] = useState(10);
+  const [generations, setGenerations] = useState(() => readSettings().generations);
+  const [roundLimit, setRoundLimit] = useState(() => readSettings().rounds);
   const [started, setStarted] = useState(false);
   const [finished, setFinished] = useState(false);
   const [round, setRound] = useState(1);
@@ -64,6 +75,10 @@ export default function PokemonTypeGuessGame() {
   const fetchSequence = useRef(0);
 
   useEffect(() => () => { fetchSequence.current += 1; }, []);
+  useEffect(() => {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ generations, rounds: roundLimit })); }
+    catch { /* optional */ }
+  }, [generations, roundLimit]);
 
   async function loadNextPokemon() {
     const requestId = ++fetchSequence.current;
@@ -157,7 +172,7 @@ export default function PokemonTypeGuessGame() {
           <button type="button" className="type-trainer-back" onClick={() => navigate("/games/type-trainer")}>
             <span aria-hidden="true">‹</span> Zurück
           </button>
-          <span className="type-trainer-eyebrow">Typen-Trainer · Pokémon-Typen</span>
+          <button type="button" className="type-trainer-home-link" onClick={() => navigate("/")}>Zur Startseite</button>
         </div>
         <h1>Pokémon-Typen erraten</h1>
         <p className="type-trainer-subtitle">
@@ -186,11 +201,14 @@ export default function PokemonTypeGuessGame() {
             </div>
             <label className="type-trainer-field">
               <span>Runden</span>
+              <span className="type-trainer-select-shell">
               <select value={roundLimit} onChange={(event) => setRoundLimit(Number(event.target.value))}>
                 <option value={10}>10 Runden</option>
                 <option value={20}>20 Runden</option>
+                <option value={30}>30 Runden</option>
                 <option value={0}>Endlos (bis zum Pool-Ende)</option>
               </select>
+              </span>
             </label>
             <div className="type-trainer-setup-footer">
               <span>Bisheriger Rekord: <strong>{best} Punkte</strong></span>
@@ -241,6 +259,7 @@ export default function PokemonTypeGuessGame() {
                       <div className="type-trainer-answer-types">
                         {pokemon.types.map((type) => (
                           <span key={type} className="type-trainer-type is-answer" style={{ "--tt-color": getTypeColor(type) }}>
+                            <img className="type-trainer-type-icon" src={getTypeIconUrl(type)} alt="" />
                             {getTypeLabel(type)}
                           </span>
                         ))}
@@ -262,7 +281,7 @@ export default function PokemonTypeGuessGame() {
                           feedback && picked && !isAnswer ? "is-wrong" : "",
                         ].filter(Boolean).join(" ")}
                         style={{ "--tt-color": type.color }}>
-                        <span className="type-trainer-type-dot" aria-hidden="true" />
+                        <img className="type-trainer-type-icon" src={getTypeIconUrl(type.key)} alt="" loading="lazy" />
                         {type.label}
                         {isAnswer ? <span className="type-trainer-answer-mark">✓</span> : null}
                         {feedback && picked && !isAnswer ? <span className="type-trainer-answer-mark">×</span> : null}
