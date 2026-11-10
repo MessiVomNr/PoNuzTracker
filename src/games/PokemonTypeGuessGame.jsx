@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { POKEMON_TYPES, buildPokemonIdDeck, getTypeColor, getTypeLabel, getTypeIconUrl } from "./typeTrainerData";
+import { getGenerationTypes, buildPokemonIdDeck, getTypeColor, getTypeLabel, getTypeIconUrl } from "./typeTrainerData";
+import { loadTrainerPokemon } from "./trainerPokemonApi";
+import { GenerationFilter } from "./GenerationFilter";
 import "./typeTrainer.css";
 
-const CACHE_PREFIX = "ponuz-type-trainer-pokemon-v1-";
 const HIGHSCORE_KEY = "ponuz-type-trainer-pokemon-best-v1";
 const ALL_GENS = [1,2,3,4,5,6,7,8,9];
 const SETTINGS_KEY = "ponuz-type-trainer-pokemon-settings-v1";
@@ -14,8 +15,10 @@ function readSettings() {
       ? [...new Set(saved.generations.map(Number).filter((gen) => ALL_GENS.includes(gen)))].sort((a, b) => a - b)
       : [1, 2, 3];
     const rounds = [0, 10, 20, 30].includes(Number(saved?.rounds)) ? Number(saved.rounds) : 10;
-    return { generations, rounds };
-  } catch { return { generations: [1, 2, 3], rounds: 10 }; }
+    const ruleGen = saved?.ruleGen === "auto" || ALL_GENS.some((gen) => String(gen) === String(saved?.ruleGen))
+      ? String(saved.ruleGen) : "auto";
+    return { generations, rounds, ruleGen };
+  } catch { return { generations: [1, 2, 3], rounds: 10, ruleGen: "auto" }; }
 }
 
 function readBest() {
@@ -23,43 +26,12 @@ function readBest() {
   catch { return 0; }
 }
 
-async function fetchPokemon(id) {
-  const key = CACHE_PREFIX + id;
-  try {
-    const cached = localStorage.getItem(key);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (parsed?.types?.length && parsed?.image) return parsed;
-    }
-  } catch { /* cache optional */ }
-
-  const baseUrl = "https://pokeapi.co/api/v2";
-  const [pokemonResponse, speciesResponse] = await Promise.all([
-    fetch(baseUrl + "/pokemon/" + id),
-    fetch(baseUrl + "/pokemon-species/" + id),
-  ]);
-  if (!pokemonResponse.ok || !speciesResponse.ok) throw new Error("Pokémon-Daten konnten nicht geladen werden.");
-  const [pokemon, species] = await Promise.all([pokemonResponse.json(), speciesResponse.json()]);
-  const name = species.names?.find((entry) => entry.language?.name === "de")?.name
-    || species.names?.find((entry) => entry.language?.name === "en")?.name
-    || pokemon.name;
-  const types = [...(pokemon.types || [])]
-    .sort((a, b) => a.slot - b.slot)
-    .map((entry) => entry.type.name)
-    .filter((type) => POKEMON_TYPES.some((candidate) => candidate.key === type));
-  const image = pokemon.sprites?.other?.["official-artwork"]?.front_default
-    || pokemon.sprites?.front_default
-    || "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/" + id + ".png";
-  if (!types.length) throw new Error("Für dieses Pokémon sind keine Typen vorhanden.");
-  const result = { id, name, types, image };
-  try { localStorage.setItem(key, JSON.stringify(result)); } catch { /* cache optional */ }
-  return result;
-}
-
 export default function PokemonTypeGuessGame() {
   const navigate = useNavigate();
   const [generations, setGenerations] = useState(() => readSettings().generations);
   const [roundLimit, setRoundLimit] = useState(() => readSettings().rounds);
+  const [ruleGen, setRuleGen] = useState(() => readSettings().ruleGen);
+  const activeRuleGen = ruleGen === "auto" ? Math.max(1, ...generations) : Number(ruleGen);
   const [started, setStarted] = useState(false);
   const [finished, setFinished] = useState(false);
   const [round, setRound] = useState(1);
@@ -76,9 +48,9 @@ export default function PokemonTypeGuessGame() {
 
   useEffect(() => () => { fetchSequence.current += 1; }, []);
   useEffect(() => {
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ generations, rounds: roundLimit })); }
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ generations, rounds: roundLimit, ruleGen })); }
     catch { /* optional */ }
-  }, [generations, roundLimit]);
+  }, [generations, roundLimit, ruleGen]);
 
   async function loadNextPokemon() {
     const requestId = ++fetchSequence.current;
@@ -93,7 +65,7 @@ export default function PokemonTypeGuessGame() {
         if (!deckRef.current.length) break;
         const id = deckRef.current.pop();
         try {
-          const next = await fetchPokemon(id);
+          const next = await loadTrainerPokemon(id, activeRuleGen);
           if (requestId !== fetchSequence.current) return;
           setPokemon(next);
           return;
@@ -110,8 +82,8 @@ export default function PokemonTypeGuessGame() {
   }
 
   function begin() {
-    if (!generations.length) return;
-    deckRef.current = buildPokemonIdDeck(generations);
+    if (!generations.length || !generations.some((gen) => gen <= activeRuleGen)) return;
+    deckRef.current = buildPokemonIdDeck(generations.filter((gen) => gen <= activeRuleGen));
     setRound(1);
     setScore(0);
     setCorrectCount(0);
@@ -177,28 +149,29 @@ export default function PokemonTypeGuessGame() {
         <h1>Pokémon-Typen erraten</h1>
         <p className="type-trainer-subtitle">
           Schau dir das Pokémon an und wähle seinen Typ oder seine beiden Typen.
-          Es gelten die Standardformen und ihre aktuellen Typen.
+          Die Typen richten sich nach deinem ausgewählten Spielstand.
         </p>
 
         {!started ? (
           <div className="type-trainer-setup">
             <div className="type-trainer-wide">
               <span className="type-trainer-field-title">Generationen auswählen</span>
-              <div className="type-trainer-generation-grid">
-                {ALL_GENS.map((gen) => (
-                  <button key={gen} type="button" aria-pressed={generations.includes(gen)}
-                    className={"type-trainer-generation " + (generations.includes(gen) ? "is-active" : "")}
-                    onClick={() => toggleGeneration(gen)}>
-                    Gen {gen}
-                  </button>
-                ))}
-              </div>
-              <div className="type-trainer-inline">
-                <button type="button" className="type-trainer-link" onClick={() => setGenerations(ALL_GENS)}>Alle auswählen</button>
-                <button type="button" className="type-trainer-link" onClick={() => setGenerations([1])}>Nur Gen 1</button>
-                <button type="button" className="type-trainer-link" onClick={() => setGenerations([])}>Auswahl leeren</button>
-              </div>
+              <GenerationFilter generations={generations}
+                onToggle={toggleGeneration}
+                onOnly={(gen) => setGenerations([gen])}
+                onAll={() => setGenerations(ALL_GENS)}
+                onClear={() => setGenerations([])}
+              />
             </div>
+            <label className="type-trainer-field">
+              <span>Typenstand</span>
+              <span className="type-trainer-select-shell">
+                <select value={ruleGen} onChange={(event) => setRuleGen(event.target.value)}>
+                  <option value="auto">Automatisch (höchste ausgewählte Gen)</option>
+                  {ALL_GENS.map((gen) => <option value={String(gen)} key={gen}>Generation {gen}</option>)}
+                </select>
+              </span>
+            </label>
             <label className="type-trainer-field">
               <span>Runden</span>
               <span className="type-trainer-select-shell">
@@ -212,7 +185,7 @@ export default function PokemonTypeGuessGame() {
             </label>
             <div className="type-trainer-setup-footer">
               <span>Bisheriger Rekord: <strong>{best} Punkte</strong></span>
-              <button type="button" className="type-trainer-primary" disabled={!generations.length} onClick={begin}>Training starten</button>
+              <button type="button" className="type-trainer-primary" disabled={!generations.some((gen) => gen <= activeRuleGen)} onClick={begin}>Training starten</button>
             </div>
           </div>
         ) : finished ? (
@@ -268,7 +241,7 @@ export default function PokemonTypeGuessGame() {
                   </div>
                 </div>
                 <div className="type-trainer-type-grid" role="group" aria-label="Pokémon-Typen wählen">
-                  {POKEMON_TYPES.map((type) => {
+                  {getGenerationTypes(activeRuleGen).map((type) => {
                     const picked = selected.includes(type.key);
                     const isAnswer = feedback && pokemon.types.includes(type.key);
                     return (
