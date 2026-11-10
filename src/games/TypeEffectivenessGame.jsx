@@ -1,75 +1,132 @@
 import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  POKEMON_TYPES, RELATION_OPTIONS, buildTypeQuestionDeck,
-  getMatchingTypes, getTypeColor, getTypeLabel,
+  POKEMON_TYPES, DAMAGE_OPTIONS, buildTypeQuestionDeck,
+  getQuestionChoices, choiceMatchesQuestion, formatMultiplier,
+  getTypeColor, getTypeLabel, getTypeIconUrl,
 } from "./typeTrainerData";
 import "./typeTrainer.css";
 
+const SETTINGS_KEY = "ponuz-type-trainer-settings-v2";
 const HIGHSCORE_KEY = "ponuz-type-trainer-effectiveness-best-v1";
+const DEFAULT_SETTINGS = { direction: "mixed", multiplier: "mixed", targetKind: "mixed", rounds: 10 };
 
 function readHighscore() {
   try { return Number(localStorage.getItem(HIGHSCORE_KEY)) || 0; }
   catch { return 0; }
 }
+function readSettings() {
+  try {
+    const value = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+    if (!value || typeof value !== "object") return DEFAULT_SETTINGS;
+    return {
+      direction: ["mixed", "attack", "defend"].includes(value.direction) ? value.direction : "mixed",
+      multiplier: ["mixed", ...DAMAGE_OPTIONS.map((item) => item.key)].includes(value.multiplier) ? value.multiplier : "mixed",
+      targetKind: ["mixed", "single", "dual"].includes(value.targetKind) ? value.targetKind : "mixed",
+      rounds: [0, 10, 20, 30].includes(Number(value.rounds)) ? Number(value.rounds) : 10,
+    };
+  } catch { return DEFAULT_SETTINGS; }
+}
+
+function TypeLogo({ typeKey }) {
+  return (
+    <span className="type-trainer-logo-name" style={{ "--tt-color": getTypeColor(typeKey) }}>
+      <img src={getTypeIconUrl(typeKey)} alt="" loading="lazy" className="type-trainer-type-icon" />
+      <span>{getTypeLabel(typeKey)}</span>
+    </span>
+  );
+}
+
+function ChoiceButton({ choice, selected, feedback, correct, onClick }) {
+  const wrong = Boolean(feedback && selected && !correct);
+  return (
+    <button type="button" aria-pressed={selected} disabled={Boolean(feedback)}
+      className={[
+        "type-trainer-type", choice.types.length > 1 ? "type-trainer-dual-choice" : "",
+        selected ? "is-selected" : "",
+        feedback && correct ? "is-answer" : "",
+        wrong ? "is-wrong" : "",
+      ].filter(Boolean).join(" ")}
+      style={{ "--tt-color": getTypeColor(choice.types[0]) }} onClick={onClick}>
+      <span className="type-trainer-choice-label">
+        {choice.types.map((key) => <TypeLogo key={key} typeKey={key} />)}
+      </span>
+      {feedback && correct ? <span className="type-trainer-answer-mark" aria-label="Richtig">✓</span> : null}
+      {wrong ? <span className="type-trainer-answer-mark" aria-label="Falsch">×</span> : null}
+    </button>
+  );
+}
 
 function questionText(question) {
-  const typeName = getTypeLabel(question.type);
-  if (question.direction === "defender") {
-    if (question.relation === "strong") return "Welche Angriffstypen treffen " + typeName + " sehr effektiv?";
-    if (question.relation === "weak") return "Welche Angriffstypen treffen " + typeName + " nicht sehr effektiv?";
-    return "Gegen welche Angriffstypen ist " + typeName + " immun?";
+  const multiplier = formatMultiplier(question.multiplier);
+  if (question.direction === "attack") {
+    if (question.targetKind === "dual") {
+      return "Welche der folgenden Typenkombinationen nehmen durch " +
+        getTypeLabel(question.attackType) + "-Attacken " + multiplier + " Schaden?";
+    }
+    return "Welche einzelnen Pokémon-Typen nehmen durch " +
+      getTypeLabel(question.attackType) + "-Attacken " + multiplier + " Schaden?";
   }
-  if (question.relation === "strong") return "Welche Typen trifft " + typeName + " sehr effektiv?";
-  if (question.relation === "weak") return "Welche Typen trifft " + typeName + " nicht sehr effektiv?";
-  return "Gegen welche Typen sind " + typeName + "-Attacken wirkungslos?";
+  const types = question.defendingTypes.map(getTypeLabel).join(" / ");
+  return "Welche Angriffstypen verursachen " + multiplier +
+    " Schaden gegen ein Pokémon vom Typ " + types + "?";
 }
 
 export default function TypeEffectivenessGame() {
   const navigate = useNavigate();
-  const [direction, setDirection] = useState("mixed");
-  const [relation, setRelation] = useState("mixed");
-  const [roundLimit, setRoundLimit] = useState(10);
+  const [settings, setSettings] = useState(readSettings);
   const [started, setStarted] = useState(false);
   const [finished, setFinished] = useState(false);
   const [round, setRound] = useState(1);
   const [question, setQuestion] = useState(null);
+  const [choices, setChoices] = useState([]);
   const [selected, setSelected] = useState([]);
   const [feedback, setFeedback] = useState(null);
   const [score, setScore] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [highscore, setHighscore] = useState(readHighscore);
+  const [setupError, setSetupError] = useState("");
   const deckRef = useRef([]);
 
-  function getNextQuestion() {
-    if (!deckRef.current.length) {
-      deckRef.current = buildTypeQuestionDeck(direction, relation);
-    }
-    return deckRef.current.pop() || null;
+  function updateSetting(key, value) {
+    setSettings((previous) => {
+      const updated = { ...previous, [key]: value };
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated)); } catch { /* optional */ }
+      return updated;
+    });
+    setSetupError("");
+  }
+
+  function presentQuestion(nextQuestion) {
+    setQuestion(nextQuestion);
+    setChoices(nextQuestion ? getQuestionChoices(nextQuestion) : []);
+    setSelected([]);
+    setFeedback(null);
   }
 
   function startGame() {
-    deckRef.current = buildTypeQuestionDeck(direction, relation);
+    const deck = buildTypeQuestionDeck(settings.direction, settings.multiplier, settings.targetKind);
+    if (!deck.length) {
+      setSetupError("Für diese Einstellungen gibt es keine passenden Fragen. Bitte eine andere Kombination wählen.");
+      return;
+    }
+    deckRef.current = deck;
     setRound(1);
     setScore(0);
     setCorrectCount(0);
-    setSelected([]);
-    setFeedback(null);
     setFinished(false);
-    setQuestion(getNextQuestion());
+    presentQuestion(deckRef.current.pop());
     setStarted(true);
   }
 
   function submit() {
     if (!question || feedback || !selected.length) return;
-    const answers = getMatchingTypes(question);
-    const correct = answers.length === selected.length
-      && answers.every((type) => selected.includes(type));
+    const answers = choices.filter((choice) => choiceMatchesQuestion(question, choice)).map((choice) => choice.key);
+    const correct = answers.length === selected.length && answers.every((key) => selected.includes(key));
     const nextScore = score + (correct ? 100 : 0);
     setScore(nextScore);
     if (correct) setCorrectCount((value) => value + 1);
     setFeedback({ correct, answers });
-
     if (nextScore > highscore) {
       setHighscore(nextScore);
       try { localStorage.setItem(HIGHSCORE_KEY, String(nextScore)); } catch { /* optional */ }
@@ -78,25 +135,24 @@ export default function TypeEffectivenessGame() {
 
   function next() {
     if (!feedback) return;
-    if (roundLimit && round >= roundLimit) {
+    if ((settings.rounds && round >= settings.rounds) || !deckRef.current.length) {
       setFinished(true);
       return;
     }
     setRound((value) => value + 1);
-    setQuestion(getNextQuestion());
-    setSelected([]);
-    setFeedback(null);
+    presentQuestion(deckRef.current.pop());
   }
 
   function toggle(key) {
     if (feedback) return;
-    setSelected((values) => values.includes(key)
-      ? values.filter((value) => value !== key)
-      : [...values, key]);
+    setSelected((current) => current.includes(key)
+      ? current.filter((item) => item !== key)
+      : [...current, key]);
   }
 
-  const category = RELATION_OPTIONS.find((item) => item.key === question?.relation);
-  const roundDescription = question?.direction === "defender" ? "Angriffe auf den Typ" : "Angriffe mit dem Typ";
+  const focusTypes = question
+    ? question.direction === "attack" ? [question.attackType] : question.defendingTypes
+    : [];
 
   return (
     <main className="games-page type-trainer-page">
@@ -105,41 +161,66 @@ export default function TypeEffectivenessGame() {
           <button type="button" className="type-trainer-back" onClick={() => navigate("/games/type-trainer")}>
             <span aria-hidden="true">‹</span> Zurück
           </button>
-          <span className="type-trainer-eyebrow">Typen-Trainer · Effektivität</span>
+          <button type="button" className="type-trainer-home-link" onClick={() => navigate("/")}>Zur Startseite</button>
         </div>
+        <p className="type-trainer-eyebrow">Typen-Trainer / Effektivität</p>
         <h1>Typen-Matchups</h1>
         <p className="type-trainer-subtitle">
-          Finde alle passenden Typen. Mehrere Antworten können richtig sein.
-          Es gilt die normale Typentabelle ab Generation 6, ohne Fähigkeiten oder Items.
+          Wähle alle passenden Antworten. Es gilt die aktuelle Typentabelle ohne Fähigkeiten,
+          Items oder andere Effekte. Zwei Verteidigungstypen werden miteinander verrechnet.
         </p>
 
         {!started ? (
           <div className="type-trainer-setup">
             <label className="type-trainer-field">
               <span>Fragerichtung</span>
-              <select value={direction} onChange={(event) => setDirection(event.target.value)}>
-                <option value="mixed">Gemischt</option>
-                <option value="defender">Was trifft diesen Typ?</option>
-                <option value="attacker">Wen trifft dieser Typ?</option>
-              </select>
+              <span className="type-trainer-select-shell">
+                <select value={settings.direction} onChange={(event) => updateSetting("direction", event.target.value)}>
+                  <option value="mixed">Gemischt</option>
+                  <option value="attack">Angriff → Was trifft der Typ?</option>
+                  <option value="defend">Verteidigung → Was trifft den Typ?</option>
+                </select>
+              </span>
             </label>
             <label className="type-trainer-field">
-              <span>Effektivität</span>
-              <select value={relation} onChange={(event) => setRelation(event.target.value)}>
-                <option value="mixed">Gemischt</option>
-                <option value="strong">Sehr effektiv (2×)</option>
-                <option value="weak">Nicht sehr effektiv (½×)</option>
-                <option value="immune">Immunität (0×)</option>
-              </select>
+              <span>Schadensfaktor</span>
+              <span className="type-trainer-select-shell">
+                <select value={settings.multiplier} onChange={(event) => updateSetting("multiplier", event.target.value)}>
+                  <option value="mixed">Gemischt (alle Multiplikatoren)</option>
+                  {DAMAGE_OPTIONS.map((item) => (
+                    <option key={item.key} value={item.key}>{item.label}</option>
+                  ))}
+                </select>
+              </span>
+            </label>
+            <label className="type-trainer-field">
+              <span>Verteidigungstypen</span>
+              <span className="type-trainer-select-shell">
+                <select value={settings.targetKind} onChange={(event) => updateSetting("targetKind", event.target.value)}>
+                  <option value="mixed">Einzeltypen und Kombinationen</option>
+                  <option value="single">Nur einzelne Typen</option>
+                  <option value="dual">Nur Zweier-Kombinationen</option>
+                </select>
+              </span>
             </label>
             <label className="type-trainer-field">
               <span>Runden</span>
-              <select value={roundLimit} onChange={(event) => setRoundLimit(Number(event.target.value))}>
-                <option value={10}>10 Runden</option>
-                <option value={20}>20 Runden</option>
-                <option value={0}>Endlos</option>
-              </select>
+              <span className="type-trainer-select-shell">
+                <select value={settings.rounds} onChange={(event) => updateSetting("rounds", Number(event.target.value))}>
+                  <option value={10}>10 Runden</option>
+                  <option value={20}>20 Runden</option>
+                  <option value={30}>30 Runden</option>
+                  <option value={0}>Endlos (bis alle Fragen gespielt sind)</option>
+                </select>
+              </span>
             </label>
+            <div className="type-trainer-setup-note type-trainer-wide">
+              <strong>So funktioniert es:</strong> Bei „Angriff“ siehst du einen Angriffstyp und suchst
+              passende Verteidigungstypen. Bei „Verteidigung“ siehst du die Typen eines
+              Pokémon und wählst alle Angriffstypen mit dem angegebenen Schaden.
+              Bei Zweier-Kombinationen stehen übersichtliche Antwortmöglichkeiten zur Auswahl.
+            </div>
+            {setupError ? <p className="type-trainer-settings-error type-trainer-wide" role="alert">{setupError}</p> : null}
             <div className="type-trainer-setup-footer">
               <span>Bisheriger Rekord: <strong>{highscore} Punkte</strong></span>
               <button type="button" className="type-trainer-primary" onClick={startGame}>Training starten</button>
@@ -158,55 +239,49 @@ export default function TypeEffectivenessGame() {
         ) : question ? (
           <>
             <div className="type-trainer-score-row">
-              <span>Runde {round}{roundLimit ? " / " + roundLimit : " · Endlos"}</span>
+              <span>Runde {round}{settings.rounds ? " / " + settings.rounds : " · Endlos"}</span>
               <span>{score} Punkte</span>
               <span>{correctCount} richtig</span>
             </div>
             <section className="type-trainer-question">
-              <span className="type-trainer-eyebrow">{roundDescription} · {category?.label}</span>
-              <span className="type-trainer-focus-type" style={{ "--tt-color": getTypeColor(question.type) }}>
-                {getTypeLabel(question.type)}
+              <span className="type-trainer-eyebrow">
+                {question.direction === "attack" ? "Angriff → Verteidigung" : "Verteidigung ← Angriff"}
+                {" · "}{formatMultiplier(question.multiplier)} Schaden
               </span>
+              <div className="type-trainer-focus-types">
+                {focusTypes.map((key) => (
+                  <span key={key} className="type-trainer-focus-type" style={{ "--tt-color": getTypeColor(key) }}>
+                    <img src={getTypeIconUrl(key)} alt="" />{getTypeLabel(key)}
+                  </span>
+                ))}
+              </div>
               <h2>{questionText(question)}</h2>
+              {question.direction === "attack" && question.targetKind === "dual" ? (
+                <p className="type-trainer-question-note">Wähle alle richtigen Kombinationen aus den 18 angezeigten Möglichkeiten.</p>
+              ) : null}
             </section>
-            <div className="type-trainer-type-grid" role="group" aria-label="Antwortmöglichkeiten">
-              {POKEMON_TYPES.map((type) => {
-                const picked = selected.includes(type.key);
-                const isAnswer = feedback?.answers.includes(type.key);
-                const wrong = feedback && picked && !isAnswer;
-                return (
-                  <button
-                    key={type.key}
-                    type="button"
-                    className={[
-                      "type-trainer-type", picked ? "is-selected" : "",
-                      isAnswer ? "is-answer" : "", wrong ? "is-wrong" : "",
-                    ].filter(Boolean).join(" ")}
-                    style={{ "--tt-color": type.color }}
-                    aria-pressed={picked}
-                    disabled={Boolean(feedback)}
-                    onClick={() => toggle(type.key)}
-                  >
-                    <span className="type-trainer-type-dot" aria-hidden="true" />
-                    {type.label}
-                    {feedback && isAnswer ? <span className="type-trainer-answer-mark" aria-label="Richtig">✓</span> : null}
-                    {wrong ? <span className="type-trainer-answer-mark" aria-label="Falsch">×</span> : null}
-                  </button>
-                );
-              })}
+            <div className={"type-trainer-type-grid " + (choices.some((choice) => choice.types.length > 1) ? "has-dual-choices" : "")}
+              role="group" aria-label="Antwortmöglichkeiten">
+              {choices.map((choice) => (
+                <ChoiceButton key={choice.key} choice={choice}
+                  selected={selected.includes(choice.key)}
+                  feedback={feedback}
+                  correct={feedback?.answers.includes(choice.key)}
+                  onClick={() => toggle(choice.key)} />
+              ))}
             </div>
             {feedback ? (
               <div className={"type-trainer-feedback " + (feedback.correct ? "is-correct" : "is-incorrect")} role="status">
-                <strong>{feedback.correct ? "Richtig! +100 Punkte" : "Noch nicht ganz richtig."}</strong>
-                <span>Richtige Typen: {feedback.answers.map(getTypeLabel).join(", ")}.</span>
+                <strong>{feedback.correct ? "Richtig! +100 Punkte" : "Nicht ganz richtig – versuche es bei der nächsten Frage erneut."}</strong>
+                <span>Richtige Antworten: {choices.filter((choice) => feedback.answers.includes(choice.key))
+                  .map((choice) => choice.types.map(getTypeLabel).join(" / ")).join(", ")}.</span>
               </div>
-            ) : (
-              <p className="type-trainer-hint">Wähle alle richtigen Typen aus und überprüfe deine Antwort.</p>
-            )}
+            ) : <p className="type-trainer-hint">{selected.length} ausgewählt · Mehrere Antworten können richtig sein.</p>}
             <div className="type-trainer-actions">
               {feedback ? (
                 <button type="button" className="type-trainer-primary" onClick={next}>
-                  {roundLimit && round >= roundLimit ? "Ergebnis ansehen" : "Nächste Frage"}
+                  {(settings.rounds && round >= settings.rounds) || !deckRef.current.length
+                    ? "Ergebnis ansehen" : "Nächste Frage"}
                 </button>
               ) : (
                 <button type="button" className="type-trainer-primary" disabled={!selected.length} onClick={submit}>
@@ -216,9 +291,7 @@ export default function TypeEffectivenessGame() {
               <button type="button" className="type-trainer-secondary" onClick={() => setStarted(false)}>Beenden</button>
             </div>
           </>
-        ) : (
-          <p>Für diese Einstellungen sind keine Fragen verfügbar.</p>
-        )}
+        ) : <p>Keine Frage verfügbar.</p>}
       </section>
     </main>
   );
