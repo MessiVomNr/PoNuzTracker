@@ -1,3 +1,4 @@
+import { GenerationStarter } from "../games/GenerationFilter";
 // src/online/OnlineGuessLobby.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -922,7 +923,7 @@ export default function OnlineGuessLobby() {
                               />
                             </span>
 
-                            <span className="online-gen-title">Gen {gen}</span>
+                            <span className="online-gen-title"><GenerationStarter gen={gen} /> Gen {gen}</span>
                           </div>
 
                           <button
