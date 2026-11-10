@@ -155,8 +155,7 @@ export default function PokemonTypeGuessGame() {
         {!started ? (
           <div className="type-trainer-setup">
             <div className="type-trainer-wide">
-              <span className="type-trainer-field-title">Generationen auswählen</span>
-              <GenerationFilter generations={generations}
+              <GenerationFilter title="Generationen auswählen" generations={generations}
                 onToggle={toggleGeneration}
                 onOnly={(gen) => setGenerations([gen])}
                 onAll={() => setGenerations(ALL_GENS)}
@@ -183,6 +182,9 @@ export default function PokemonTypeGuessGame() {
               </select>
               </span>
             </label>
+            {generations.length > 0 && !generations.some((gen) => gen <= activeRuleGen)
+              ? <p className="type-trainer-settings-error type-trainer-wide">Wähle einen Typenstand ab Gen {Math.min(...generations)}.</p>
+              : null}
             <div className="type-trainer-setup-footer">
               <span>Bisheriger Rekord: <strong>{best} Punkte</strong></span>
               <button type="button" className="type-trainer-primary" disabled={!generations.some((gen) => gen <= activeRuleGen)} onClick={begin}>Training starten</button>
