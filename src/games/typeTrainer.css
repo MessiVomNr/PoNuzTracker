@@ -250,3 +250,77 @@
   .type-trainer-type-grid.has-dual-choices .type-trainer-choice-label { flex-wrap: nowrap; }
   .type-trainer-dual-choice .type-trainer-logo-name { font-size: 12px; }
 }
+
+/* Compact answer buttons: fewer tall tiles and more answers visible. */
+.type-trainer-panel .type-trainer-type-grid {
+  gap: 7px !important;
+  margin-top: 14px !important;
+}
+.type-trainer-panel .type-trainer-type-grid.has-dual-choices {
+  grid-template-columns: repeat(4,minmax(0,1fr)) !important;
+}
+.type-trainer-panel .type-trainer-type-grid .type-trainer-type {
+  min-height: 40px !important;
+  padding: 6px 9px !important;
+  border-radius: 11px !important;
+  font-size: 12px !important;
+  line-height: 1.16 !important;
+  gap: 5px !important;
+  font-weight: 800 !important;
+}
+.type-trainer-panel .type-trainer-type-grid .type-trainer-dual-choice {
+  min-height: 42px !important;
+}
+.type-trainer-panel .type-trainer-type-grid .type-trainer-type-icon {
+  width: 20px !important;
+  height: 20px !important;
+  flex-basis: 20px !important;
+}
+.type-trainer-panel .type-trainer-type-grid .type-trainer-dual-choice .type-trainer-type-icon {
+  width: 18px !important;
+  height: 18px !important;
+  flex-basis: 18px !important;
+}
+.type-trainer-panel .type-trainer-type-grid .type-trainer-logo-name {
+  gap: 4px;
+  font-size: 12px;
+}
+.type-trainer-panel .type-trainer-type-grid .type-trainer-choice-label {
+  gap: 6px;
+}
+.type-trainer-panel .type-trainer-type-grid .type-trainer-answer-mark {
+  font-size: 15px !important;
+}
+.type-trainer-panel .type-trainer-question {
+  min-height: 145px;
+  gap: 8px;
+  padding: 15px 20px;
+}
+.type-trainer-panel .type-trainer-question h2 {
+  font-size: clamp(17px,2.4vw,23px);
+  line-height: 1.25;
+}
+.type-trainer-question-pokemon {
+  width: min(190px,46vw);
+  height: min(190px,46vw);
+  object-fit: contain;
+  filter: drop-shadow(0 12px 22px rgba(0,0,0,.3));
+}
+@media(max-width:850px) {
+  .type-trainer-panel .type-trainer-type-grid.has-dual-choices {
+    grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+  }
+}
+@media(max-width:600px) {
+  .type-trainer-panel .type-trainer-type-grid.has-dual-choices {
+    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  }
+  .type-trainer-panel .type-trainer-type-grid:not(.has-dual-choices) {
+    grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+  }
+  .type-trainer-panel .type-trainer-type-grid .type-trainer-type {
+    font-size: 11px !important;
+    padding: 6px 5px !important;
+  }
+  .type-trainer-panel .type-trainer-type-grid .type-trainer-choice-label { flex-wrap: wrap; justify-content: center; }
+}
