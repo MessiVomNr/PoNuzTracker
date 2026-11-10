@@ -259,9 +259,26 @@ export function createTrainingChoices(question, { answerMode = "classic", diffic
   const good = shuffleItems(candidates.filter(isRight));
   const wrong = shuffleItems(candidates.filter((item) => !isRight(item)));
   if (!good.length) return { choices: [], answers: [] };
-  const count = difficulty === "easy" ? 6 : difficulty === "hard" ? 12 : 9;
+
+  // Bei "Alle Typen" bleiben bei Einzeltyp-Antworten wirklich ALLE 15/17/18
+  // Typen sichtbar. Der klassische Modus darf dabei nur Fragen mit
+  // maximal zwei echten Treffern stellen, sonst wäre er unlösbar.
+  const isDualAnswer = !question.pokemonTypes
+    && question.direction === "attack" && question.targetKind === "dual";
+  if (difficulty === "allTypes" && !isDualAnswer) {
+    const maxCorrect = answerMode === "all" ? Infinity : answerMode === "one" ? 1 : 2;
+    if (good.length > maxCorrect) return { choices: [], answers: [] };
+    return {
+      choices: shuffleItems(candidates),
+      answers: good.map((choice) => choice.key),
+    };
+  }
+
+  // Zweier-Kombinationen bleiben eine übersichtliche Stichprobe.
+  const count = difficulty === "allTypes" ? 18
+    : difficulty === "easy" ? 6 : difficulty === "hard" ? 12 : 9;
   let rightCount = answerMode === "all"
-    ? Math.min(good.length, difficulty === "hard" ? 8 : difficulty === "normal" ? 6 : 4)
+    ? Math.min(good.length, difficulty === "allTypes" ? 9 : difficulty === "hard" ? 8 : difficulty === "normal" ? 6 : 4)
     : answerMode === "one" ? 1 : answerMode === "two" ? 2 : (difficulty === "easy" ? 1 : Math.random() < .5 ? 1 : 2);
   rightCount = Math.max(1, Math.min(rightCount, good.length, count - 2));
   if (answerMode === "all" && question.direction === "defend" && !question.pokemonTypes) {
@@ -282,7 +299,7 @@ export function createTrainingChoices(question, { answerMode = "classic", diffic
       return Math.abs(Math.log2(value) - Math.log2(target));
     };
     const sorted = [...wrong].sort((a, b) => closeness(effect(a)) - closeness(effect(b)));
-    const trickyCount = difficulty === "hard" ? Math.ceil(wrongCount * .85) : Math.ceil(wrongCount * .55);
+    const trickyCount = ["hard", "allTypes"].includes(difficulty) ? Math.ceil(wrongCount * .85) : Math.ceil(wrongCount * .55);
     chosenWrong = sorted.slice(0, trickyCount);
     chosenWrong.push(...wrong.filter((candidate) => !chosenWrong.includes(candidate)).slice(0, wrongCount - chosenWrong.length));
   }
