@@ -7,7 +7,7 @@ export function GenerationStarter({ gen }) {
   return (
     <img
       className="trainer-gen-starter"
-      src={"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/" + FIRST_STARTERS[gen] + ".png"}
+      src={"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + FIRST_STARTERS[gen] + ".png"}
       alt=""
       loading="lazy"
       aria-hidden="true"
