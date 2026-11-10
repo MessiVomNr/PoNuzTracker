@@ -31,7 +31,7 @@ function readSettings() {
       direction: allowed(parsed.direction, ["attack","defend","mixed"], "mixed"),
       targetKind: allowed(parsed.targetKind, ["single","dual","mixed"], "mixed"),
       multiplier: allowed(parsed.multiplier, ["mixed",...DAMAGE_OPTIONS.map((x) => x.key)], "mixed"),
-      difficulty: allowed(parsed.difficulty, ["easy","normal","hard"], "normal"),
+      difficulty: allowed(parsed.difficulty, ["easy","normal","hard","allTypes"], "normal"),
       answerMode: allowed(parsed.answerMode, ["classic","one","two","all"], "classic"),
       ruleGen: allowed(String(parsed.ruleGen ?? "auto"), ["auto",...ALL_GENS.map(String)], "auto"),
       pokemonGens: Array.isArray(parsed.pokemonGens)
@@ -82,7 +82,7 @@ function questionText(question) {
     " Schaden gegen " + defending + "?";
 }
 function displayAnswer(choice) { return choice.types.map(getTypeLabel).join(" / "); }
-const SCORE_BY_DIFFICULTY = { easy: 100, normal: 150, hard: 200 };
+const SCORE_BY_DIFFICULTY = { easy: 100, normal: 150, hard: 200, allTypes: 250 };
 
 export default function TypeEffectivenessGame() {
   const navigate = useNavigate();
@@ -147,7 +147,7 @@ export default function TypeEffectivenessGame() {
     setQuestion(null);
     let lastError;
     try {
-      for (let attempts = 0; attempts < 6 && deckRef.current.length; attempts += 1) {
+      for (let attempts = 0; attempts < 50 && deckRef.current.length; attempts += 1) {
         const entry = deckRef.current.pop();
         try {
           let next;
@@ -266,6 +266,7 @@ export default function TypeEffectivenessGame() {
                   <option value="easy">Einfach · 6 Antworten</option>
                   <option value="normal">Normal · 9 Antworten</option>
                   <option value="hard">Schwer · 12 Antworten</option>
+                  <option value="allTypes">Alle Typen · bis zu 18 Antworten</option>
                 </select>
               </span>
             </label>
