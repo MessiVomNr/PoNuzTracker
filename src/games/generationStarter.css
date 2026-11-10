@@ -1,9 +1,10 @@
 .trainer-gen-starter {
-  width: 31px; height: 31px; flex: 0 0 31px;
-  object-fit: contain; image-rendering: pixelated;
-  filter: grayscale(1) brightness(0) invert(.78);
-  opacity: .86;
+  width: 48px; height: 48px; flex: 0 0 48px;
+  object-fit: contain;
+  image-rendering: auto;
+  opacity: 1;
   vertical-align: middle;
+  filter: drop-shadow(0 3px 5px rgba(0,0,0,.28));
 }
 .trainer-generation-filter { min-width: 0; }
 .trainer-generation-filter-header {display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px;color:#e6f0ff;font-size:15px}
@@ -16,7 +17,7 @@
 .trainer-generation-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
 .trainer-generation-option{display:flex;align-items:center;gap:4px;min-width:0;background:rgba(67,92,149,.14);border:1px solid rgba(128,168,242,.16);border-radius:14px;padding:5px}
 .trainer-generation-option.is-active{background:rgba(68,108,189,.24);border-color:rgba(128,181,255,.48)}
-.trainer-generation-toggle{display:flex;align-items:center;gap:7px;flex:1;min-width:0;border:0;border-radius:10px;padding:3px 6px;background:transparent;color:#edf4ff;cursor:pointer;font-size:14px;font-weight:850;text-align:left}
+.trainer-generation-toggle{display:flex;align-items:center;gap:8px;flex:1;min-width:0;border:0;border-radius:10px;padding:2px 6px;background:transparent;color:#edf4ff;cursor:pointer;font-size:14px;font-weight:850;text-align:left}
 .trainer-generation-toggle:hover{background:rgba(132,175,247,.10)}
 .trainer-generation-check{margin-left:auto;color:#a2c9ff;font-size:16px}
 .trainer-generation-only{flex:0 0 auto;padding:7px 9px}
@@ -24,4 +25,12 @@
 @media(max-width:460px){.trainer-generation-list{grid-template-columns:1fr}}
 /* Mini silhouette next to generation titles in other games */
 .solo-gen-title .trainer-gen-starter,
-.online-gen-title .trainer-gen-starter { width:27px;height:27px;vertical-align:middle;margin-right:4px }
+.online-gen-title .trainer-gen-starter { width:38px;height:38px;vertical-align:middle;margin-right:5px;filter:drop-shadow(0 2px 5px rgba(0,0,0,.24)) }
+/* Farbige Starter sollen auch in kompakten Generation-Dropdowns klar erkennbar sein. */
+.trainer-generation-option {min-height:57px}
+.trainer-generation-toggle {min-height:49px}
+.trainer-generation-toggle .trainer-gen-starter {width:48px;height:48px;flex-basis:48px}
+@media(max-width:520px){
+  .trainer-generation-toggle .trainer-gen-starter {width:43px;height:43px;flex-basis:43px}
+  .trainer-generation-option {min-height:51px}
+}
