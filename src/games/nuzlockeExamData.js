@@ -30,12 +30,13 @@ export const ABILITIES = [
 const ABILITY_MAP = Object.fromEntries(ABILITIES.map((ability) => [ability.key, ability.label]));
 // Nur stabile, belegbare Kombinationen aus Basisform + möglicher Fähigkeit.
 export const ABILITY_CASES = [
-  { id: 1, key: "overgrow", minGen: 3 },
+  { id: 1, key: "overgrow", minGen: 3, otherAbilities: ["chlorophyll"] },
   { id: 4, key: "blaze", minGen: 3 },
   { id: 7, key: "torrent", minGen: 3 },
   { id: 25, key: "static", minGen: 3 },
   { id: 51, key: "arena-trap", minGen: 3 },
-  { id: 81, key: "magnet-pull", minGen: 3 },
+  { id: 74, key: "sturdy", minGen: 3 },
+  { id: 81, key: "magnet-pull", minGen: 3, otherAbilities: ["sturdy"] },
   { id: 92, key: "levitate", minGen: 3 },
   { id: 130, key: "intimidate", minGen: 3 },
   { id: 134, key: "water-absorb", minGen: 3 },
@@ -47,7 +48,7 @@ export const ABILITY_CASES = [
   { id: 292, key: "wonder-guard", minGen: 3 },
   { id: 360, key: "shadow-tag", minGen: 3 },
   { id: 448, key: "inner-focus", minGen: 4 },
-  { id: 462, key: "magnet-pull", minGen: 4 },
+  { id: 462, key: "magnet-pull", minGen: 4, otherAbilities: ["sturdy"] },
   { id: 576, key: "shadow-tag", minGen: 5 }, // versteckte Fähigkeit
 ];
 
@@ -202,7 +203,9 @@ export function makeWeaknessQuestion(pokemon, ruleGen, difficulty = "normal") {
 export function makeAbilityQuestion(entry, difficulty = "normal") {
   const name = pokedex["pokedex" + entry.id] || "Pokémon";
   const count = difficulty === "easy" ? 3 : difficulty === "hard" ? 5 : 4;
-  const wrong = shuffleItems(ABILITIES.filter((ability) => ability.key !== entry.key)).slice(0, count-1);
+  const validAbilities = new Set([entry.key, ...(entry.otherAbilities || [])]);
+  // Die falschen Optionen dürfen keine weitere echte Fähigkeit dieser Spezies sein.
+  const wrong = shuffleItems(ABILITIES.filter((ability) => !validAbilities.has(ability.key))).slice(0, count-1);
   return {
     category: "ability", title: "Welche Fähigkeit kann " + name + " besitzen?",
     pokemon: { id: entry.id, name, image: pokemonArtwork(entry.id) },
