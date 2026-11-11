@@ -21,7 +21,7 @@ export const IMPORTANT_ITEMS = [
   { id:"life-orb", name:"Leben-Orb", minGen:4, effect:"Verstärkt schädigende Attacken um 30 %, verursacht danach normalerweise Rückstoßschaden." },
   { id:"eviolite", name:"Evolith", minGen:5, effect:"Erhöht Verteidigung und Spezial-Verteidigung eines entwicklungsfähigen Pokémon um 50 %." },
   { id:"assault-vest", name:"Offensivweste", minGen:6, effect:"Erhöht die Spezial-Verteidigung um 50 %, erlaubt aber normalerweise keine Status-Attacken." },
-  { id:"sitrus-berry", name:"Tsitrubeere", minGen:3, effect:"Heilt bei höchstens der Hälfte der KP einmalig ein Viertel der maximalen KP." },
+  { id:"sitrus-berry", name:"Tsitrubeere", minGen:4, effect:"Heilt bei höchstens der Hälfte der KP einmalig ein Viertel der maximalen KP." },
   { id:"lum-berry", name:"Prunusbeere", minGen:3, effect:"Heilt einmalig eine primäre Statusveränderung oder Verwirrung." },
   { id:"rocky-helmet", name:"Beulenhelm", minGen:5, effect:"Verletzt Gegner bei Kontaktattacken." },
   { id:"air-balloon", name:"Luftballon", minGen:5, effect:"Macht schwebend und schützt normalerweise vor Boden-Attacken, bis er platzt." },
