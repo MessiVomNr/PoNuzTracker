@@ -305,3 +305,19 @@ export function examResult(correct, total) {
   if (ratio >= .8) return { percent, rank: "Kann in Erwägung gezogen werden", passed: false };
   return { percent, rank: "Noch nicht bereit", passed: false };
 }
+
+// Drei feste Nuzlocke-Prüfungen. Jede beginnt einfach und zieht an,
+// unabhängig von den frei einstellbaren Trainingsoptionen.
+export const NUZLOCKE_TESTS = [
+  { key: "easy", label: "Einfach", subtitle: "Entspannt beginnen, zum Ende anspruchsvoller" },
+  { key: "normal", label: "Mittel", subtitle: "Von Grundlagen bis zu schweren Fragen" },
+  { key: "hard", label: "Schwer", subtitle: "Schneller Anstieg, schwieriges Finale" },
+];
+export const NUZLOCKE_EXAM_ROUNDS = 30;
+
+export function examQuestionDifficulty(test, questionIndex) {
+  const index = Math.max(0, Math.min(NUZLOCKE_EXAM_ROUNDS - 1, Number(questionIndex) || 0));
+  if (test === "easy") return index < 18 ? "easy" : index < 27 ? "normal" : "hard";
+  if (test === "hard") return index < 5 ? "easy" : index < 15 ? "normal" : "hard";
+  return index < 10 ? "easy" : index < 21 ? "normal" : "hard";
+}
