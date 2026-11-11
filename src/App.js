@@ -79,8 +79,8 @@ function AppContent() {
         <Route path="/games/type-trainer" element={<TypeTrainerMenu />} />
         <Route path="/games/type-trainer/effectiveness" element={<TypeEffectivenessGame />} />
         <Route path="/games/type-trainer/pokemon-types" element={<PokemonTypeGuessGame />} />
-        <Route path="/games/nuzlocke-exam" element={<NuzlockeExam />} />
-        <Route path="/games/knowledge-training" element={<NuzlockeExam mode="practice" />} />
+        <Route path="/games/nuzlocke-exam" element={<NuzlockeExam key="exam" mode="exam" />} />
+        <Route path="/games/knowledge-training" element={<NuzlockeExam key="practice" mode="practice" />} />
         <Route path="/games/pokemon-guess" element={<PokemonGuessMenu />} />
         <Route path="/games/pokemon-guess/solo" element={<PokemonGuessSolo />} />
         <Route path="/games/higher-lower" element={<PokemonHigherLower />} />
