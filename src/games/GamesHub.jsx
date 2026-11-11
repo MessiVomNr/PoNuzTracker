@@ -125,6 +125,23 @@ export default function GamesHub() {
           <button
             type="button"
             className="games-hub-card games-hub-card-primary"
+            onClick={() => navigate("/games/knowledge-training")}
+          >
+            <span className="games-hub-card-icon games-hub-card-icon-muted">
+              <span style={{ fontSize:29, color:"#c3d8ff", fontWeight:900 }} aria-hidden="true">?</span>
+            </span>
+            <span className="games-hub-card-content">
+              <span className="games-hub-card-title">Pokémon-Wissenstraining</span>
+              <span className="games-hub-card-text">
+                Items, Stats, Fähigkeiten, Entwicklungen und Kampfmechaniken frei üben.
+              </span>
+            </span>
+            <span className="games-hub-card-arrow">›</span>
+          </button>
+
+          <button
+            type="button"
+            className="games-hub-card games-hub-card-primary"
             onClick={() => navigate("/games/nuzlocke-exam")}
           >
             <ControllerIcon />
