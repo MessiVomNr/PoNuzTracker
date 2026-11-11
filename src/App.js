@@ -30,6 +30,7 @@ import TypeTrainerMenu from "./games/TypeTrainerMenu";
 import TypeEffectivenessGame from "./games/TypeEffectivenessGame";
 import PokemonTypeGuessGame from "./games/PokemonTypeGuessGame";
 import NuzlockeExam from "./games/NuzlockeExam";
+import { StarterThemeProvider } from "./games/GenerationFilter";
 import PokemonGuessMenu from "./games/PokemonGuessMenu";
 import PokemonGuessSolo from "./games/PokemonGuessSolo";
 import PokemonHigherLower from "./games/PokemonHigherLower";
@@ -68,10 +69,12 @@ function useBackgroundControl() {
 function AppContent() {
   useInitTheme();
   useBackgroundControl();
+  const location = useLocation();
 
   return (
     <>
       <GlobalEscapeMenu />
+      <StarterThemeProvider key={location.pathname}>
       <Routes>
         <Route path="/" element={<HomeMode />} />
 
@@ -113,6 +116,7 @@ function AppContent() {
         <Route path="/compare/:leftId" element={<PokemonCompare />} />
         <Route path="/team-compare" element={<TeamCompare />} />
       </Routes>
+      </StarterThemeProvider>
     </>
   );
 }
