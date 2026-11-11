@@ -6,54 +6,67 @@ import { loadTrainerPokemon } from "./trainerPokemonApi";
 import { getGenerationTypes, getTypeColor, getTypeIconUrl } from "./typeTrainerData";
 import {
   EXAM_CATEGORIES, ABILITY_CASES, TRAP_SCENARIOS,
-  examPokemonList, buildExamSchedule, pokemonArtwork,
+  examPokemonList, examCategories, buildExamSchedule, pokemonArtwork,
   makeDamageQuestion, makeWeaknessQuestion, makeAbilityQuestion,
   makeScenarioQuestion, examResult,
 } from "./nuzlockeExamData";
+import {
+  IMPORTANT_ITEMS, SIMPLE_EVOLUTIONS, MOVE_FACTS,
+  availableBattleFacts, finalEvolutionPool,
+  makeItemQuestion, makeEvolutionQuestion, makeMoveQuestion,
+  makeBattleQuestion, makeOffenseQuestion, makeSpeedQuestion,
+} from "./nuzlockeKnowledgeData";
 import "./typeTrainer.css";
 import "./nuzlockeExam.css";
 
-const SETTINGS_KEY = "ponuz-nuzlocke-exam-settings-v1";
-const BEST_KEY = "ponuz-nuzlocke-exam-best-v1";
 const GENS = [1,2,3,4,5,6,7,8,9];
-const INITIAL_SETTINGS = { generations: [1,2,3], ruleGen: "auto", rounds: 20, difficulty: "normal" };
-
-function readSettings() {
+const SETTINGS_KEYS = {
+  exam: "ponuz-nuzlocke-exam-settings-v2",
+  practice: "ponuz-knowledge-training-settings-v1",
+};
+const BEST_KEYS = {
+  exam: "ponuz-nuzlocke-exam-best-v2",
+  practice: "ponuz-knowledge-training-best-v1",
+};
+const INITIAL_SETTINGS = {
+  generations: [1,2,3], ruleGen: "auto", rounds: 24,
+  difficulty: "normal", categories: EXAM_CATEGORIES.map((entry) => entry.key),
+};
+function readSettings(mode) {
+  const defaults = { ...INITIAL_SETTINGS, rounds: mode === "practice" ? 20 : 24 };
   try {
-    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
-    if (!saved || typeof saved !== "object") return INITIAL_SETTINGS;
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEYS[mode]));
+    if (!saved || typeof saved !== "object") return defaults;
     const generations = Array.isArray(saved.generations)
       ? [...new Set(saved.generations.map(Number).filter((gen) => GENS.includes(gen)))].sort((a,b) => a-b)
-      : INITIAL_SETTINGS.generations;
+      : defaults.generations;
     const ruleGen = saved.ruleGen === "auto" || GENS.some((gen) => String(gen) === saved.ruleGen)
       ? saved.ruleGen : "auto";
+    const allowedRounds = mode === "practice" ? [10,20,30,50] : [12,24,36];
     return {
       generations, ruleGen,
-      rounds: [12,20,30].includes(Number(saved.rounds)) ? Number(saved.rounds) : 20,
+      rounds: allowedRounds.includes(Number(saved.rounds)) ? Number(saved.rounds) : defaults.rounds,
       difficulty: ["easy","normal","hard"].includes(saved.difficulty) ? saved.difficulty : "normal",
+      categories: Array.isArray(saved.categories)
+        ? [...new Set(saved.categories.filter((key) => EXAM_CATEGORIES.some((cat) => cat.key === key)))]
+        : defaults.categories,
     };
-  } catch { return INITIAL_SETTINGS; }
+  } catch { return defaults; }
 }
-function readBest() {
-  try { return Number(localStorage.getItem(BEST_KEY)) || 0; }
+function readBest(mode) {
+  try { return Number(localStorage.getItem(BEST_KEYS[mode])) || 0; }
   catch { return 0; }
 }
-function chooseNew(array, usedSet) {
-  let left = array.filter((item) => !usedSet.has(item.id ?? item.dexId));
-  if (!left.length) {
-    usedSet.clear();
-    left = array;
-  }
-  if (!left.length) return null;
-  const item = left[Math.floor(Math.random()*left.length)];
-  usedSet.add(item.id ?? item.dexId);
+function pickUnused(array, usedSet, key = (item) => item.id ?? item.dexId) {
+  if (!array.length) return null;
+  let pool = array.filter((item) => !usedSet.has(key(item)));
+  if (!pool.length) { usedSet.clear(); pool = array; }
+  const item = pool[Math.floor(Math.random() * pool.length)];
+  usedSet.add(key(item));
   return item;
 }
-function CategoryLabel({ category }) {
-  return <span className="exam-kind">{EXAM_CATEGORIES.find((item) => item.key === category)?.label || "Wissen"}</span>;
-}
 function TypeToken({ typeKey }) {
-  const type = getGenerationTypes(9).find((candidate) => candidate.key === typeKey);
+  const type = getGenerationTypes(9).find((entry) => entry.key === typeKey);
   return (
     <span className="exam-type-token" style={{ "--tt-color": getTypeColor(typeKey) }}>
       <img src={getTypeIconUrl(typeKey)} alt="" loading="lazy" />
@@ -61,30 +74,38 @@ function TypeToken({ typeKey }) {
     </span>
   );
 }
-function QuestionOption({ option, checked, selected, correct, onClick, disabled }) {
-  const isCorrect = checked && correct;
-  const isWrong = checked && selected && !correct;
+function AnswerOption({ option, checked, selected, correct, onClick }) {
   return (
-    <button type="button" onClick={onClick} disabled={disabled}
-      aria-pressed={selected}
+    <button type="button" disabled={checked} aria-pressed={selected}
+      onClick={onClick}
       className={[
         "exam-option", option.type ? "exam-option-type" : "",
         selected ? "exam-option-selected" : "",
-        isCorrect ? "exam-option-correct" : "",
-        isWrong ? "exam-option-wrong" : "",
+        checked && correct ? "exam-option-correct" : "",
+        checked && selected && !correct ? "exam-option-wrong" : "",
       ].filter(Boolean).join(" ")}>
-      {option.type
-        ? <TypeToken typeKey={option.type} />
-        : <span>{option.label}</span>}
-      {isCorrect ? <span className="exam-check" aria-label="Richtig">✓</span> : null}
-      {isWrong ? <span className="exam-check" aria-label="Falsch">×</span> : null}
+      {option.type ? <TypeToken typeKey={option.type} /> : <span>{option.label}</span>}
+      {checked && correct ? <span className="exam-check" aria-label="Richtig">✓</span> : null}
+      {checked && selected && !correct ? <span className="exam-check" aria-label="Falsch">×</span> : null}
     </button>
   );
 }
+function PokemonArt({ pokemon }) {
+  return (
+    <img src={pokemon.image} className="exam-pokemon-image"
+      alt={pokemon.name}
+      onError={(event) => {
+        const fallback = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/" + pokemon.id + ".png";
+        if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
+      }}
+    />
+  );
+}
 
-export default function NuzlockeExam() {
+export default function NuzlockeExam({ mode = "exam" }) {
   const nav = useNavigate();
-  const [settings, setSettings] = useState(readSettings);
+  const practice = mode === "practice";
+  const [settings, setSettings] = useState(() => readSettings(mode));
   const [active, setActive] = useState(false);
   const [finished, setFinished] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -98,197 +119,227 @@ export default function NuzlockeExam() {
   const [answered, setAnswered] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [byCategory, setByCategory] = useState({});
-  const [best, setBest] = useState(readBest);
-  const currentRun = useRef(0);
+  const [best, setBest] = useState(() => readBest(mode));
+  const requestRef = useRef(0);
   const schedule = useRef([]);
-  const usedPokemon = useRef(new Set());
-  const usedAbilities = useRef(new Set());
-  const usedScenarios = useRef(new Set());
+  const used = useRef({});
+  const [busyHint, setBusyHint] = useState("");
 
-  useEffect(() => () => { currentRun.current += 1; }, []);
+  useEffect(() => () => { requestRef.current += 1; }, []);
   useEffect(() => {
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
-    catch { /* optional */ }
-  }, [settings]);
+    try { localStorage.setItem(SETTINGS_KEYS[mode], JSON.stringify(settings)); }
+    catch { /* local storage optional */ }
+  }, [settings, mode]);
 
   const ruleGen = settings.ruleGen === "auto"
     ? Math.max(1, ...settings.generations) : Number(settings.ruleGen);
-  const pool = useMemo(() =>
-    examPokemonList(settings.generations, ruleGen),
+  const pool = useMemo(() => examPokemonList(settings.generations, ruleGen),
     [settings.generations, ruleGen]);
-  const guessSuggestions = useMemo(
-    () => question?.category === "name" && !checked
-      ? getPokemonNameSuggestions(nameInput, pool, 8)
-      : [],
-    [nameInput, pool, question?.category, checked]);
+  const fullyEvolved = useMemo(() => finalEvolutionPool(pool), [pool]);
+  const availableCategories = useMemo(() => examCategories(ruleGen, pool), [ruleGen, pool]);
+  const selectedCategories = practice
+    ? availableCategories.filter((key) => settings.categories.includes(key))
+    : availableCategories;
+  const nameSuggestions = useMemo(() =>
+    question?.category === "name" && !checked
+      ? getPokemonNameSuggestions(nameInput, pool, 9) : [],
+    [nameInput, question?.category, checked, pool]);
   const completion = examResult(correctCount, answered);
 
-  function changeSetting(key, value) { setSettings((previous) => ({ ...previous, [key]: value })); }
-  function changeGens(next) { changeSetting("generations", next); }
+  function changeSetting(key, value) {
+    setSettings((previous) => ({ ...previous, [key]: value }));
+  }
+  function setGenList(gens) { changeSetting("generations", gens); }
+  function toggleCategory(key) {
+    changeSetting("categories", settings.categories.includes(key)
+      ? settings.categories.filter((value) => value !== key)
+      : [...settings.categories, key]);
+  }
   function exit() {
-    currentRun.current += 1;
+    requestRef.current += 1;
     setActive(false); setFinished(false); setLoading(false);
-    setQuestion(null); setError("");
+    setQuestion(null); setError(""); setBusyHint("");
+  }
+  function pick(array, key, identity) {
+    if (!used.current[key]) used.current[key] = new Set();
+    return pickUnused(array, used.current[key], identity);
+  }
+
+  async function makeQuestion(category) {
+    if (category === "scenario") {
+      const candidates = TRAP_SCENARIOS.filter((entry) => entry.minGen <= ruleGen);
+      return makeScenarioQuestion(pick(candidates, "scenario"));
+    }
+    if (category === "ability") {
+      const ids = new Set(pool.map((pokemon) => pokemon.dexId));
+      const possible = ABILITY_CASES.filter((entry) => entry.minGen <= ruleGen && ids.has(entry.id));
+      const chosen = pick(possible, "ability");
+      return chosen && makeAbilityQuestion(chosen, settings.difficulty);
+    }
+    if (category === "items") {
+      const eligible = IMPORTANT_ITEMS.filter((item) => item.minGen <= ruleGen);
+      const item = pick(eligible, "items");
+      return item && makeItemQuestion(item, ruleGen, settings.difficulty);
+    }
+    if (category === "evolution") {
+      const eligible = SIMPLE_EVOLUTIONS.filter((item) => item.minGen <= ruleGen);
+      const fact = pick(eligible, "evolution");
+      return fact && makeEvolutionQuestion(fact, ruleGen, settings.difficulty);
+    }
+    if (category === "moves") {
+      const eligible = MOVE_FACTS.filter((item) => item.minGen <= ruleGen);
+      const move = pick(eligible, "moves");
+      return move && makeMoveQuestion(move, ruleGen);
+    }
+    if (category === "battle") {
+      const fact = pick(availableBattleFacts(ruleGen), "battle");
+      return fact && makeBattleQuestion(fact);
+    }
+    if (category === "offense") {
+      const chosen = pick(fullyEvolved, "offense");
+      if (!chosen) return null;
+      const pokemon = await loadTrainerPokemon(chosen.dexId, ruleGen);
+      return makeOffenseQuestion(pokemon, settings.difficulty);
+    }
+    if (category === "speed") {
+      if (fullyEvolved.length < 2) return null;
+      const first = pick(fullyEvolved, "speedA");
+      const second = pick(fullyEvolved.filter((pokemon) => pokemon.dexId !== first.dexId), "speedB");
+      if (!first || !second) return null;
+      const [left,right] = await Promise.all([
+        loadTrainerPokemon(first.dexId, ruleGen),
+        loadTrainerPokemon(second.dexId, ruleGen),
+      ]);
+      return makeSpeedQuestion(left,right,settings.difficulty);
+    }
+    const chosen = pick(pool, "pokemon");
+    if (!chosen) return null;
+    const name = chosen.name;
+    if (category === "name") {
+      return { category, title: "Wie heißt dieses Pokémon?",
+        pokemon: { id:chosen.dexId, name, image:pokemonArtwork(chosen.dexId) },
+        correct:[name], explanation:"Gesucht war " + name + "." };
+    }
+    const pokemon = await loadTrainerPokemon(chosen.dexId, ruleGen);
+    if (!pokemon.types?.length) return null;
+    if (category === "types") {
+      return {
+        category, title:"Welche Typen hat " + name + "?", pokemon,
+        correct:pokemon.types, maxAnswers:pokemon.types.length,
+        options:getGenerationTypes(ruleGen).map((type) => ({key:type.key,type:type.key})),
+        explanation:name + " hat " + pokemon.types.map((key) =>
+          getGenerationTypes(ruleGen).find((type) => type.key === key)?.label || key).join(" / ") + ".",
+      };
+    }
+    if (category === "weakness") return makeWeaknessQuestion(pokemon, ruleGen, settings.difficulty);
+    if (category === "damage") return makeDamageQuestion(pokemon, ruleGen, settings.difficulty);
+    return null;
   }
 
   async function prepareNextQuestion() {
-    const runId = ++currentRun.current;
-    setLoading(true); setError(""); setQuestion(null);
+    const requestId = ++requestRef.current;
+    setLoading(true); setError(""); setBusyHint(""); setQuestion(null);
     setSelected([]); setChecked(false); setWasCorrect(false);
     setNameInput(""); setSuggestionIndex(-1);
-    let lastError = null;
+    let reason = "";
     try {
-      // Skip impossible encounters and transiently unavailable PokeAPI Pokémon.
-      for (let attempt = 0; attempt < 24 && schedule.current.length; attempt += 1) {
+      for (let attempt = 0; attempt < 32 && schedule.current.length; attempt += 1) {
         const category = schedule.current.shift();
-        let prepared = null;
         try {
-          if (category === "scenario") {
-            const candidates = TRAP_SCENARIOS.filter((q) => q.minGen <= ruleGen);
-            const selectedScenario = chooseNew(candidates, usedScenarios.current);
-            prepared = selectedScenario && makeScenarioQuestion(selectedScenario);
-          } else if (category === "ability") {
-            const available = ABILITY_CASES.filter((entry) => entry.minGen <= ruleGen &&
-              pool.some((item) => item.dexId === entry.id));
-            const abilityCase = chooseNew(available, usedAbilities.current);
-            prepared = abilityCase && makeAbilityQuestion(abilityCase, settings.difficulty);
-          } else {
-            const chosen = chooseNew(pool, usedPokemon.current);
-            if (!chosen) continue;
-            const name = chosen.name;
-            if (category === "name") {
-              prepared = {
-                category, title: "Wie heißt dieses Pokémon?",
-                pokemon: { id: chosen.dexId, name, image: pokemonArtwork(chosen.dexId) },
-                correct: [name],
-                explanation: "Gesucht war " + name + ".",
-              };
-            } else {
-              const pokemon = await loadTrainerPokemon(chosen.dexId, ruleGen);
-              if (runId !== currentRun.current) return;
-              if (!pokemon.types.length) continue;
-              if (category === "types") {
-                prepared = {
-                  category, title: "Welche Typen hat " + name + "?",
-                  pokemon, correct: pokemon.types, maxAnswers: pokemon.types.length,
-                  options: getGenerationTypes(ruleGen).map((type) => ({
-                    key: type.key, type: type.key,
-                  })),
-                  explanation: name + " hat den Typ " + pokemon.types
-                    .map((key) => getGenerationTypes(ruleGen).find((x) => x.key === key)?.label || key).join(" / ") + ".",
-                };
-              } else if (category === "weakness") {
-                prepared = makeWeaknessQuestion(pokemon, ruleGen, settings.difficulty);
-              } else if (category === "damage") {
-                prepared = makeDamageQuestion(pokemon, ruleGen, settings.difficulty);
-              }
-            }
-          }
-          if (!prepared || (prepared.options && !prepared.correct?.length)) {
-            // Don't silently shorten the exam if a particular Pokémon has
-            // no usable weakness question under the selected rules.
+          if (attempt > 5) setBusyHint("Suche eine passende Frage …");
+          const prepared = await makeQuestion(category);
+          if (requestId !== requestRef.current) return;
+          if (!prepared || !prepared.correct?.length || (prepared.options && !prepared.options.length)) {
             schedule.current.push(category);
             continue;
           }
-          if (runId !== currentRun.current) return;
           setQuestion(prepared);
           return;
-        } catch (err) {
-          lastError = err;
-          // Put this category back so a slow API does not silently remove a topic.
-          if (category) schedule.current.push(category);
+        } catch (caught) {
+          // If fetching Pokémon fails, preserve the exam category and offer retry.
+          schedule.current.unshift(category);
+          reason = caught?.message || "Frage nicht verfügbar.";
+          break;
         }
       }
-      if (runId !== currentRun.current) return;
-      if (!schedule.current.length) {
-        setFinished(true);
-      } else {
-        setError(lastError?.message || "Diese Frage konnte nicht geladen werden.");
-      }
+      if (requestId !== requestRef.current) return;
+      if (!schedule.current.length) setFinished(true);
+      else setError(reason || "Für diese Auswahl konnte keine lösbare Frage erzeugt werden. Probiere eine andere Generation oder Schwierigkeit.");
     } finally {
-      if (runId === currentRun.current) setLoading(false);
+      if (requestId === requestRef.current) { setLoading(false); setBusyHint(""); }
     }
   }
-
   function start() {
-    if (!pool.length) return;
-    schedule.current = buildExamSchedule({ ...settings, ruleGen }, pool);
-    usedPokemon.current.clear();
-    usedAbilities.current.clear();
-    usedScenarios.current.clear();
+    if (!pool.length || !selectedCategories.length) return;
+    schedule.current = buildExamSchedule({
+      ...settings, ruleGen, categories:selectedCategories,
+    },pool);
+    if (!schedule.current.length) return;
+    requestRef.current += 1;
+    used.current = {};
     setAnswered(0); setCorrectCount(0); setByCategory({});
-    setError(""); setFinished(false); setActive(true);
+    setQuestion(null); setError(""); setFinished(false); setActive(true);
     prepareNextQuestion();
   }
-
   function toggleOption(key) {
     if (checked) return;
+    const maximum = question?.maxAnswers || question?.correct?.length || 1;
     setSelected((previous) => previous.includes(key)
       ? previous.filter((item) => item !== key)
-      : previous.length < (question.maxAnswers || question.correct.length)
-        ? [...previous, key] : previous);
+      : previous.length < maximum ? [...previous,key] : previous);
   }
-
   function submit() {
     if (!question || checked) return;
     const isName = question.category === "name";
     if (isName ? !nameInput.trim() : !selected.length) return;
-    const correct = isName
-      ? doesGuessMatch({ name: question.correct[0] }, nameInput)
-      : selected.length === question.correct.length
-        && question.correct.every((item) => selected.includes(item));
-    const nextAnswered = answered + 1;
-    const nextCorrect = correctCount + (correct ? 1 : 0);
-    setChecked(true); setWasCorrect(correct);
-    setAnswered(nextAnswered); setCorrectCount(nextCorrect);
+    const right = isName
+      ? doesGuessMatch({ name:question.correct[0] }, nameInput)
+      : selected.length === question.correct.length && question.correct.every((item) => selected.includes(item));
+    setChecked(true); setWasCorrect(right);
+    setAnswered((value) => value + 1);
+    setCorrectCount((value) => value + Number(right));
     setByCategory((previous) => ({
       ...previous,
-      [question.category]: {
-        total: (previous[question.category]?.total || 0) + 1,
-        correct: (previous[question.category]?.correct || 0) + (correct ? 1 : 0),
+      [question.category]:{
+        total:(previous[question.category]?.total||0)+1,
+        correct:(previous[question.category]?.correct||0)+Number(right),
       },
     }));
-    const percent = examResult(nextCorrect, nextAnswered).percent;
-    // Bestwert erst bei regulärem Prüfungsabschluss gespeichert.
-    if (nextAnswered === settings.rounds && percent > best) {
-      setBest(percent);
-      try { localStorage.setItem(BEST_KEY, String(percent)); } catch { /* optional */ }
-    }
   }
-
+  function finish() {
+    const percentage = examResult(correctCount, answered).percent;
+    if (percentage > best) {
+      setBest(percentage);
+      try { localStorage.setItem(BEST_KEYS[mode],String(percentage)); }
+      catch { /* optional */ }
+    }
+    setFinished(true);
+  }
   function advance() {
     if (!checked) return;
-    if (answered >= settings.rounds || !schedule.current.length) {
-      const finalPercent = examResult(correctCount, answered).percent;
-      if (finalPercent > best) {
-        setBest(finalPercent);
-        try { localStorage.setItem(BEST_KEY, String(finalPercent)); } catch { /* optional */ }
-      }
-      setFinished(true);
-      return;
-    }
-    prepareNextQuestion();
+    if (answered >= settings.rounds || !schedule.current.length) finish();
+    else prepareNextQuestion();
   }
-
   function onNameKeyDown(event) {
-    if (!guessSuggestions.length) return;
+    if (!nameSuggestions.length) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setSuggestionIndex((index) => (index + 1) % guessSuggestions.length);
+      setSuggestionIndex((index) => (index + 1) % nameSuggestions.length);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setSuggestionIndex((index) => index <= 0 ? guessSuggestions.length - 1 : index - 1);
+      setSuggestionIndex((index) => index <= 0 ? nameSuggestions.length-1 : index-1);
     } else if (event.key === "Enter" && suggestionIndex >= 0) {
       event.preventDefault();
-      setNameInput(guessSuggestions[suggestionIndex].name);
+      setNameInput(nameSuggestions[suggestionIndex].name);
       setSuggestionIndex(-1);
     } else if (event.key === "Escape") {
       setSuggestionIndex(-1);
     }
   }
 
-  const displayedCategory = question?.category;
-  const isNameQuestion = displayedCategory === "name";
+  const isName = question?.category === "name";
+  const categoryInfo = EXAM_CATEGORIES.find((category) => category.key === question?.category);
+  const title = practice ? "Pokémon-Wissenstraining" : "Nuzlocke-Eignungstest";
 
   return (
     <main className="games-page type-trainer-page">
@@ -297,8 +348,11 @@ export default function NuzlockeExam() {
           <button type="button" className="type-trainer-back" onClick={() => nav("/games")}>‹ Zurück</button>
           <button type="button" className="type-trainer-home-link" onClick={() => nav("/")}>Zur Startseite</button>
         </div>
-        <h1>Nuzlocke-Eignungstest</h1>
-        <p className="type-trainer-subtitle">Sechs Wissensgebiete. Eine Prüfung. Bist du bereit für deine Nuzlocke?</p>
+        <h1>{title}</h1>
+        <p className="type-trainer-subtitle">
+          {practice ? "Trainiere deine Lieblingskategorien – einzeln oder gemischt."
+            : "Alle Wissensgebiete. Eine Prüfung. Erst 100 % sind wirklich Nuzlocke-würdig."}
+        </p>
         {!active ? (
           <div className="type-trainer-setup">
             <label className="type-trainer-field">
@@ -312,12 +366,12 @@ export default function NuzlockeExam() {
               </span>
             </label>
             <label className="type-trainer-field">
-              <span>Prüfungsfragen</span>
+              <span>{practice ? "Trainingsrunden" : "Prüfungsfragen"}</span>
               <span className="type-trainer-select-shell">
                 <select value={settings.rounds} onChange={(event) => changeSetting("rounds", Number(event.target.value))}>
-                  <option value={12}>12 Fragen</option>
-                  <option value={20}>20 Fragen</option>
-                  <option value={30}>30 Fragen</option>
+                  {(practice ? [10,20,30,50] : [12,24,36]).map((count) => (
+                    <option key={count} value={count}>{count} Fragen</option>
+                  ))}
                 </select>
               </span>
             </label>
@@ -331,139 +385,190 @@ export default function NuzlockeExam() {
               </span>
             </label>
             <div className="exam-pass-info">
-              <span className="exam-pass-number">75 %</span>
-              <span>zum Bestehen</span>
-              <span className="exam-pass-divider" />
+              {practice ? (
+                <>
+                  <span className="exam-pass-number">+100</span>
+                  <span>pro richtige Antwort</span>
+                </>
+              ) : (
+                <>
+                  <span className="exam-pass-number">100 %</span>
+                  <span>Nuzlocke-würdig</span>
+                </>
+              )}
+              <span className="exam-pass-divider"/>
               <span>Bestwert: <strong>{best} %</strong></span>
             </div>
             <div className="type-trainer-wide">
               <GenerationFilter title="Pokémon-Generationen"
                 generations={settings.generations}
-                onToggle={(gen) => changeGens(settings.generations.includes(gen)
+                onToggle={(gen) => setGenList(settings.generations.includes(gen)
                   ? settings.generations.filter((value) => value !== gen)
-                  : [...settings.generations, gen].sort((a,b) => a-b))}
-                onOnly={(gen) => changeGens([gen])}
-                onAll={() => changeGens(GENS)}
-                onClear={() => changeGens([])}
+                  : [...settings.generations,gen].sort((a,b)=>a-b))}
+                onOnly={(gen) => setGenList([gen])}
+                onAll={() => setGenList(GENS)}
+                onClear={() => setGenList([])}
               />
             </div>
-            <div className="type-trainer-setup-footer">
-              <span>{pool.length} Pokémon im Fragenpool · Gen {ruleGen}</span>
-              <button type="button" className="type-trainer-primary" disabled={!pool.length} onClick={start}>Prüfung starten</button>
+            <div className="type-trainer-wide">
+              <div className="exam-knowledge-header">
+                <span className="type-trainer-field-title">{practice ? "Wissensgebiete auswählen" : "Prüfungsgebiete"}</span>
+                {practice ? <div className="exam-knowledge-actions">
+                  <button type="button" onClick={() => changeSetting("categories",availableCategories)}>Alle</button>
+                  <button type="button" onClick={() => changeSetting("categories",[])}>Keine</button>
+                </div> : null}
+              </div>
+              <div className="exam-knowledge-grid">
+                {EXAM_CATEGORIES.map((category) => {
+                  const available = availableCategories.includes(category.key);
+                  const chosen = available && (!practice || settings.categories.includes(category.key));
+                  return (
+                    <button key={category.key} type="button"
+                      className={"exam-knowledge-chip" + (chosen?" is-selected":"")}
+                      disabled={!available || !practice}
+                      aria-pressed={chosen}
+                      onClick={() => toggleCategory(category.key)}>
+                      <span>{chosen ? "✓" : "○"}</span>
+                      <span>{category.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            {!pool.length ? <div className="type-trainer-settings-error type-trainer-wide">Wähle mindestens eine Generation, die zum Typenstand passt.</div> : null}
+            <div className="type-trainer-setup-footer">
+              <span>{pool.length} Pokémon · Gen {ruleGen} · {selectedCategories.length} Wissensgebiete</span>
+              <button type="button" className="type-trainer-primary"
+                disabled={!pool.length || !selectedCategories.length}
+                onClick={start}>{practice ? "Training starten" : "Prüfung starten"}</button>
+            </div>
+            {!pool.length ? <p className="type-trainer-settings-error type-trainer-wide">Wähle mindestens eine Generation, die zum Regelstand passt.</p> : null}
+            {pool.length>0&&!selectedCategories.length ? <p className="type-trainer-settings-error type-trainer-wide">Wähle mindestens ein verfügbares Wissensgebiet.</p> : null}
+            {!practice ? (
+              <div className="exam-rank-hint type-trainer-wide">
+                80 %: In Erwägung · 90 %: Kommt infrage · 100 %: Nuzlocke-würdig
+              </div>
+            ) : null}
           </div>
         ) : finished ? (
           <section className="exam-results" role="status">
-            <div className="exam-rank-icon" aria-hidden="true">{completion.passed ? "★" : "◇"}</div>
+            <div className="exam-rank-icon" aria-hidden="true">{!practice && completion.passed ? "★" : "◇"}</div>
             <div className="exam-result-percent">{completion.percent} %</div>
-            <h2>{completion.rank}</h2>
+            <h2>{practice ? "Training abgeschlossen" : completion.rank}</h2>
             <p>{correctCount} von {answered} Fragen richtig · {correctCount * 100} Punkte</p>
             <div className="exam-category-results">
               {EXAM_CATEGORIES.filter((category) => byCategory[category.key]?.total).map((category) => (
-                <div className="exam-category-row" key={category.key}>
+                <div key={category.key} className="exam-category-row">
                   <span>{category.label}</span>
-                  <strong>{byCategory[category.key].correct}/{byCategory[category.key].total}</strong>
+                  <strong>{byCategory[category.key].correct} / {byCategory[category.key].total}</strong>
                 </div>
               ))}
             </div>
             <div className="type-trainer-actions">
-              <button className="type-trainer-primary" type="button" onClick={start}>Erneut versuchen</button>
-              <button className="type-trainer-secondary" type="button" onClick={exit}>Einstellungen</button>
+              <button type="button" className="type-trainer-primary" onClick={start}>
+                {practice ? "Weiter trainieren" : "Prüfung wiederholen"}
+              </button>
+              <button type="button" className="type-trainer-secondary" onClick={exit}>Einstellungen</button>
+              {!practice ? <button type="button" className="type-trainer-secondary"
+                onClick={() => nav("/games/knowledge-training")}>Gezielt trainieren</button> : null}
             </div>
           </section>
         ) : (
           <>
             <div className="type-trainer-score-row">
-              <span>Frage {Math.min(answered + 1, settings.rounds)} / {settings.rounds}</span>
+              <span>Frage {Math.min(answered+1,settings.rounds)} / {settings.rounds}</span>
               <span>{correctCount * 100} Punkte</span>
               <span>{correctCount} richtig</span>
             </div>
-            <div className="exam-progress"><span style={{width: (answered / settings.rounds * 100) + "%"}} /></div>
-            {loading ? <div className="type-trainer-loading" role="status">Nächste Frage wird geladen …</div> :
-              error ? <div className="type-trainer-feedback is-incorrect">
+            <div className="exam-progress"><span style={{width: (answered/settings.rounds*100)+"%"}}/></div>
+            {loading ? (
+              <div className="type-trainer-loading" role="status">Frage wird geladen … {busyHint}</div>
+            ) : error ? (
+              <div className="type-trainer-feedback is-incorrect" role="alert">
                 <strong>{error}</strong>
-                <button className="type-trainer-secondary" type="button" onClick={prepareNextQuestion}>Erneut versuchen</button>
-                <button className="type-trainer-secondary" type="button" onClick={exit}>Beenden</button>
-              </div> :
-              question ? (
-                <>
-                  <section className="exam-question-block">
-                    <CategoryLabel category={question.category} />
-                    {question.pokemon ? (
-                      <img src={question.pokemon.image} className="exam-pokemon-image"
-                        alt={isNameQuestion ? "Unbekanntes Pokémon" : question.pokemon.name}
-                        onError={(event) => {
-                          const fallback = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/" + question.pokemon.id + ".png";
-                          if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
-                        }}
-                      />
-                    ) : null}
-                    <h2>{question.title}</h2>
-                    {question.attackingType ? (
-                      <TypeToken typeKey={question.attackingType} />
-                    ) : null}
-                  </section>
-                  {isNameQuestion ? (
-                    <form className="exam-name-form" onSubmit={(event) => { event.preventDefault(); submit(); }}>
-                      <div className="exam-input-wrap">
-                        <input type="text" className="exam-name-input"
-                          placeholder="Pokémon-Name eingeben …" value={nameInput}
-                          autoComplete="off" autoFocus disabled={checked}
-                          onChange={(event) => { setNameInput(event.target.value); setSuggestionIndex(-1); }}
-                          onKeyDown={onNameKeyDown} />
-                        {!checked && nameInput.trim() && guessSuggestions.length > 0 ? (
-                          <div className="exam-suggestions" role="listbox" aria-label="Pokémon-Vorschläge">
-                            {guessSuggestions.map((pokemon,index) => (
-                              <button type="button" key={pokemon.dexId} role="option"
-                                aria-selected={index===suggestionIndex}
-                                className={index===suggestionIndex ? "is-active" : ""}
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
-                                  setNameInput(pokemon.name);
-                                  setSuggestionIndex(-1);
-                                }}
-                                onClick={() => { setNameInput(pokemon.name); setSuggestionIndex(-1); }}>
-                                {pokemon.name}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                      {!checked ? <button type="submit" className="type-trainer-primary" disabled={!nameInput.trim()}>Prüfen</button> : null}
-                    </form>
-                  ) : (
-                    <div className={"exam-options-grid" + (question.options.some((option) => option.type) ? " has-types" : "")}
-                      role="group" aria-label="Antwortmöglichkeiten">
-                      {question.options.map((option) => (
-                        <QuestionOption key={option.key} option={option}
-                          checked={checked} selected={selected.includes(option.key)}
-                          correct={question.correct.includes(option.key)}
-                          disabled={checked}
-                          onClick={() => toggleOption(option.key)}
-                        />
+                <div className="type-trainer-actions">
+                  <button className="type-trainer-secondary" type="button" onClick={prepareNextQuestion}>Erneut versuchen</button>
+                  <button className="type-trainer-secondary" type="button" onClick={exit}>Einstellungen</button>
+                </div>
+              </div>
+            ) : question ? (
+              <>
+                <section className="exam-question-block">
+                  <span className="exam-kind">{categoryInfo?.label || "Wissen"}</span>
+                  {question.pokemon ? <PokemonArt pokemon={question.pokemon}/> : null}
+                  {question.pokemonPair ? (
+                    <div className="exam-pokemon-pair">
+                      {question.pokemonPair.map((pokemon) => (
+                        <div key={pokemon.id}><PokemonArt pokemon={pokemon}/><strong>{pokemon.name}</strong></div>
                       ))}
                     </div>
-                  )}
-                  {checked ? (
-                    <div className={"type-trainer-feedback " + (wasCorrect ? "is-correct" : "is-incorrect")} role="status">
-                      <strong>{wasCorrect ? "Richtig! +100 Punkte" : "Nicht richtig – hier ist die Auflösung:"}</strong>
-                      <span>{question.explanation}</span>
+                  ) : null}
+                  {question.itemImage ? <img className="exam-item-art" src={question.itemImage} alt=""
+                    onError={(event) => { event.currentTarget.style.display="none"; }}/> : null}
+                  <h2>{question.title}</h2>
+                  {question.questionNote ? <p className="exam-question-note">{question.questionNote}</p> : null}
+                  {question.attackingType ? <TypeToken typeKey={question.attackingType}/> : null}
+                </section>
+                {isName ? (
+                  <form className="exam-name-form" onSubmit={(event) => {event.preventDefault();submit();}}>
+                    <div className="exam-input-wrap">
+                      <input type="text" className="exam-name-input"
+                        placeholder="Pokémon-Name eingeben …" value={nameInput}
+                        autoComplete="off" autoFocus disabled={checked}
+                        onChange={(event) => {setNameInput(event.target.value);setSuggestionIndex(-1);}}
+                        onKeyDown={onNameKeyDown}/>
+                      {!checked && nameInput.trim() && nameSuggestions.length > 0 ? (
+                        <div className="exam-suggestions" role="listbox" aria-label="Pokémon-Vorschläge">
+                          {nameSuggestions.map((pokemon,index) => (
+                            <button type="button" key={pokemon.dexId} role="option"
+                              aria-selected={index===suggestionIndex}
+                              className={index===suggestionIndex?"is-active":""}
+                              onMouseDown={(event) => {event.preventDefault();setNameInput(pokemon.name);setSuggestionIndex(-1);}}
+                              onClick={() => {setNameInput(pokemon.name);setSuggestionIndex(-1);}}>
+                              {pokemon.name}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : <p className="type-trainer-hint">{isNameQuestion ? "Tippe den Namen oder wähle einen Vorschlag." :
-                    "Wähle " + (question.correct.length === 1 ? "eine Antwort." : question.correct.length + " Antworten.")}</p>}
-                  <div className="type-trainer-actions">
-                    {checked ? (
-                      <button type="button" className="type-trainer-primary" onClick={advance}>
-                        {answered >= settings.rounds || !schedule.current.length ? "Ergebnis anzeigen" : "Nächste Frage"}
-                      </button>
-                    ) : !isNameQuestion ? (
-                      <button type="button" className="type-trainer-primary" disabled={!selected.length} onClick={submit}>Antwort prüfen</button>
-                    ) : null}
-                    <button type="button" className="type-trainer-secondary" onClick={exit}>Prüfung verlassen</button>
+                    {!checked ? <button type="submit" className="type-trainer-primary" disabled={!nameInput.trim()}>Prüfen</button> : null}
+                  </form>
+                ) : (
+                  <div className={"exam-options-grid" + (question.options.some((option)=>option.type)?" has-types":"")}
+                    role="group" aria-label="Antwortmöglichkeiten">
+                    {question.options.map((option) => (
+                      <AnswerOption key={option.key} option={option}
+                        checked={checked} selected={selected.includes(option.key)}
+                        correct={question.correct.includes(option.key)}
+                        onClick={() => toggleOption(option.key)}/>
+                    ))}
                   </div>
-                </>
-              ) : null}
+                )}
+                {checked ? (
+                  <div className={"type-trainer-feedback "+(wasCorrect?"is-correct":"is-incorrect")} role="status">
+                    <strong>{wasCorrect?"Richtig! +100 Punkte":"Leider nicht richtig."}</strong>
+                    <span>{question.explanation}</span>
+                  </div>
+                ) : (
+                  <p className="type-trainer-hint">{isName?"Tippe den Pokémon-Namen oder wähle einen Vorschlag.":
+                    question.correct.length===1?"Wähle eine Antwort.":
+                      "Wähle "+question.correct.length+" richtige Antworten."}</p>
+                )}
+                <div className="type-trainer-actions">
+                  {checked ? (
+                    <button type="button" className="type-trainer-primary" onClick={advance}>
+                      {answered>=settings.rounds||!schedule.current.length?"Ergebnis anzeigen":"Nächste Frage"}
+                    </button>
+                  ) : !isName ? (
+                    <button type="button" className="type-trainer-primary" disabled={!selected.length} onClick={submit}>
+                      Antwort prüfen
+                    </button>
+                  ) : null}
+                  <button type="button" className="type-trainer-secondary" onClick={exit}>
+                    {practice?"Training beenden":"Prüfung verlassen"}
+                  </button>
+                </div>
+              </>
+            ) : null}
           </>
         )}
       </section>
