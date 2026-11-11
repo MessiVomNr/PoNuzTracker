@@ -29,6 +29,7 @@ import GamesHub from "./games/GamesHub";
 import TypeTrainerMenu from "./games/TypeTrainerMenu";
 import TypeEffectivenessGame from "./games/TypeEffectivenessGame";
 import PokemonTypeGuessGame from "./games/PokemonTypeGuessGame";
+import NuzlockeExam from "./games/NuzlockeExam";
 import PokemonGuessMenu from "./games/PokemonGuessMenu";
 import PokemonGuessSolo from "./games/PokemonGuessSolo";
 import PokemonHigherLower from "./games/PokemonHigherLower";
@@ -78,6 +79,7 @@ function AppContent() {
         <Route path="/games/type-trainer" element={<TypeTrainerMenu />} />
         <Route path="/games/type-trainer/effectiveness" element={<TypeEffectivenessGame />} />
         <Route path="/games/type-trainer/pokemon-types" element={<PokemonTypeGuessGame />} />
+        <Route path="/games/nuzlocke-exam" element={<NuzlockeExam />} />
         <Route path="/games/pokemon-guess" element={<PokemonGuessMenu />} />
         <Route path="/games/pokemon-guess/solo" element={<PokemonGuessSolo />} />
         <Route path="/games/higher-lower" element={<PokemonHigherLower />} />
