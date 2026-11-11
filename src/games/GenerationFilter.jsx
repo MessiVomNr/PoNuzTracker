@@ -18,16 +18,30 @@ function chooseStarterGroup() {
   try { localStorage.setItem("ponuz-last-starter-group", next); } catch { /* optional */ }
   return next;
 }
-export const ACTIVE_STARTER_GROUP = chooseStarterGroup();
+// Alle Generationsbilder einer Seite nutzen denselben Starter-Typ.
+// Beim erneuten Betreten der Seite wird durch den Provider neu gewürfelt.
+export const ACTIVE_STARTER_GROUP = "grass";
+const StarterGroupContext = React.createContext(ACTIVE_STARTER_GROUP);
+
+export function StarterThemeProvider({ children }) {
+  const starterGroup = React.useContext(StarterGroupContext);
+  return (
+    <StarterGroupContext.Provider value={starterGroup}>
+      {children}
+    </StarterGroupContext.Provider>
+  );
+}
 export function getStarterSpecies(gen, group = ACTIVE_STARTER_GROUP) {
   return STARTER_GROUPS[group]?.[Number(gen) - 1] || STARTER_GROUPS.grass[0];
 }
 
-export function GenerationStarter({ gen, group = ACTIVE_STARTER_GROUP }) {
+export function GenerationStarter({ gen, group }) {
+  const inheritedGroup = React.useContext(StarterGroupContext);
+  const actualGroup = group || inheritedGroup;
   return (
     <img
       className="trainer-gen-starter"
-      src={"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + getStarterSpecies(gen, group) + ".png"}
+      src={"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + getStarterSpecies(gen, actualGroup) + ".png"}
       alt=""
       loading="lazy"
       aria-hidden="true"
