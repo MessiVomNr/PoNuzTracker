@@ -184,7 +184,12 @@ export default function NuzlockeExam() {
               }
             }
           }
-          if (!prepared || (prepared.options && !prepared.correct?.length)) continue;
+          if (!prepared || (prepared.options && !prepared.correct?.length)) {
+            // Don't silently shorten the exam if a particular Pokémon has
+            // no usable weakness question under the selected rules.
+            schedule.current.push(category);
+            continue;
+          }
           if (runId !== currentRun.current) return;
           setQuestion(prepared);
           return;
