@@ -120,3 +120,11 @@
 .exam-pokemon-pair{gap:8px}.exam-pokemon-pair>div{padding:8px}
 .exam-pokemon-pair .exam-pokemon-image{width:min(125px,36vw);height:min(125px,36vw)}
 }
+
+/* Kategorie mit eigenem Nur-Schalter wie die Gen-Auswahl. */
+.exam-knowledge-unit{display:flex;align-items:stretch;gap:5px;min-width:0}
+.exam-knowledge-unit .exam-knowledge-chip{flex:1 1 auto;min-width:0}
+.exam-knowledge-only{flex:0 0 auto;border:1px solid rgba(155,188,244,.22);
+  background:rgba(91,126,192,.16);border-radius:12px;color:#dceaff;
+  font:inherit;font-size:12px;font-weight:850;padding:7px 10px;cursor:pointer}
+.exam-knowledge-only:hover{background:rgba(99,150,235,.30);border-color:#8cbaff}
