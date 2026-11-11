@@ -3,7 +3,7 @@
 // Ausnahmen (z. B. Geist-Typen ab Gen 6) sind ausdrücklich berücksichtigt.
 import { pokedex } from "../data/pokedex";
 import {
-  EXTRA_CATEGORIES, IMPORTANT_ITEMS, SIMPLE_EVOLUTIONS, MOVE_FACTS,
+  EXTRA_CATEGORIES, IMPORTANT_ITEMS, SIMPLE_EVOLUTIONS, LEVEL_EVOLUTIONS, MOVE_FACTS,
   availableBattleFacts, finalEvolutionPool,
 } from "./nuzlockeKnowledgeData";
 import {
@@ -215,8 +215,8 @@ export function examCategories(ruleGen, pokemonPool) {
     pokemonPool.some((p) => p.dexId === entry.id && ruleGen >= entry.minGen))) available.push("ability");
   if (TRAP_SCENARIOS.some((scenario) => scenario.minGen <= ruleGen)) available.push("scenario");
   if (IMPORTANT_ITEMS.some((item) => item.minGen <= ruleGen)) available.push("items");
-  const simpleEvolutions = SIMPLE_EVOLUTIONS.filter((item) => item.minGen <= ruleGen);
-  if (simpleEvolutions.length >= 3) available.push("evolution");
+  const evolutions = [...SIMPLE_EVOLUTIONS, ...LEVEL_EVOLUTIONS].filter((item) => item.minGen <= ruleGen);
+  if (evolutions.length >= 3) available.push("evolution");
   if (MOVE_FACTS.some((item) => item.minGen <= ruleGen)) available.push("moves");
   if (availableBattleFacts(ruleGen).length) available.push("battle");
   const fullyEvolved = finalEvolutionPool(pokemonPool);
@@ -247,7 +247,7 @@ export function makeDamageQuestion(pokemon, ruleGen, difficulty = "normal") {
   if (!attack) return null;
   const right = getTypeMultiplierForGeneration(attack.key, pokemon.types, ruleGen);
   const possible = [0, .25, .5, 1, 2, 4].filter((multiplier) => multiplier !== right);
-  const max = difficulty === "easy" ? 3 : difficulty === "hard" ? 6 : 4;
+  const max = difficulty === "hard" ? 6 : 4;
   const sorted = [...possible].sort((a,b) => Math.abs(a-right)-Math.abs(b-right));
   const options = shuffleItems([right, ...sorted.slice(0, max-1)]).map((value) => ({
     key: String(value), label: formatMultiplier(value), value,
@@ -259,10 +259,19 @@ export function makeDamageQuestion(pokemon, ruleGen, difficulty = "normal") {
 }
 
 export function makeWeaknessQuestion(pokemon, ruleGen, difficulty = "normal") {
-  const { choices, answers } = createTrainingChoices(
+  const result = createTrainingChoices(
     { pokemonTypes: pokemon.types, ruleGen, multiplier: 2 },
-    { difficulty: difficulty === "easy" ? "easy" : difficulty === "hard" ? "hard" : "normal", answerMode: "classic" });
-  if (!answers.length) return null;
+    { difficulty, answerMode: "classic" });
+  if (!result.answers.length) return null;
+  // Nur eine gerade Anzahl an Antworten (6, 8 oder 12).
+  const correctKeys = new Set(result.answers);
+  const targetCount = difficulty === "normal" ? 8 : result.choices.length;
+  const choices = shuffleItems([
+    ...result.choices.filter((choice) => correctKeys.has(choice.key)),
+    ...result.choices.filter((choice) => !correctKeys.has(choice.key))
+      .slice(0, targetCount - result.answers.length),
+  ]);
+  const answers = result.answers;
   return {
     category: "weakness", title: "Ohne Fähigkeiten/Items: Welche Angriffstypen treffen " + pokemon.name + " sehr effektiv?",
     pokemon, options: choices.map((choice) => ({ key: choice.key, type: choice.types[0] })),
@@ -274,7 +283,7 @@ export function makeWeaknessQuestion(pokemon, ruleGen, difficulty = "normal") {
 
 export function makeAbilityQuestion(entry, difficulty = "normal") {
   const name = pokedex["pokedex" + entry.id] || "Pokémon";
-  const count = difficulty === "easy" ? 3 : difficulty === "hard" ? 5 : 4;
+  const count = difficulty === "hard" ? 6 : 4;
   const validAbilities = new Set([entry.key, ...(entry.otherAbilities || [])]);
   // Die falschen Optionen dürfen keine weitere echte Fähigkeit dieser Spezies sein.
   const wrong = shuffleItems(ABILITIES.filter((ability) => !validAbilities.has(ability.key))).slice(0, count-1);
