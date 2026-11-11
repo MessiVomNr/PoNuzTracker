@@ -128,3 +128,28 @@
   background:rgba(91,126,192,.16);border-radius:12px;color:#dceaff;
   font:inherit;font-size:12px;font-weight:850;padding:7px 10px;cursor:pointer}
 .exam-knowledge-only:hover{background:rgba(99,150,235,.30);border-color:#8cbaff}
+
+/* Drei feste Nuzlocke-Prüfungen statt konfigurierbarer Prüfungsregeln. */
+.exam-fixed-tests {display:grid;gap:19px;background:rgba(8,17,36,.48);
+  border:1px solid rgba(147,176,235,.18);border-radius:22px;padding:25px}
+.exam-fixed-header,.exam-fixed-footer {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.exam-fixed-header strong {font-size:17px;color:#edf4ff;font-weight:900}
+.exam-fixed-header>span,.exam-fixed-footer {font-size:13px;color:#b3c7ea}
+.exam-test-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.exam-test-card {border:1px solid rgba(143,184,253,.28);border-radius:18px;
+  min-height:190px;display:flex;flex-direction:column;align-items:flex-start;gap:13px;
+  text-align:left;padding:21px 19px;color:#e7f0ff;cursor:pointer;font:inherit;
+  background:linear-gradient(155deg,rgba(46,75,131,.58),rgba(17,31,59,.82));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:transform .16s,border-color .16s,background .16s}
+.exam-test-card:hover {transform:translateY(-3px);border-color:#88b6ff;
+  background:linear-gradient(155deg,rgba(61,102,177,.64),rgba(22,42,78,.88))}
+.exam-test-card:focus-visible {outline:2px solid #afd0ff;outline-offset:3px}
+.exam-test-card strong {font-size:25px;color:#fff;line-height:1.1}
+.exam-test-card>span:nth-of-type(2) {color:#c1d0ec;font-size:13px;line-height:1.45;flex:1}
+.exam-test-step {display:grid;place-items:center;min-width:35px;height:35px;padding:0 8px;
+  border-radius:11px;background:rgba(125,162,238,.16);border:1px solid rgba(176,205,255,.20);
+  font-size:14px;font-weight:900;color:#bed5ff}
+.exam-test-start{font-size:12px;color:#bfd5ff;letter-spacing:.01em;font-weight:900}
+.exam-fixed-footer {padding-top:12px;border-top:1px solid rgba(150,183,245,.18)}
+@media(max-width:740px){.exam-test-grid{grid-template-columns:1fr}
+  .exam-test-card{min-height:130px;gap:9px;padding:16px 18px}}
