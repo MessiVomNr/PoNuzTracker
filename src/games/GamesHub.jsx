@@ -149,7 +149,7 @@ export default function GamesHub() {
             <span className="games-hub-card-content">
               <span className="games-hub-card-title">Nuzlocke-Eignungstest</span>
               <span className="games-hub-card-text">
-                Pokémon erkennen, Typen, Schwächen und gefährliche Fähigkeiten meistern.
+                Drei Prüfungen mit 30 Fragen aus zwölf Pokémon-Wissensgebieten.
               </span>
             </span>
 
