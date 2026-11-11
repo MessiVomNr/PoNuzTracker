@@ -423,14 +423,21 @@ export default function NuzlockeExam({ mode = "exam" }) {
                   const available = availableCategories.includes(category.key);
                   const chosen = available && (!practice || settings.categories.includes(category.key));
                   return (
-                    <button key={category.key} type="button"
-                      className={"exam-knowledge-chip" + (chosen?" is-selected":"")}
-                      disabled={!available || !practice}
-                      aria-pressed={chosen}
-                      onClick={() => toggleCategory(category.key)}>
-                      <span>{chosen ? "✓" : "○"}</span>
-                      <span>{category.label}</span>
-                    </button>
+                    <div key={category.key} className="exam-knowledge-unit">
+                      <button type="button"
+                        className={"exam-knowledge-chip" + (chosen?" is-selected":"")}
+                        disabled={!available || !practice}
+                        aria-pressed={chosen}
+                        onClick={() => toggleCategory(category.key)}>
+                        <span>{chosen ? "✓" : "○"}</span>
+                        <span>{category.label}</span>
+                      </button>
+                      {practice && available ? (
+                        <button type="button" className="exam-knowledge-only"
+                          title={"Nur " + category.label + " trainieren"}
+                          onClick={() => changeSetting("categories", [category.key])}>Nur</button>
+                      ) : null}
+                    </div>
                   );
                 })}
               </div>
