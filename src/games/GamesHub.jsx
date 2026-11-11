@@ -124,17 +124,15 @@ export default function GamesHub() {
 
           <button
             type="button"
-            className="games-hub-card games-hub-card-disabled"
-            disabled
+            className="games-hub-card games-hub-card-primary"
+            onClick={() => navigate("/games/nuzlocke-exam")}
           >
             <ControllerIcon />
 
             <span className="games-hub-card-content">
-              <span className="games-hub-card-title">
-                Weitere Games
-              </span>
+              <span className="games-hub-card-title">Nuzlocke-Eignungstest</span>
               <span className="games-hub-card-text">
-                Später kommen mehr Modi dazu.
+                Pokémon erkennen, Typen, Schwächen und gefährliche Fähigkeiten meistern.
               </span>
             </span>
 
