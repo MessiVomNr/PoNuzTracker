@@ -3,6 +3,10 @@
 // Ausnahmen (z. B. Geist-Typen ab Gen 6) sind ausdrücklich berücksichtigt.
 import { pokedex } from "../data/pokedex";
 import {
+  EXTRA_CATEGORIES, IMPORTANT_ITEMS, SIMPLE_EVOLUTIONS, MOVE_FACTS,
+  availableBattleFacts, finalEvolutionPool,
+} from "./nuzlockeKnowledgeData";
+import {
   GEN_RANGES, getGenerationTypes, getTypeMultiplierForGeneration,
   shuffleItems, getTypeLabel, createTrainingChoices, formatMultiplier,
 } from "./typeTrainerData";
@@ -14,6 +18,7 @@ export const EXAM_CATEGORIES = [
   { key: "damage", label: "Effektivität" },
   { key: "ability", label: "Fähigkeiten zuordnen" },
   { key: "scenario", label: "Nuzlocke-Fallen" },
+  ...EXTRA_CATEGORIES,
 ];
 
 export const ABILITIES = [
@@ -203,19 +208,32 @@ export function pokemonArtwork(id) {
   return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + id + ".png";
 }
 
-export function examCategories(ruleGen, pokemonPool, generations) {
+export function examCategories(ruleGen, pokemonPool) {
+  if (!pokemonPool.length) return [];
   const available = ["name", "types", "weakness", "damage"];
-  if (ruleGen >= 3 && ABILITY_CASES.some((entry) => pokemonPool.some((p) => p.dexId === entry.id && ruleGen >= entry.minGen))) {
-    available.push("ability");
-  }
+  if (ruleGen >= 3 && ABILITY_CASES.some((entry) =>
+    pokemonPool.some((p) => p.dexId === entry.id && ruleGen >= entry.minGen))) available.push("ability");
   if (TRAP_SCENARIOS.some((scenario) => scenario.minGen <= ruleGen)) available.push("scenario");
+  if (IMPORTANT_ITEMS.some((item) => item.minGen <= ruleGen)) available.push("items");
+  const simpleEvolutions = SIMPLE_EVOLUTIONS.filter((item) => item.minGen <= ruleGen);
+  if (simpleEvolutions.length >= 3) available.push("evolution");
+  if (MOVE_FACTS.some((item) => item.minGen <= ruleGen)) available.push("moves");
+  if (availableBattleFacts(ruleGen).length) available.push("battle");
+  const fullyEvolved = finalEvolutionPool(pokemonPool);
+  if (fullyEvolved.length >= 1) available.push("offense");
+  if (fullyEvolved.length >= 2) available.push("speed");
   return available;
 }
 
-// Gleiche Anzahl Fragen je Kategorie, danach erst Wiederholungen.
+// Alle verfügbaren Kategorien werden pro Zyklus gleich häufig genutzt.
+// Im Training kann der Spieler einzelne Themen an- und abwählen.
 export function buildExamSchedule(settings, pool) {
-  const categories = examCategories(settings.ruleGen, pool, settings.generations);
+  const available = examCategories(settings.ruleGen, pool);
+  const categories = Array.isArray(settings.categories)
+    ? available.filter((key) => settings.categories.includes(key))
+    : available;
   const result = [];
+  if (!categories.length) return result;
   while (result.length < settings.rounds) {
     result.push(...shuffleItems(categories).slice(0, settings.rounds - result.length));
   }
@@ -280,9 +298,10 @@ export function makeScenarioQuestion(scenario) {
 }
 
 export function examResult(correct, total) {
-  const percent = Math.round((correct / Math.max(1,total)) * 100);
-  if (percent >= 90) return { percent, rank: "Nuzlocke-Meister", passed: true };
-  if (percent >= 75) return { percent, rank: "Nuzlocke-würdig", passed: true };
-  if (percent >= 50) return { percent, rank: "Aufstrebender Trainer", passed: false };
+  const ratio = Math.max(0, Math.min(1, correct / Math.max(1, total)));
+  const percent = Math.round(ratio * 100);
+  if (total > 0 && correct === total) return { percent: 100, rank: "Nuzlocke-würdig", passed: true };
+  if (ratio >= .9) return { percent, rank: "Kommt infrage", passed: false };
+  if (ratio >= .8) return { percent, rank: "Kann in Erwägung gezogen werden", passed: false };
   return { percent, rank: "Noch nicht bereit", passed: false };
 }
