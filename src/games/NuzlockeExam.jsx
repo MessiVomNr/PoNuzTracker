@@ -90,10 +90,10 @@ function AnswerOption({ option, checked, selected, correct, onClick }) {
     </button>
   );
 }
-function PokemonArt({ pokemon }) {
+function PokemonArt({ pokemon, hideName = false }) {
   return (
     <img src={pokemon.image} className="exam-pokemon-image"
-      alt={pokemon.name}
+      alt={hideName ? "Unbekanntes Pokémon" : pokemon.name}
       onError={(event) => {
         const fallback = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/" + pokemon.id + ".png";
         if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
@@ -494,7 +494,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
               <>
                 <section className="exam-question-block">
                   <span className="exam-kind">{categoryInfo?.label || "Wissen"}</span>
-                  {question.pokemon ? <PokemonArt pokemon={question.pokemon}/> : null}
+                  {question.pokemon ? <PokemonArt pokemon={question.pokemon} hideName={isName}/> : null}
                   {question.pokemonPair ? (
                     <div className="exam-pokemon-pair">
                       {question.pokemonPair.map((pokemon) => (
