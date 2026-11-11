@@ -1,13 +1,33 @@
 import React from "react";
 import "./generationStarter.css";
 
-const FIRST_STARTERS = { 1: 1, 2: 152, 3: 252, 4: 387, 5: 495, 6: 650, 7: 722, 8: 810, 9: 906 };
+// Je Seitenaufruf EIN Starter-Typ für alle Generationen.
+// Ein neuer Aufruf wählt zufällig einen anderen der drei Typen, damit
+// nicht jedes Mal nur Pflanzenstarter gezeigt werden.
+export const STARTER_GROUPS = {
+  grass: [1, 152, 252, 387, 495, 650, 722, 810, 906],
+  fire: [4, 155, 255, 390, 498, 653, 725, 813, 909],
+  water: [7, 158, 258, 393, 501, 656, 728, 816, 912],
+};
+const GROUP_NAMES = Object.keys(STARTER_GROUPS);
+function chooseStarterGroup() {
+  let previous = "";
+  try { previous = localStorage.getItem("ponuz-last-starter-group") || ""; } catch { /* optional */ }
+  const options = GROUP_NAMES.filter((group) => group !== previous);
+  const next = options[Math.floor(Math.random() * options.length)] || "grass";
+  try { localStorage.setItem("ponuz-last-starter-group", next); } catch { /* optional */ }
+  return next;
+}
+export const ACTIVE_STARTER_GROUP = chooseStarterGroup();
+export function getStarterSpecies(gen, group = ACTIVE_STARTER_GROUP) {
+  return STARTER_GROUPS[group]?.[Number(gen) - 1] || STARTER_GROUPS.grass[0];
+}
 
 export function GenerationStarter({ gen }) {
   return (
     <img
       className="trainer-gen-starter"
-      src={"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + FIRST_STARTERS[gen] + ".png"}
+      src={"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + getStarterSpecies(gen) + ".png"}
       alt=""
       loading="lazy"
       aria-hidden="true"
