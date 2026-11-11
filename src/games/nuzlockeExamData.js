@@ -179,7 +179,7 @@ export function makeDamageQuestion(pokemon, ruleGen, difficulty = "normal") {
   const options = shuffleItems([right, ...sorted.slice(0, max-1)]).map((value) => ({
     key: String(value), label: formatMultiplier(value), value,
   }));
-  return { category: "damage", title: "Wie effektiv ist " + getTypeLabel(attack.key) +
+  return { category: "damage", title: "Ohne Fähigkeiten/Items: Wie effektiv ist " + getTypeLabel(attack.key) +
     " gegen " + pokemon.name + "?", pokemon, attackingType: attack.key,
     options, correct: [String(right)],
     explanation: "Der Angriff verursacht " + formatMultiplier(right) + " Schaden." };
@@ -191,7 +191,7 @@ export function makeWeaknessQuestion(pokemon, ruleGen, difficulty = "normal") {
     { difficulty: difficulty === "easy" ? "easy" : difficulty === "hard" ? "hard" : "normal", answerMode: "classic" });
   if (!answers.length) return null;
   return {
-    category: "weakness", title: "Welche Angriffstypen treffen " + pokemon.name + " sehr effektiv?",
+    category: "weakness", title: "Ohne Fähigkeiten/Items: Welche Angriffstypen treffen " + pokemon.name + " sehr effektiv?",
     pokemon, options: choices.map((choice) => ({ key: choice.key, type: choice.types[0] })),
     correct: answers, maxAnswers: 2, explanation: "Schwächen: " + getGenerationTypes(ruleGen)
       .filter((type) => getTypeMultiplierForGeneration(type.key, pokemon.types, ruleGen) > 1)
