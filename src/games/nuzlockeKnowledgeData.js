@@ -73,7 +73,7 @@ export const MOVE_FACTS = [
   { key:"thunderbolt", name:"Donnerblitz", type:"electric", minGen:1, category:"special" },
   { key:"ice-beam", name:"Eisstrahl", type:"ice", minGen:1, category:"special" },
   { key:"flamethrower", name:"Flammenwurf", type:"fire", minGen:1, category:"special" },
-  { key:"hyper-beam", name:"Hyperstrahl", type:"normal", minGen:1, category:"physical" },
+  { key:"hyper-beam", name:"Hyperstrahl", type:"normal", minGen:1, category:"special" },
   { key:"quick-attack", name:"Ruckzuckhieb", type:"normal", minGen:1, category:"physical" },
   { key:"rock-slide", name:"Steinhagel", type:"rock", minGen:1, category:"physical" },
   { key:"toxic", name:"Toxin", type:"poison", minGen:1, category:"status" },
