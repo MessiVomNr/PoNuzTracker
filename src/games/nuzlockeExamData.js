@@ -50,6 +50,25 @@ export const ABILITY_CASES = [
   { id: 448, key: "inner-focus", minGen: 4 },
   { id: 462, key: "magnet-pull", minGen: 4, otherAbilities: ["sturdy"] },
   { id: 576, key: "shadow-tag", minGen: 5 }, // versteckte Fähigkeit
+  // Starter aller neueren Generationen, damit auch Gen 6–9 Fähigkeitsfragen erhalten.
+  { id: 387, key: "overgrow", minGen: 4 },
+  { id: 390, key: "blaze", minGen: 4 },
+  { id: 393, key: "torrent", minGen: 4 },
+  { id: 495, key: "overgrow", minGen: 5 },
+  { id: 498, key: "blaze", minGen: 5, otherAbilities: ["thick-fat"] },
+  { id: 501, key: "torrent", minGen: 5 },
+  { id: 650, key: "overgrow", minGen: 6 },
+  { id: 653, key: "blaze", minGen: 6 },
+  { id: 656, key: "torrent", minGen: 6 },
+  { id: 722, key: "overgrow", minGen: 7 },
+  { id: 725, key: "blaze", minGen: 7, otherAbilities: ["intimidate"] },
+  { id: 728, key: "torrent", minGen: 7 },
+  { id: 810, key: "overgrow", minGen: 8 },
+  { id: 813, key: "blaze", minGen: 8 },
+  { id: 816, key: "torrent", minGen: 8 },
+  { id: 906, key: "overgrow", minGen: 9 },
+  { id: 909, key: "blaze", minGen: 9 },
+  { id: 912, key: "torrent", minGen: 9 },
 ];
 
 export const TRAP_SCENARIOS = [
