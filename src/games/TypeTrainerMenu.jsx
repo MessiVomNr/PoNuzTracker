@@ -34,6 +34,17 @@ export default function TypeTrainerMenu() {
             </span>
             <span className="games-hub-card-arrow">›</span>
           </button>
+          <button type="button" className="games-hub-card games-hub-card-primary"
+            onClick={() => navigate("/games/knowledge-training")}>
+            <span className="games-hub-card-icon games-hub-card-icon-muted">
+              <span className="type-trainer-menu-icon" aria-hidden="true">?</span>
+            </span>
+            <span className="games-hub-card-content">
+              <span className="games-hub-card-title">Pokémon-Wissenstraining</span>
+              <span className="games-hub-card-text">Zwölf Kategorien – einzeln oder gemischt trainieren.</span>
+            </span>
+            <span className="games-hub-card-arrow">›</span>
+          </button>
           <button type="button" className="games-hub-card games-hub-card-primary" onClick={() => navigate("/games/nuzlocke-exam")}>
             <span className="games-hub-card-icon games-hub-card-icon-muted">
               <span className="type-trainer-menu-icon" aria-hidden="true">★</span>
