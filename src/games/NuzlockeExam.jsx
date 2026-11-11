@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { GenerationFilter } from "./GenerationFilter";
 import { getPokemonNameSuggestions, doesGuessMatch } from "./guessGameEngine";
 import { loadTrainerPokemon } from "./trainerPokemonApi";
-import { getGenerationTypes, getTypeColor, getTypeIconUrl } from "./typeTrainerData";
+import { getGenerationTypes, getTypeColor, getTypeIconUrl, shuffleItems } from "./typeTrainerData";
 import {
   EXAM_CATEGORIES, ABILITY_CASES, TRAP_SCENARIOS,
   examPokemonList, examCategories, buildExamSchedule, pokemonArtwork,
@@ -11,7 +11,7 @@ import {
   makeScenarioQuestion, examResult, NUZLOCKE_TESTS, NUZLOCKE_EXAM_ROUNDS, examQuestionDifficulty,
 } from "./nuzlockeExamData";
 import {
-  IMPORTANT_ITEMS, SIMPLE_EVOLUTIONS, MOVE_FACTS,
+  IMPORTANT_ITEMS, SIMPLE_EVOLUTIONS, LEVEL_EVOLUTIONS, MOVE_FACTS,
   availableBattleFacts, finalEvolutionPool,
   makeItemQuestion, makeEvolutionQuestion, makeMoveQuestion,
   makeBattleQuestion, makeOffenseQuestion, makeSpeedQuestion,
@@ -50,7 +50,7 @@ function readSettings(mode) {
       : defaults.generations;
     const ruleGen = saved.ruleGen === "auto" || GENS.some((gen) => String(gen) === saved.ruleGen)
       ? saved.ruleGen : "auto";
-    const allowedRounds = [10,20,30,50];
+    const allowedRounds = [0,10,20,30,50];
     return {
       generations, ruleGen,
       rounds: allowedRounds.includes(Number(saved.rounds)) ? Number(saved.rounds) : defaults.rounds,
@@ -93,6 +93,7 @@ function AnswerOption({ option, checked, selected, correct, onClick }) {
         checked && selected && !correct ? "exam-option-wrong" : "",
       ].filter(Boolean).join(" ")}>
       {option.type ? <TypeToken typeKey={option.type} /> : <span>{option.label}</span>}
+      {selected && !checked ? <span className="exam-selected-mark" aria-hidden="true">✓</span> : null}
       {checked && correct ? <span className="exam-check" aria-label="Richtig">✓</span> : null}
       {checked && selected && !correct ? <span className="exam-check" aria-label="Falsch">×</span> : null}
     </button>
@@ -155,6 +156,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
       ? getPokemonNameSuggestions(nameInput, pool, 9) : [],
     [nameInput, question?.category, checked, pool]);
   const completion = examResult(correctCount, answered);
+  const isEndless = practice && settings.rounds === 0;
   const roundDifficulty = practice ? settings.difficulty
     : examQuestionDifficulty(examTierRef.current, answered);
 
@@ -194,7 +196,8 @@ export default function NuzlockeExam({ mode = "exam" }) {
       return item && makeItemQuestion(item, ruleGen, roundDifficulty);
     }
     if (category === "evolution") {
-      const eligible = SIMPLE_EVOLUTIONS.filter((item) => item.minGen <= ruleGen);
+      const eligible = [...SIMPLE_EVOLUTIONS, ...LEVEL_EVOLUTIONS]
+        .filter((item) => item.minGen <= ruleGen);
       const fact = pick(eligible, "evolution");
       return fact && makeEvolutionQuestion(fact, ruleGen, roundDifficulty);
     }
@@ -248,6 +251,25 @@ export default function NuzlockeExam({ mode = "exam" }) {
     return null;
   }
 
+  // Auswahlfragen: gerade Antwortanzahl, ohne richtige Antworten zu entfernen.
+  function normalizeQuestion(prepared) {
+    if (!prepared || prepared.category === "name") return prepared;
+    if (!Array.isArray(prepared.options) || prepared.options.length < 4) return null;
+    const options = shuffleItems([...prepared.options]);
+    if (options.length % 2 !== 0) {
+      const removable = options.findIndex((option) => !prepared.correct.includes(option.key));
+      if (removable < 0) return null;
+      options.splice(removable, 1);
+    }
+    if (options.length < 4 || !prepared.correct.every((key) => options.some((option) => option.key === key))) return null;
+    return { ...prepared, options };
+  }
+  function refillEndlessQueue() {
+    schedule.current.push(...buildExamSchedule({
+      ...settings, ruleGen, categories:selectedCategories, rounds:30,
+    },pool));
+  }
+
   async function prepareNextQuestion() {
     const requestId = ++requestRef.current;
     setLoading(true); setError(""); setBusyHint(""); setQuestion(null);
@@ -255,11 +277,12 @@ export default function NuzlockeExam({ mode = "exam" }) {
     setNameInput(""); setSuggestionIndex(-1);
     let reason = "";
     try {
+      if (isEndless && !schedule.current.length) refillEndlessQueue();
       for (let attempt = 0; attempt < 32 && schedule.current.length; attempt += 1) {
         const category = schedule.current.shift();
         try {
           if (attempt > 5) setBusyHint("Suche eine passende Frage …");
-          const prepared = await makeQuestion(category);
+          const prepared = normalizeQuestion(await makeQuestion(category));
           if (requestId !== requestRef.current) return;
           if (!prepared || !prepared.correct?.length || (prepared.options && !prepared.options.length)) {
             schedule.current.push(category);
@@ -285,6 +308,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
     if (!pool.length || !selectedCategories.length) return;
     schedule.current = buildExamSchedule({
       ...settings, ruleGen, categories:selectedCategories,
+      rounds: isEndless ? 30 : settings.rounds,
     },pool);
     if (!schedule.current.length) return;
     requestRef.current += 1;
@@ -334,7 +358,8 @@ export default function NuzlockeExam({ mode = "exam" }) {
   }
   function advance() {
     if (!checked) return;
-    if (answered >= settings.rounds || !schedule.current.length) finish();
+    if (isEndless && !schedule.current.length) refillEndlessQueue();
+    if ((!isEndless && answered >= settings.rounds) || !schedule.current.length) finish();
     else prepareNextQuestion();
   }
   function onNameKeyDown(event) {
@@ -387,7 +412,8 @@ export default function NuzlockeExam({ mode = "exam" }) {
               <span>{practice ? "Trainingsrunden" : "Prüfungsfragen"}</span>
               <span className="type-trainer-select-shell">
                 <select value={settings.rounds} onChange={(event) => changeSetting("rounds", Number(event.target.value))}>
-                  {(practice ? [10,20,30,50] : [12,24,36]).map((count) => (
+                  <option value={0}>Endlos</option>
+                  {[10,20,30,50].map((count) => (
                     <option key={count} value={count}>{count} Fragen</option>
                   ))}
                 </select>
@@ -518,7 +544,8 @@ export default function NuzlockeExam({ mode = "exam" }) {
               ))}
             </div>
             <div className="type-trainer-actions">
-              <button type="button" className="type-trainer-primary" onClick={start}>
+              <button type="button" className="type-trainer-primary"
+                onClick={practice ? start : () => launchExam(examTier)}>
                 {practice ? "Weiter trainieren" : "Prüfung wiederholen"}
               </button>
               <button type="button" className="type-trainer-secondary" onClick={exit}>Einstellungen</button>
@@ -529,11 +556,11 @@ export default function NuzlockeExam({ mode = "exam" }) {
         ) : (
           <>
             <div className="type-trainer-score-row">
-              <span>{practice ? "Training" : NUZLOCKE_TESTS.find((test) => test.key === examTier)?.label + "-Test"} · Frage {Math.min(answered+1,settings.rounds)} / {settings.rounds}</span>
+              <span>{practice ? "Training" : NUZLOCKE_TESTS.find((test) => test.key === examTier)?.label + "-Test"} · Frage {isEndless ? answered+1 : Math.min(answered+1,settings.rounds)} / {isEndless ? "∞" : settings.rounds}</span>
               <span>{correctCount * 100} Punkte</span>
               <span>{correctCount} richtig</span>
             </div>
-            <div className="exam-progress"><span style={{width: (answered/settings.rounds*100)+"%"}}/></div>
+            {!isEndless ? <div className="exam-progress"><span style={{width: (answered/settings.rounds*100)+"%"}}/></div> : null}
             {loading ? (
               <div className="type-trainer-loading" role="status">Frage wird geladen … {busyHint}</div>
             ) : error ? (
@@ -610,14 +637,14 @@ export default function NuzlockeExam({ mode = "exam" }) {
                 <div className="type-trainer-actions">
                   {checked ? (
                     <button type="button" className="type-trainer-primary" onClick={advance}>
-                      {answered>=settings.rounds||!schedule.current.length?"Ergebnis anzeigen":"Nächste Frage"}
+                      {!isEndless && (answered>=settings.rounds||!schedule.current.length)?"Ergebnis anzeigen":"Nächste Frage"}
                     </button>
                   ) : !isName ? (
                     <button type="button" className="type-trainer-primary" disabled={!selected.length} onClick={submit}>
                       Antwort prüfen
                     </button>
                   ) : null}
-                  <button type="button" className="type-trainer-secondary" onClick={exit}>
+                  <button type="button" className="type-trainer-secondary" onClick={() => { if (isEndless && answered > 0) finish(); else exit(); }}>
                     {practice?"Training beenden":"Prüfung verlassen"}
                   </button>
                 </div>
