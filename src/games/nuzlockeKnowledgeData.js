@@ -235,7 +235,7 @@ function asOptions(labels, correctLabel) {
 export function makeItemQuestion(item, ruleGen, difficulty="normal") {
   const available = IMPORTANT_ITEMS.filter((candidate) => candidate.minGen <= ruleGen);
   const reverse = Math.random() >= 0.5;
-  const count = difficulty === "easy" ? 3 : difficulty === "hard" ? 5 : 4;
+  const count = difficulty === "hard" ? 6 : 4;
   const wrong = pickDifferent(available, item, count-1);
   const labels = reverse ? [item.name, ...wrong.map((x) => x.name)] : [item.effect, ...wrong.map((x) => x.effect)];
   const correctLabel = reverse ? item.name : item.effect;
@@ -249,25 +249,45 @@ export function makeItemQuestion(item, ruleGen, difficulty="normal") {
   };
 }
 export function makeEvolutionQuestion(fact, ruleGen, difficulty="normal") {
-  const candidates = SIMPLE_EVOLUTIONS.filter((item) => item.minGen <= ruleGen);
-  const reverse = Math.random() >= 0.5;
-  const count = difficulty === "easy" ? 3 : difficulty === "hard" ? 5 : 4;
-  if (reverse) {
-    // This is always unambiguous: the evolution target uniquely identifies the species.
-    const pool = shuffleItems(candidates.filter((item) => item.from !== fact.from && item.target !== fact.target));
-    const values = [fact.target, ...pool.slice(0,count-1).map((item) => item.target)];
+  const count = difficulty === "hard" ? 6 : 4;
+  if (fact.level) {
+    const levelCandidates = LEVEL_EVOLUTIONS.filter((entry) => entry.minGen <= ruleGen);
+    // Nahe Entwicklungslevel sind schwierigere Ablenkungen.
+    const levels = [...new Set([
+      ...levelCandidates.map((entry) => entry.level),
+      ...Array.from({length:8}, (_,i) => fact.level+(i-4)*2),
+    ])].filter((level) => level !== fact.level && level >= 5 && level <= 70);
+    const sorted = levels.sort((a,b) => Math.abs(a-fact.level)-Math.abs(b-fact.level));
+    const wrong = difficulty === "easy"
+      ? shuffleItems(sorted).slice(0,count-1)
+      : sorted.slice(0,count-1);
+    const labels = [fact.level, ...wrong].map((level) => "Level " + level);
     return {
-      category:"evolution", title:"Zu welchem Pokémon wird " + fact.from + " durch " + fact.trigger + "?",
-      ...asOptions(values,fact.target),
-      explanation:fact.from + " → " + fact.target + " (" + fact.trigger + ").",
+      category:"evolution",
+      title: "Ab welchem Level entwickelt sich " + fact.from + " zu " + fact.target + "?",
+      ...asOptions(labels,"Level "+fact.level),
+      explanation:fact.from+" entwickelt sich ab Level "+fact.level+" zu "+fact.target+".",
     };
   }
-  const triggerOptions = [...new Set(candidates.map((item) => item.trigger))];
-  const wrong = shuffleItems(triggerOptions.filter((trigger) => trigger !== fact.trigger)).slice(0,count-1);
+  const candidates = SIMPLE_EVOLUTIONS.filter((entry) => entry.minGen <= ruleGen);
+  const reverse = Math.random() >= .75;
+  if (reverse) {
+    const others = shuffleItems(candidates.filter((entry) =>
+      entry.from !== fact.from && entry.target !== fact.target));
+    const options = [fact.target, ...others.slice(0,count-1).map((entry) => entry.target)];
+    return {
+      category:"evolution", title:"Zu welchem Pokémon entwickelt sich "+fact.from+" durch "+fact.trigger+"?",
+      ...asOptions(options,fact.target),
+      explanation:fact.from+" → "+fact.target+" ("+fact.trigger+").",
+    };
+  }
+  const triggers = [...new Set(candidates.map((entry) => entry.trigger))];
+  const wrong = shuffleItems(triggers.filter((trigger) => trigger !== fact.trigger)).slice(0,count-1);
   return {
-    category:"evolution", title:"Was benötigt " + fact.from + " für die Entwicklung zu " + fact.target + "?",
+    category:"evolution",
+    title:"Wie entwickelt sich "+fact.from+" zu "+fact.target+"?",
     ...asOptions([fact.trigger,...wrong],fact.trigger),
-    explanation:fact.from + " → " + fact.target + " durch " + fact.trigger + ".",
+    explanation:fact.from+" wird durch "+fact.trigger+" zu "+fact.target+".",
   };
 }
 const MOVE_CLASSES = [
