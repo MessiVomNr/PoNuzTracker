@@ -23,11 +23,11 @@ export function getStarterSpecies(gen, group = ACTIVE_STARTER_GROUP) {
   return STARTER_GROUPS[group]?.[Number(gen) - 1] || STARTER_GROUPS.grass[0];
 }
 
-export function GenerationStarter({ gen }) {
+export function GenerationStarter({ gen, group = ACTIVE_STARTER_GROUP }) {
   return (
     <img
       className="trainer-gen-starter"
-      src={"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + getStarterSpecies(gen) + ".png"}
+      src={"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + getStarterSpecies(gen, group) + ".png"}
       alt=""
       loading="lazy"
       aria-hidden="true"
@@ -36,6 +36,7 @@ export function GenerationStarter({ gen }) {
 }
 
 export function GenerationFilter({ generations, onToggle, onOnly, onAll, onClear, title = "Generationen" }) {
+  const [starterGroup] = React.useState(chooseStarterGroup);
   return (
     <div className="trainer-generation-filter">
       <div className="trainer-generation-filter-header">
@@ -55,7 +56,7 @@ export function GenerationFilter({ generations, onToggle, onOnly, onAll, onClear
                 aria-pressed={active}
                 onClick={() => onToggle(gen)}
               >
-                <GenerationStarter gen={gen} />
+                <GenerationStarter gen={gen} group={starterGroup} />
                 <span>Gen {gen}</span>
                 <span className="trainer-generation-check" aria-hidden="true">{active ? "✓" : ""}</span>
               </button>
