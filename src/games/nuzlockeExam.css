@@ -82,3 +82,41 @@
   .exam-name-form .type-trainer-primary{width:100%}
   .exam-input-wrap{width:100%}
 }
+
+/* Knowledge training: compact selectable topic chips. */
+.exam-knowledge-header{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:0 0 11px}
+.exam-knowledge-header .type-trainer-field-title{margin:0}
+.exam-knowledge-actions{display:flex;gap:7px}
+.exam-knowledge-actions button{border:1px solid rgba(157,190,255,.26);border-radius:10px;
+  background:rgba(90,128,206,.16);color:#d7e6ff;font:inherit;font-size:12px;
+  font-weight:850;padding:7px 13px;cursor:pointer}
+.exam-knowledge-actions button:hover{background:rgba(98,146,232,.34)}
+.exam-knowledge-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.exam-knowledge-chip{display:flex;align-items:center;gap:8px;text-align:left;
+  min-height:45px;min-width:0;padding:9px 13px;
+  border-radius:12px;border:1px solid rgba(155,188,244,.21);
+  background:rgba(41,63,105,.36);color:#c9d8f2;
+  font:inherit;font-size:13px;font-weight:850;cursor:pointer}
+.exam-knowledge-chip span:first-child{width:19px;flex:0 0 19px;color:#9eb5df}
+.exam-knowledge-chip.is-selected{border-color:#6a9ee5;background:rgba(59,105,187,.27);color:#fff}
+.exam-knowledge-chip.is-selected span:first-child{color:#99c5ff}
+.exam-knowledge-chip:hover:not(:disabled){background:rgba(62,114,204,.31)}
+.exam-knowledge-chip:disabled{cursor:default;opacity:.83}
+.exam-knowledge-chip:disabled:not(.is-selected){opacity:.42}
+.exam-rank-hint{padding:8px 3px;color:#9cb7e4;font-size:12px;text-align:center;letter-spacing:.02em}
+.exam-pokemon-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px;width:min(520px,100%)}
+.exam-pokemon-pair>div{display:flex;flex-direction:column;align-items:center;gap:5px;
+  min-width:0;padding:10px;border:1px solid rgba(139,179,250,.16);
+  background:rgba(35,57,103,.18);border-radius:17px}
+.exam-pokemon-pair .exam-pokemon-image{width:min(148px,32vw);height:min(148px,32vw)}
+.exam-pokemon-pair strong{font-size:13px;color:#ebf3ff}
+.exam-item-art{width:90px;height:90px;image-rendering:pixelated;object-fit:contain;
+  filter:drop-shadow(0 10px 14px rgba(0,0,0,.35))}
+.exam-question-note{margin:0;max-width:670px;color:#bad1f6;font-size:15px;font-weight:850}
+.exam-options-grid .exam-option{min-height:48px;overflow-wrap:anywhere}
+.exam-options-grid .exam-option>span:first-child{min-width:0}
+@media(max-width:850px){.exam-knowledge-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.exam-knowledge-grid{grid-template-columns:1fr}
+.exam-pokemon-pair{gap:8px}.exam-pokemon-pair>div{padding:8px}
+.exam-pokemon-pair .exam-pokemon-image{width:min(125px,36vw);height:min(125px,36vw)}
+}
