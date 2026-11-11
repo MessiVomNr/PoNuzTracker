@@ -8,7 +8,7 @@ import {
   EXAM_CATEGORIES, ABILITY_CASES, TRAP_SCENARIOS,
   examPokemonList, examCategories, buildExamSchedule, pokemonArtwork,
   makeDamageQuestion, makeWeaknessQuestion, makeAbilityQuestion,
-  makeScenarioQuestion, examResult,
+  makeScenarioQuestion, examResult, NUZLOCKE_TESTS, NUZLOCKE_EXAM_ROUNDS, examQuestionDifficulty,
 } from "./nuzlockeExamData";
 import {
   IMPORTANT_ITEMS, SIMPLE_EVOLUTIONS, MOVE_FACTS,
@@ -33,7 +33,15 @@ const INITIAL_SETTINGS = {
   difficulty: "normal", categories: EXAM_CATEGORIES.map((entry) => entry.key),
 };
 function readSettings(mode) {
-  const defaults = { ...INITIAL_SETTINGS, rounds: mode === "practice" ? 20 : 24 };
+  const defaults = { ...INITIAL_SETTINGS, rounds: mode === "practice" ? 20 : NUZLOCKE_EXAM_ROUNDS };
+  if (mode === "exam") {
+    // Eine echte Prüfung: keine manuellen Gen-, Runden- oder Schwierigkeitseinstellungen.
+    // Alle zwölf Themen sind in Gen 9 mit Pokémon aus allen neun Generationen verfügbar.
+    return {
+      ...defaults, generations: GENS, ruleGen: "9", rounds: NUZLOCKE_EXAM_ROUNDS,
+      categories: EXAM_CATEGORIES.map((entry) => entry.key),
+    };
+  }
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEYS[mode]));
     if (!saved || typeof saved !== "object") return defaults;
@@ -42,7 +50,7 @@ function readSettings(mode) {
       : defaults.generations;
     const ruleGen = saved.ruleGen === "auto" || GENS.some((gen) => String(gen) === saved.ruleGen)
       ? saved.ruleGen : "auto";
-    const allowedRounds = mode === "practice" ? [10,20,30,50] : [12,24,36];
+    const allowedRounds = [10,20,30,50];
     return {
       generations, ruleGen,
       rounds: allowedRounds.includes(Number(saved.rounds)) ? Number(saved.rounds) : defaults.rounds,
@@ -106,6 +114,8 @@ export default function NuzlockeExam({ mode = "exam" }) {
   const nav = useNavigate();
   const practice = mode === "practice";
   const [settings, setSettings] = useState(() => readSettings(mode));
+  const [examTier, setExamTier] = useState("normal");
+  const examTierRef = useRef("normal");
   const [active, setActive] = useState(false);
   const [finished, setFinished] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -145,6 +155,8 @@ export default function NuzlockeExam({ mode = "exam" }) {
       ? getPokemonNameSuggestions(nameInput, pool, 9) : [],
     [nameInput, question?.category, checked, pool]);
   const completion = examResult(correctCount, answered);
+  const roundDifficulty = practice ? settings.difficulty
+    : examQuestionDifficulty(examTierRef.current, answered);
 
   function changeSetting(key, value) {
     setSettings((previous) => ({ ...previous, [key]: value }));
@@ -174,17 +186,17 @@ export default function NuzlockeExam({ mode = "exam" }) {
       const ids = new Set(pool.map((pokemon) => pokemon.dexId));
       const possible = ABILITY_CASES.filter((entry) => entry.minGen <= ruleGen && ids.has(entry.id));
       const chosen = pick(possible, "ability");
-      return chosen && makeAbilityQuestion(chosen, settings.difficulty);
+      return chosen && makeAbilityQuestion(chosen, roundDifficulty);
     }
     if (category === "items") {
       const eligible = IMPORTANT_ITEMS.filter((item) => item.minGen <= ruleGen);
       const item = pick(eligible, "items");
-      return item && makeItemQuestion(item, ruleGen, settings.difficulty);
+      return item && makeItemQuestion(item, ruleGen, roundDifficulty);
     }
     if (category === "evolution") {
       const eligible = SIMPLE_EVOLUTIONS.filter((item) => item.minGen <= ruleGen);
       const fact = pick(eligible, "evolution");
-      return fact && makeEvolutionQuestion(fact, ruleGen, settings.difficulty);
+      return fact && makeEvolutionQuestion(fact, ruleGen, roundDifficulty);
     }
     if (category === "moves") {
       const eligible = MOVE_FACTS.filter((item) => item.minGen <= ruleGen);
@@ -199,7 +211,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
       const chosen = pick(fullyEvolved, "offense");
       if (!chosen) return null;
       const pokemon = await loadTrainerPokemon(chosen.dexId, ruleGen);
-      return makeOffenseQuestion(pokemon, settings.difficulty);
+      return makeOffenseQuestion(pokemon, roundDifficulty);
     }
     if (category === "speed") {
       if (fullyEvolved.length < 2) return null;
@@ -210,7 +222,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
         loadTrainerPokemon(first.dexId, ruleGen),
         loadTrainerPokemon(second.dexId, ruleGen),
       ]);
-      return makeSpeedQuestion(left,right,settings.difficulty);
+      return makeSpeedQuestion(left,right,roundDifficulty);
     }
     const chosen = pick(pool, "pokemon");
     if (!chosen) return null;
@@ -231,8 +243,8 @@ export default function NuzlockeExam({ mode = "exam" }) {
           getGenerationTypes(ruleGen).find((type) => type.key === key)?.label || key).join(" / ") + ".",
       };
     }
-    if (category === "weakness") return makeWeaknessQuestion(pokemon, ruleGen, settings.difficulty);
-    if (category === "damage") return makeDamageQuestion(pokemon, ruleGen, settings.difficulty);
+    if (category === "weakness") return makeWeaknessQuestion(pokemon, ruleGen, roundDifficulty);
+    if (category === "damage") return makeDamageQuestion(pokemon, ruleGen, roundDifficulty);
     return null;
   }
 
@@ -280,6 +292,11 @@ export default function NuzlockeExam({ mode = "exam" }) {
     setAnswered(0); setCorrectCount(0); setByCategory({});
     setQuestion(null); setError(""); setFinished(false); setActive(true);
     prepareNextQuestion();
+  }
+  function launchExam(testTier) {
+    examTierRef.current = testTier;
+    setExamTier(testTier);
+    start();
   }
   function toggleOption(key) {
     if (checked) return;
@@ -351,9 +368,10 @@ export default function NuzlockeExam({ mode = "exam" }) {
         <h1>{title}</h1>
         <p className="type-trainer-subtitle">
           {practice ? "Trainiere deine Lieblingskategorien – einzeln oder gemischt."
-            : "Alle Wissensgebiete. Eine Prüfung. Erst 100 % sind wirklich Nuzlocke-würdig."}
+            : "Drei Prüfungen. Je 30 Fragen. Zwölf Themen. Erst 100 % sind Nuzlocke-würdig."}
         </p>
         {!active ? (
+          practice ? (
           <div className="type-trainer-setup">
             <label className="type-trainer-field">
               <span>Schwierigkeit</span>
@@ -456,11 +474,40 @@ export default function NuzlockeExam({ mode = "exam" }) {
               </div>
             ) : null}
           </div>
+
+          ) : (
+            <div className="exam-fixed-tests">
+              <div className="exam-fixed-header">
+                <strong>Welche Prüfung willst du ablegen?</strong>
+                <span>30 Fragen pro Prüfung</span>
+              </div>
+              <div className="exam-test-grid">
+                {NUZLOCKE_TESTS.map((tier, index) => (
+                  <button key={tier.key} type="button"
+                    className={"exam-test-card exam-test-" + tier.key}
+                    onClick={() => launchExam(tier.key)}>
+                    <span className="exam-test-step">{index + 1}</span>
+                    <strong>{tier.label}</strong>
+                    <span>{tier.subtitle}</span>
+                    <span className="exam-test-start">Prüfung starten ›</span>
+                  </button>
+                ))}
+              </div>
+              <div className="exam-fixed-footer">
+                <span>Alle 12 Wissensgebiete · Steigender Schwierigkeitsgrad</span>
+                <span>Bestwert: <strong>{best} %</strong></span>
+              </div>
+              <div className="exam-rank-hint">
+                80 %: In Erwägung · 90 %: Kommt infrage · 100 %: Nuzlocke-würdig
+              </div>
+            </div>
+          )
         ) : finished ? (
           <section className="exam-results" role="status">
             <div className="exam-rank-icon" aria-hidden="true">{!practice && completion.passed ? "★" : "◇"}</div>
             <div className="exam-result-percent">{completion.percent} %</div>
             <h2>{practice ? "Training abgeschlossen" : completion.rank}</h2>
+            {!practice ? <p>Test: {NUZLOCKE_TESTS.find((test) => test.key === examTier)?.label}</p> : null}
             <p>{correctCount} von {answered} Fragen richtig · {correctCount * 100} Punkte</p>
             <div className="exam-category-results">
               {EXAM_CATEGORIES.filter((category) => byCategory[category.key]?.total).map((category) => (
@@ -482,7 +529,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
         ) : (
           <>
             <div className="type-trainer-score-row">
-              <span>Frage {Math.min(answered+1,settings.rounds)} / {settings.rounds}</span>
+              <span>{practice ? "Training" : NUZLOCKE_TESTS.find((test) => test.key === examTier)?.label + "-Test"} · Frage {Math.min(answered+1,settings.rounds)} / {settings.rounds}</span>
               <span>{correctCount * 100} Punkte</span>
               <span>{correctCount} richtig</span>
             </div>
