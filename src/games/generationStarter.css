@@ -34,3 +34,46 @@
   .trainer-generation-toggle .trainer-gen-starter {width:43px;height:43px;flex-basis:43px}
   .trainer-generation-option {min-height:51px}
 }
+
+/* Der Nur-Shortcut sitzt in jeder Gen-Karte klar abgetrennt rechts. */
+.trainer-generation-option {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-items: center;
+  gap: 8px !important;
+  padding: 6px 8px !important;
+  border-radius: 15px;
+}
+.trainer-generation-option .trainer-generation-toggle {
+  min-width: 0;
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 3px 4px;
+}
+.trainer-generation-option .trainer-generation-only {
+  justify-self: end;
+  background: transparent !important;
+  border: 1px solid rgba(162,192,244,.28) !important;
+  color: #bcd1f3 !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+  min-width: 42px;
+  min-height: 31px;
+  padding: 7px 8px !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+  opacity: .85;
+}
+.trainer-generation-option .trainer-generation-only:hover,
+.trainer-generation-option .trainer-generation-only:focus-visible {
+  opacity: 1;
+  background: rgba(113,160,239,.18) !important;
+  border-color: #90b9f6 !important;
+  color: white !important;
+}
+.trainer-generation-option .trainer-generation-check { margin-left: auto; }
+@media(max-width:520px){
+  .trainer-generation-option { gap: 5px !important; }
+}
