@@ -447,7 +447,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
     const isLevel = question.responseType === "evolution-level";
     if ((isName || isLevel) ? !nameInput.trim() : !selected.length) return;
     const right = isLevel
-      ? /^\\d{1,3}$/.test(nameInput.trim()) && Number(nameInput.trim()) === Number(question.correct[0])
+      ? /^\d{1,3}$/.test(nameInput.trim()) && Number(nameInput.trim()) === Number(question.correct[0])
       : isName
         ? doesGuessMatch({ name:question.correct[0] }, nameInput)
         : selected.length === question.correct.length && question.correct.every((item) => selected.includes(item));
