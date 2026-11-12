@@ -278,14 +278,11 @@ export function makeItemQuestion(item, ruleGen, difficulty="normal") {
 export function makeEvolutionQuestion(fact, ruleGen, difficulty="normal", variant="mixed") {
   const count = difficulty === "hard" ? 6 : 4;
   if (variant === "target") {
-    const otherTargets = [...SIMPLE_EVOLUTIONS, ...LEVEL_EVOLUTIONS]
-      .filter((entry) => entry.minGen <= ruleGen && entry.target !== fact.target);
-    const labels = [fact.target, ...shuffleItems([...new Set(otherTargets.map((entry) => entry.target))])
-      .slice(0, count-1)];
     return {
       category: "evolution",
+      responseType: "pokemon-name",
       title: "In welches Pokémon entwickelt sich " + fact.from + "?",
-      ...asOptions(labels, fact.target),
+      correct: [fact.target],
       explanation: fact.from + " entwickelt sich zu " + fact.target + (fact.level
         ? " (ab Level " + fact.level + ")." : " (" + fact.trigger + ")."),
     };
@@ -312,13 +309,12 @@ export function makeEvolutionQuestion(fact, ruleGen, difficulty="normal", varian
   const candidates = SIMPLE_EVOLUTIONS.filter((entry) => entry.minGen <= ruleGen);
   const reverse = Math.random() >= .75;
   if (reverse) {
-    const others = shuffleItems(candidates.filter((entry) =>
-      entry.from !== fact.from && entry.target !== fact.target));
-    const options = [fact.target, ...others.slice(0,count-1).map((entry) => entry.target)];
     return {
-      category:"evolution", title:"Zu welchem Pokémon entwickelt sich "+fact.from+" durch "+fact.trigger+"?",
-      ...asOptions(options,fact.target),
-      explanation:fact.from+" → "+fact.target+" ("+fact.trigger+").",
+      category: "evolution",
+      responseType: "pokemon-name",
+      title: "Zu welchem Pokémon entwickelt sich " + fact.from + " durch " + fact.trigger + "?",
+      correct: [fact.target],
+      explanation: fact.from + " → " + fact.target + " (" + fact.trigger + ").",
     };
   }
   const triggers = [...new Set(candidates.map((entry) => entry.trigger))];
