@@ -440,33 +440,41 @@ export const NUZLOCKE_TIER_RULES = {
   hard: { ruleGen: 9, generations: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
 };
 
-// Die Themen bleiben bis zur Frage eine Überraschung.
-// Entwicklungsfragen erscheinen in allen drei Prüfungen häufiger;
-// bei Level-Fragen richtet sich der Zahlenabstand nach dem Prüfungstier.
-export const NUZLOCKE_TIER_QUESTION_COUNTS = {
+// Gewichtete Zufallsauswahl statt fester Mengen je Wissensgebiet.
+// Typen und Effektivitäten kommen häufiger vor, aber die konkrete
+// Anzahl je Kategorie ist in jeder Prüfung anders.
+export const NUZLOCKE_TIER_WEIGHTS = {
   easy: {
-    types: 5, weakness: 4, damage: 3, moves: 4, items: 4,
+    types: 7, weakness: 9, damage: 9, moves: 5, items: 4,
     name: 3, evolution: 5, offense: 2,
   },
   normal: {
-    name: 2, types: 3, weakness: 3, damage: 2, moves: 3, items: 3,
-    ability: 2, evolution: 4, offense: 3, speed: 2, battle: 1, scenario: 2,
+    name: 2, types: 4, weakness: 7, damage: 7, moves: 4, items: 3,
+    ability: 3, evolution: 4, offense: 3, speed: 3, battle: 2, scenario: 3,
   },
   hard: {
-    name: 2, types: 2, weakness: 2, damage: 2, moves: 2, items: 2,
-    ability: 3, evolution: 5, offense: 3, speed: 2, battle: 2, scenario: 3,
+    name: 2, types: 3, weakness: 6, damage: 6, moves: 3, items: 3,
+    ability: 4, evolution: 4, offense: 3, speed: 3, battle: 3, scenario: 4,
   },
 };
 
 export function buildNuzlockeTierSchedule(tier, availableCategories) {
-  const counts = NUZLOCKE_TIER_QUESTION_COUNTS[tier];
-  if (!counts) return [];
-  const available = new Set(availableCategories);
-  const entries = Object.entries(counts);
-  if (entries.some(([category]) => !available.has(category))) return [];
-  const questions = entries.flatMap(([category, count]) => Array(count).fill(category));
-  if (questions.length !== NUZLOCKE_EXAM_ROUNDS) return [];
-  return shuffleItems(questions);
+  const weights = NUZLOCKE_TIER_WEIGHTS[tier];
+  if (!weights) return [];
+  const possible = availableCategories
+    .map((key) => ({ key, weight: weights[key] || 0 }))
+    .filter((entry) => entry.weight > 0);
+  const totalWeight = possible.reduce((total, entry) => total + entry.weight, 0);
+  if (!totalWeight) return [];
+
+  return Array.from({ length: NUZLOCKE_EXAM_ROUNDS }, () => {
+    let drawn = Math.random() * totalWeight;
+    for (const entry of possible) {
+      drawn -= entry.weight;
+      if (drawn < 0) return entry.key;
+    }
+    return possible[possible.length - 1].key;
+  });
 }
 
 export function examQuestionDifficulty(test, questionIndex) {
