@@ -1,6 +1,6 @@
 // Gemeinsame Wissensfragen für Training und Nuzlocke-Prüfung.
 // Historische Verfügbarkeit wird über minGen und den Regelstand gefiltert.
-import { getTypeMultiplierForGeneration, shuffleItems } from "./typeTrainerData";
+import { getTypeMultiplierForGeneration, getGenerationTypes, getTypeLabel, shuffleItems } from "./typeTrainerData";
 import { pokedex } from "../data/pokedex";
 
 export const EXTRA_CATEGORIES = [
@@ -323,10 +323,28 @@ const MOVE_CLASSES = [
   { key:"status", label:"Status" },
   { key:"variable", label:"Keine feste Schadensklasse" },
 ];
-export function makeMoveQuestion(move, ruleGen) {
+// Im einfachen Test wechseln sich Typ-Erkennung und Schadensklasse ab.
+export function makeMoveQuestion(move, ruleGen, variant = "class", difficulty = "normal") {
+  if (variant === "type") {
+    const candidates = getGenerationTypes(ruleGen);
+    if (!candidates.some((type) => type.key === move.type)) return null;
+    const wrong = shuffleItems(candidates.filter((type) => type.key !== move.type));
+    const total = difficulty === "hard" ? 6 : 4;
+    const options = shuffleItems([
+      { key: move.type, type: move.type },
+      ...wrong.slice(0, total - 1).map((type) => ({ key: type.key, type: type.key })),
+    ]);
+    return {
+      category: "moves",
+      title: "Welchen Typ hat die Attacke " + move.name + "?",
+      options,
+      correct: [move.type],
+      explanation: move.name + " ist eine Attacke vom Typ " + getTypeLabel(move.type) + ".",
+    };
+  }
   const moveClass = moveDamageClass(move, ruleGen);
   return {
-    category:"moves", title:"Welche Schadensklasse hat " + move.name + " in Generation " + ruleGen + "?",
+    category:"moves", title:"Ist " + move.name + " physisch, speziell oder eine Status-Attacke?",
     options:shuffleItems(MOVE_CLASSES).map((entry) => ({key:entry.key,label:entry.label})),
     correct:[moveClass],
     explanation:move.name + " gehört in Generation " + ruleGen + " zur Klasse " +
