@@ -151,6 +151,21 @@ export const LEVEL_EVOLUTIONS = [
 ];
 
 export const MOVE_FACTS = [
+  // Zusätzliche Attacken ohne offensichtlichen Typ im deutschen Namen,
+  // damit Typ-Fragen nicht nur aus Knirscher und wenigen Status-Moves bestehen.
+  { key:"body-slam", name:"Bodyslam", type:"normal", minGen:1, category:"physical" },
+  { key:"swift", name:"Sternschauer", type:"normal", minGen:1, category:"special" },
+  { key:"rest", name:"Erholung", type:"psychic", minGen:1, category:"status" },
+  { key:"double-team", name:"Doppelteam", type:"normal", minGen:1, category:"status" },
+  { key:"agility", name:"Agilität", type:"psychic", minGen:1, category:"status" },
+  { key:"tackle", name:"Tackle", type:"normal", minGen:1, category:"physical" },
+  { key:"self-destruct", name:"Finale", type:"normal", minGen:1, category:"physical" },
+  { key:"protect", name:"Schutzschild", type:"normal", minGen:2, category:"status" },
+  { key:"future-sight", name:"Seher", type:"psychic", minGen:2, category:"special" },
+  { key:"return", name:"Rückkehr", type:"normal", minGen:2, category:"physical" },
+  { key:"sleep-talk", name:"Schlafrede", type:"normal", minGen:2, category:"status" },
+  { key:"fake-out", name:"Mogelhieb", type:"normal", minGen:3, category:"physical" },
+  { key:"facade", name:"Fassade", type:"normal", minGen:3, category:"physical" },
   { key:"earthquake", name:"Erdbeben", type:"ground", minGen:1, category:"physical" },
   { key:"surf", name:"Surfer", type:"water", minGen:1, category:"special" },
   { key:"thunderbolt", name:"Donnerblitz", type:"electric", minGen:1, category:"special" },
@@ -180,6 +195,22 @@ export const MOVE_FACTS = [
   { key:"play-rough", name:"Knuddler", type:"fairy", minGen:6, category:"physical" },
   { key:"scald", name:"Siedewasser", type:"water", minGen:5, category:"special" },
 ];
+// In reinen Typ-Fragen keine Namen mit deutlicher Typ-Verräterfunktion
+// verwenden (z. B. Eishieb = Eis oder Donnerblitz = Elektro).
+// Die Attacken bleiben für die Physisch/Speziell/Status-Fragen verfügbar.
+const OBVIOUS_TYPE_MOVE_KEYS = new Set([
+  "earthquake", "surf", "thunderbolt", "ice-beam", "flamethrower",
+  "rock-slide", "thunder-wave", "iron-tail", "thunder-punch",
+  "fire-punch", "ice-punch", "dragon-claw", "leaf-blade",
+  "dark-pulse", "stone-edge", "moonblast", "scald", "close-combat",
+]);
+
+export function getTypeQuizMoves(ruleGen) {
+  const availableTypes = new Set(getGenerationTypes(ruleGen).map((type) => type.key));
+  return MOVE_FACTS.filter((move) => move.minGen <= ruleGen &&
+    availableTypes.has(move.type) && !OBVIOUS_TYPE_MOVE_KEYS.has(move.key));
+}
+
 const EARLY_PHYSICAL = new Set(["normal","fighting","poison","ground","flying","bug","rock","ghost","steel"]);
 export function moveDamageClass(move, gen) {
   if (move.category === "status") return "status";
@@ -417,6 +448,7 @@ const MOVE_CLASSES = [
 // Im einfachen Test wechseln sich Typ-Erkennung und Schadensklasse ab.
 export function makeMoveQuestion(move, ruleGen, variant = "class", difficulty = "normal") {
   if (variant === "type") {
+    if (!getTypeQuizMoves(ruleGen).some((candidate) => candidate.key === move.key)) return null;
     const candidates = getGenerationTypes(ruleGen);
     if (!candidates.some((type) => type.key === move.type)) return null;
     const wrong = shuffleItems(candidates.filter((type) => type.key !== move.type));
@@ -427,7 +459,7 @@ export function makeMoveQuestion(move, ruleGen, variant = "class", difficulty = 
     ]);
     return {
       category: "moves",
-      title: "Welchen Typ hat die Attacke " + move.name + "?",
+      title: "Welchen Typ hat die Attacke " + move.name + " in Generation " + ruleGen + "?",
       options,
       correct: [move.type],
       explanation: move.name + " ist eine Attacke vom Typ " + getTypeLabel(move.type) + ".",
@@ -435,7 +467,7 @@ export function makeMoveQuestion(move, ruleGen, variant = "class", difficulty = 
   }
   const moveClass = moveDamageClass(move, ruleGen);
   return {
-    category:"moves", title:"Ist " + move.name + " physisch, speziell oder eine Status-Attacke?",
+    category:"moves", title:"Ist " + move.name + " in Generation " + ruleGen + " physisch, speziell oder eine Status-Attacke?",
     options:shuffleItems(MOVE_CLASSES).map((entry) => ({key:entry.key,label:entry.label})),
     correct:[moveClass],
     explanation:move.name + " gehört in Generation " + ruleGen + " zur Klasse " +
