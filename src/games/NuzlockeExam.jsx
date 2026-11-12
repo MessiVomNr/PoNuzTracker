@@ -663,24 +663,68 @@ export default function NuzlockeExam({ mode = "exam" }) {
 
           ) : (
             <div className="exam-fixed-tests">
-              <div className="exam-fixed-header">
-                <strong>Welche Prüfung willst du ablegen?</strong>
-                <span>30 Fragen pro Prüfung</span>
+              <div className="exam-mode-switch" role="group" aria-label="Prüfungsart">
+                <button type="button"
+                  className={examSection === "general" ? "is-active" : ""}
+                  aria-pressed={examSection === "general"}
+                  onClick={() => setExamSection("general")}>Allgemeine Tests</button>
+                <button type="button"
+                  className={examSection === "generation" ? "is-active" : ""}
+                  aria-pressed={examSection === "generation"}
+                  onClick={() => setExamSection("generation")}>Generationen-Tests</button>
               </div>
-              <div className="exam-test-grid">
-                {NUZLOCKE_TESTS.map((tier, index) => (
-                  <button key={tier.key} type="button"
-                    className={"exam-test-card exam-test-" + tier.key}
-                    onClick={() => launchExam(tier.key)}>
-                    <span className="exam-test-step">{index + 1}</span>
-                    <strong>{tier.label}</strong>
-                    <span className="exam-test-start">Prüfung starten ›</span>
-                  </button>
-                ))}
-              </div>
-              <div className="exam-fixed-footer">
-                <span className="exam-qualification-status">Status: <strong>{qualificationLabel}</strong></span>
-              </div>
+              {examSection === "general" ? (
+                <>
+                  <div className="exam-fixed-header">
+                    <strong>Welche Prüfung willst du ablegen?</strong>
+                    <span>30 Fragen pro Prüfung</span>
+                  </div>
+                  <div className="exam-test-grid">
+                    {NUZLOCKE_TESTS.map((tier, index) => (
+                      <button key={tier.key} type="button"
+                        className={"exam-test-card exam-test-" + tier.key}
+                        onClick={() => launchExam(tier.key)}>
+                        <span className="exam-test-step">{index + 1}</span>
+                        <strong>{tier.label}</strong>
+                        <span className="exam-test-start">Prüfung starten ›</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="exam-fixed-footer">
+                    <span className="exam-qualification-status">Status: <strong>{qualificationLabel}</strong></span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="exam-fixed-header">
+                    <strong>Wähle eine Generation</strong>
+                    <span>30 Fragen pro Generation</span>
+                  </div>
+                  <div className="exam-generation-grid">
+                    {GENS.map((gen) => {
+                      const completed = completedGenerations.includes(gen);
+                      return (
+                        <button key={gen} type="button"
+                          className={"exam-generation-card" + (completed ? " is-completed" : "")}
+                          onClick={() => launchGenerationExam(gen)}>
+                          <GenerationStarter gen={gen} />
+                          <span>Gen {gen}</span>
+                          {completed ? (
+                            <span className="exam-generation-check" aria-label="Bestanden">✓</span>
+                          ) : (
+                            <span className="exam-generation-arrow" aria-hidden="true">›</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="exam-fixed-footer">
+                    <span className="exam-qualification-status">
+                      Bestandene Generationen: <strong>{completedGenerations.length} / 9</strong>
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           )
         ) : finished ? (
@@ -688,7 +732,10 @@ export default function NuzlockeExam({ mode = "exam" }) {
             <div className="exam-rank-icon" aria-hidden="true">{!practice && completion.passed ? "★" : "◇"}</div>
             <div className="exam-result-percent">{completion.percent} %</div>
             <h2>{practice ? "Training abgeschlossen" : completion.passed ? "Prüfung bestanden!" : "Prüfung abgeschlossen"}</h2>
-            {!practice ? (
+            {!practice ? examGeneration !== null ? (
+              <p>Generation {examGeneration} · {completedGenerations.includes(examGeneration)
+                ? "Bestanden" : "Noch nicht bestanden"}</p>
+            ) : (
               <p>Test: {NUZLOCKE_TESTS.find((test) => test.key === examTier)?.label} · Status: <strong>{qualificationLabel}</strong></p>
             ) : null}
             <p>{correctCount} von {answered} Fragen richtig · {correctCount * 100} Punkte</p>
@@ -702,7 +749,8 @@ export default function NuzlockeExam({ mode = "exam" }) {
             </div>
             <div className="type-trainer-actions">
               <button type="button" className="type-trainer-primary"
-                onClick={practice ? start : () => launchExam(examTier)}>
+                onClick={practice ? start : examGeneration !== null
+                  ? () => launchGenerationExam(examGeneration) : () => launchExam(examTier)}>
                 {practice ? "Weiter trainieren" : "Prüfung wiederholen"}
               </button>
               <button type="button" className="type-trainer-secondary" onClick={exit}>Einstellungen</button>
@@ -713,7 +761,8 @@ export default function NuzlockeExam({ mode = "exam" }) {
         ) : (
           <>
             <div className="type-trainer-score-row">
-              <span>{practice ? "Training" : NUZLOCKE_TESTS.find((test) => test.key === examTier)?.label + "-Test"} · Frage {isEndless ? answered+1 : Math.min(answered+1,settings.rounds)} / {isEndless ? "∞" : settings.rounds}</span>
+              <span>{practice ? "Training" : examGeneration !== null ? "Gen " + examGeneration + "-Test"
+                : NUZLOCKE_TESTS.find((test) => test.key === examTier)?.label + "-Test"} · Frage {isEndless ? answered+1 : Math.min(answered+1,settings.rounds)} / {isEndless ? "∞" : settings.rounds}</span>
               <span>{correctCount * 100} Punkte</span>
               <span>{correctCount} richtig</span>
             </div>
