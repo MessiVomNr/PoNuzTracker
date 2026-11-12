@@ -242,8 +242,13 @@ export function buildExamSchedule(settings, pool) {
 
 export function makeDamageQuestion(pokemon, ruleGen, difficulty = "normal") {
   const attacks = shuffleItems(getGenerationTypes(ruleGen));
-  const attack = attacks.find((type) =>
-    getTypeMultiplierForGeneration(type.key, pokemon.types, ruleGen) !== null);
+  const attack = attacks.find((type) => {
+    const damage = getTypeMultiplierForGeneration(type.key, pokemon.types, ruleGen);
+    // Im einfachen Quiz bleiben 4×/¼×-Sonderfälle außen vor.
+    return difficulty === "easy"
+      ? [0, 0.5, 1, 2].includes(damage)
+      : damage !== null;
+  });
   if (!attack) return null;
   const right = getTypeMultiplierForGeneration(attack.key, pokemon.types, ruleGen);
   const possible = [0, .25, .5, 1, 2, 4].filter((multiplier) => multiplier !== right);
