@@ -307,7 +307,7 @@ export function makeEvolutionQuestion(fact, ruleGen, difficulty="normal", varian
     };
   }
   const candidates = SIMPLE_EVOLUTIONS.filter((entry) => entry.minGen <= ruleGen);
-  const reverse = Math.random() >= .75;
+  const reverse = variant === "mixed" && Math.random() >= .75;
   if (reverse) {
     return {
       category: "evolution",
