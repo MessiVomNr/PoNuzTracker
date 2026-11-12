@@ -172,10 +172,23 @@ export default function NuzlockeExam({ mode = "exam" }) {
     ? availableCategories.filter((key) => settings.categories.includes(key))
     : availableCategories.filter((key) =>
         Object.prototype.hasOwnProperty.call(NUZLOCKE_TIER_QUESTION_COUNTS[examTier], key));
+  // Entwicklungsziele werden als Namen eingetippt. Für die Vorschläge
+  // müssen auch Pokémon aus früheren Generationen verfügbar sein,
+  // selbst wenn im freien Training nur eine einzelne Gen ausgewählt ist.
+  const evolutionNamePool = useMemo(
+    () => examPokemonList(GENS.filter((gen) => gen <= ruleGen), ruleGen),
+    [ruleGen]
+  );
+  const isTextAnswer = question?.category === "name" || question?.responseType === "pokemon-name";
   const nameSuggestions = useMemo(() =>
-    question?.category === "name" && !checked
-      ? getPokemonNameSuggestions(nameInput, pool, 9) : [],
-    [nameInput, question?.category, checked, pool]);
+    isTextAnswer && !checked
+      ? getPokemonNameSuggestions(
+          nameInput,
+          question?.responseType === "pokemon-name" ? evolutionNamePool : pool,
+          9
+        )
+      : [],
+    [nameInput, isTextAnswer, question?.responseType, checked, pool, evolutionNamePool]);
   const completion = examResult(correctCount, answered);
   const qualificationLabel = QUALIFICATION_NAMES[qualification] || "Noch nicht qualifiziert";
   const isEndless = practice && settings.rounds === 0;
@@ -338,7 +351,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
 
   // Auswahlfragen: gerade Antwortanzahl, ohne richtige Antworten zu entfernen.
   function normalizeQuestion(prepared) {
-    if (!prepared || prepared.category === "name") return prepared;
+    if (!prepared || prepared.category === "name" || prepared.responseType === "pokemon-name") return prepared;
     if (!Array.isArray(prepared.options) || prepared.options.length < 4) return null;
     const options = shuffleItems([...prepared.options]);
     if (options.length % 2 !== 0) {
@@ -422,7 +435,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
   }
   function submit() {
     if (!question || checked) return;
-    const isName = question.category === "name";
+    const isName = question.category === "name" || question.responseType === "pokemon-name";
     if (isName ? !nameInput.trim() : !selected.length) return;
     const right = isName
       ? doesGuessMatch({ name:question.correct[0] }, nameInput)
@@ -482,7 +495,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
     }
   }
 
-  const isName = question?.category === "name";
+  const isName = isTextAnswer;
   const categoryInfo = EXAM_CATEGORIES.find((category) => category.key === question?.category);
   const title = practice ? "Pokémon-Wissenstraining" : "Nuzlocke-Eignungstest";
 
