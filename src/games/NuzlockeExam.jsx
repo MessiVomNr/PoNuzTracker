@@ -471,9 +471,16 @@ export default function NuzlockeExam({ mode = "exam" }) {
   function toggleOption(key) {
     if (checked) return;
     const maximum = question?.maxAnswers || question?.correct?.length || 1;
-    setSelected((previous) => previous.includes(key)
-      ? previous.filter((item) => item !== key)
-      : previous.length < maximum ? [...previous,key] : previous);
+    setSelected((previous) => {
+      if (maximum === 1) {
+        // Single choice: selecting another option replaces the previous one.
+        return previous.includes(key) ? [] : [key];
+      }
+      // Multiple choice: keep the existing multi-select behavior.
+      return previous.includes(key)
+        ? previous.filter((item) => item !== key)
+        : previous.length < maximum ? [...previous, key] : previous;
+    });
   }
   function submit() {
     if (!question || checked) return;
