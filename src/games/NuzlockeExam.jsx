@@ -9,6 +9,7 @@ import {
   examPokemonList, examCategories, buildExamSchedule, pokemonArtwork,
   makeDamageQuestion, makeWeaknessQuestion, makeAbilityQuestion,
   makeScenarioQuestion, examResult, NUZLOCKE_TESTS, NUZLOCKE_EXAM_ROUNDS, examQuestionDifficulty,
+  NUZLOCKE_TIER_RULES, NUZLOCKE_TIER_QUESTION_COUNTS, buildNuzlockeTierSchedule,
 } from "./nuzlockeExamData";
 import {
   IMPORTANT_ITEMS, SIMPLE_EVOLUTIONS, LEVEL_EVOLUTIONS, MOVE_FACTS,
@@ -130,6 +131,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
   const [settings, setSettings] = useState(() => readSettings(mode));
   const [examTier, setExamTier] = useState("normal");
   const examTierRef = useRef("normal");
+  const [pendingExamStart, setPendingExamStart] = useState(false);
   const [active, setActive] = useState(false);
   const [finished, setFinished] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -156,15 +158,20 @@ export default function NuzlockeExam({ mode = "exam" }) {
     catch { /* local storage optional */ }
   }, [settings, mode]);
 
-  const ruleGen = settings.ruleGen === "auto"
-    ? Math.max(1, ...settings.generations) : Number(settings.ruleGen);
-  const pool = useMemo(() => examPokemonList(settings.generations, ruleGen),
-    [settings.generations, ruleGen]);
+  const examRules = NUZLOCKE_TIER_RULES[examTier] || NUZLOCKE_TIER_RULES.normal;
+  const ruleGen = practice
+    ? settings.ruleGen === "auto"
+      ? Math.max(1, ...settings.generations) : Number(settings.ruleGen)
+    : examRules.ruleGen;
+  const generations = practice ? settings.generations : examRules.generations;
+  const pool = useMemo(() => examPokemonList(generations, ruleGen),
+    [generations, ruleGen]);
   const fullyEvolved = useMemo(() => finalEvolutionPool(pool), [pool]);
   const availableCategories = useMemo(() => examCategories(ruleGen, pool), [ruleGen, pool]);
   const selectedCategories = practice
     ? availableCategories.filter((key) => settings.categories.includes(key))
-    : availableCategories;
+    : availableCategories.filter((key) =>
+        Object.prototype.hasOwnProperty.call(NUZLOCKE_TIER_QUESTION_COUNTS[examTier], key));
   const nameSuggestions = useMemo(() =>
     question?.category === "name" && !checked
       ? getPokemonNameSuggestions(nameInput, pool, 9) : [],
@@ -184,7 +191,16 @@ export default function NuzlockeExam({ mode = "exam" }) {
       ? settings.categories.filter((value) => value !== key)
       : [...settings.categories, key]);
   }
+  // Start only after the chosen tier has been rendered, so the very first
+  // question already uses the correct generation pool and question schedule.
+  useEffect(() => {
+    if (practice || !pendingExamStart) return;
+    setPendingExamStart(false);
+    start();
+  }, [pendingExamStart, examTier]);
+
   function exit() {
+    setPendingExamStart(false);
     requestRef.current += 1;
     setActive(false); setFinished(false); setLoading(false);
     setQuestion(null); setError(""); setBusyHint("");
@@ -219,22 +235,33 @@ export default function NuzlockeExam({ mode = "exam" }) {
     if (category === "moves") {
       const eligible = MOVE_FACTS.filter((item) => item.minGen <= ruleGen);
       const move = pick(eligible, "moves");
-      return move && makeMoveQuestion(move, ruleGen);
+      if (!move) return null;
+      const moveQuestionNumber = used.current.movePromptCount || 0;
+      used.current.movePromptCount = moveQuestionNumber + 1;
+      // Both type recognition and physical/special classification appear.
+      const variant = moveQuestionNumber % 2 === 0 ? "type" : "class";
+      return makeMoveQuestion(move, ruleGen, variant, roundDifficulty);
     }
     if (category === "battle") {
       const fact = pick(availableBattleFacts(ruleGen), "battle");
       return fact && makeBattleQuestion(fact);
     }
     if (category === "offense") {
-      const chosen = pick(fullyEvolved, "offense");
+      const laterEvolutions = fullyEvolved.filter((item) => item.dexId >= 387);
+      const candidates = !practice && examTier === "normal" && laterEvolutions.length
+        ? laterEvolutions : fullyEvolved;
+      const chosen = pick(candidates, "offense");
       if (!chosen) return null;
       const pokemon = await loadTrainerPokemon(chosen.dexId, ruleGen);
       return makeOffenseQuestion(pokemon, roundDifficulty);
     }
     if (category === "speed") {
-      if (fullyEvolved.length < 2) return null;
-      const first = pick(fullyEvolved, "speedA");
-      const second = pick(fullyEvolved.filter((pokemon) => pokemon.dexId !== first.dexId), "speedB");
+      const laterEvolutions = fullyEvolved.filter((item) => item.dexId >= 387);
+      const candidates = !practice && examTier === "normal" && laterEvolutions.length >= 2
+        ? laterEvolutions : fullyEvolved;
+      if (candidates.length < 2) return null;
+      const first = pick(candidates, "speedA");
+      const second = pick(candidates.filter((pokemon) => pokemon.dexId !== first.dexId), "speedB");
       if (!first || !second) return null;
       const [left,right] = await Promise.all([
         loadTrainerPokemon(first.dexId, ruleGen),
@@ -242,7 +269,15 @@ export default function NuzlockeExam({ mode = "exam" }) {
       ]);
       return makeSpeedQuestion(left,right,roundDifficulty);
     }
-    const chosen = pick(pool, "pokemon");
+    // The medium test explicitly includes Gen 4–7 encounters alongside classics.
+    let eligiblePokemon = pool;
+    if (!practice && examTier === "normal") {
+      const index = used.current.mediumPokemonCount || 0;
+      used.current.mediumPokemonCount = index + 1;
+      const later = pool.filter((item) => item.dexId >= 387);
+      if (index % 2 === 0 && later.length) eligiblePokemon = later;
+    }
+    const chosen = pick(eligiblePokemon, "pokemon");
     if (!chosen) return null;
     const name = chosen.name;
     if (category === "name") {
@@ -256,7 +291,15 @@ export default function NuzlockeExam({ mode = "exam" }) {
       return {
         category, title:"Welche Typen hat " + name + "?", pokemon,
         correct:pokemon.types, maxAnswers:pokemon.types.length,
-        options:getGenerationTypes(ruleGen).map((type) => ({key:type.key,type:type.key})),
+        options:(() => {
+          const types = getGenerationTypes(ruleGen);
+          const correct = types.filter((type) => pokemon.types.includes(type.key));
+          const wrong = shuffleItems(types.filter((type) => !pokemon.types.includes(type.key)));
+          const count = practice ? types.length : examTier === "easy" ? 6
+            : examTier === "normal" ? 10 : types.length;
+          return shuffleItems([...correct, ...wrong.slice(0, count-correct.length)])
+            .map((type) => ({key:type.key,type:type.key}));
+        })(),
         explanation:name + " hat " + pokemon.types.map((key) =>
           getGenerationTypes(ruleGen).find((type) => type.key === key)?.label || key).join(" / ") + ".",
       };
@@ -321,10 +364,12 @@ export default function NuzlockeExam({ mode = "exam" }) {
   }
   function start() {
     if (!pool.length || !selectedCategories.length) return;
-    schedule.current = buildExamSchedule({
-      ...settings, ruleGen, categories:selectedCategories,
-      rounds: isEndless ? 30 : settings.rounds,
-    },pool);
+    schedule.current = practice
+      ? buildExamSchedule({
+          ...settings, ruleGen, categories:selectedCategories,
+          rounds: isEndless ? 30 : settings.rounds,
+        },pool)
+      : buildNuzlockeTierSchedule(examTier, availableCategories);
     if (!schedule.current.length) return;
     requestRef.current += 1;
     used.current = {};
@@ -333,9 +378,10 @@ export default function NuzlockeExam({ mode = "exam" }) {
     prepareNextQuestion();
   }
   function launchExam(testTier) {
+    if (!NUZLOCKE_TIER_RULES[testTier]) return;
     examTierRef.current = testTier;
     setExamTier(testTier);
-    start();
+    setPendingExamStart(true);
   }
   function toggleOption(key) {
     if (checked) return;
