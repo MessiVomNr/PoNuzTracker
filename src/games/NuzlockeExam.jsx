@@ -210,10 +210,33 @@ export default function NuzlockeExam({ mode = "exam" }) {
 
   async function makeQuestion(category, difficulty) {
     if (category === "scenario") {
-      const candidates = TRAP_SCENARIOS.filter((entry) => entry.minGen <= ruleGen);
-      return makeScenarioQuestion(pick(candidates, "scenario"));
+      const eligible = TRAP_SCENARIOS.filter((entry) =>
+        entry.minGen <= ruleGen && (!entry.maxGen || ruleGen <= entry.maxGen));
+      const index = used.current.scenarioPromptCount || 0;
+      used.current.scenarioPromptCount = index + 1;
+      // In einem Prüfungsdurchlauf kommen festgehaltene UND frei wechselnde
+      // Pokémon sowie gelegentlich klassische Nuzlocke-Fragen vor.
+      const cases = index % 3 === 2
+        ? eligible.filter((entry) => !entry.isTrappingMatchup)
+        : eligible.filter((entry) => entry.isTrappingMatchup &&
+            entry.correct[0] === (index % 3 === 0 ? 0 : 1));
+      const chosen = pick(cases.length ? cases : eligible, "scenario");
+      return chosen && makeScenarioQuestion(chosen);
     }
     if (category === "ability") {
+      const index = used.current.abilityPromptCount || 0;
+      used.current.abilityPromptCount = index + 1;
+      // Jede zweite Fähigkeitsfrage testet eine konkrete Wechsel-Situation,
+      // z. B. Elektro gegen Ausweglos oder Stahl gegen Magnetfalle.
+      if (index % 2 === 1) {
+        const cases = TRAP_SCENARIOS.filter((entry) =>
+          entry.isTrappingMatchup && entry.minGen <= ruleGen &&
+          (!entry.maxGen || ruleGen <= entry.maxGen));
+        const situation = pick(cases, "abilitySituation");
+        if (situation) {
+          return { ...makeScenarioQuestion(situation), category: "ability" };
+        }
+      }
       const ids = new Set(pool.map((pokemon) => pokemon.dexId));
       const possible = ABILITY_CASES.filter((entry) => entry.minGen <= ruleGen && ids.has(entry.id));
       const chosen = pick(possible, "ability");
@@ -225,10 +248,16 @@ export default function NuzlockeExam({ mode = "exam" }) {
       return item && makeItemQuestion(item, ruleGen, difficulty);
     }
     if (category === "evolution") {
-      const eligible = [...SIMPLE_EVOLUTIONS, ...LEVEL_EVOLUTIONS]
+      const index = used.current.evolutionPromptCount || 0;
+      used.current.evolutionPromptCount = index + 1;
+      const variant = !practice && examTier === "easy"
+        ? ["target", "method", "level"][index % 3] : "mixed";
+      const eligible = (variant === "method" ? SIMPLE_EVOLUTIONS
+        : variant === "level" ? LEVEL_EVOLUTIONS
+        : [...SIMPLE_EVOLUTIONS, ...LEVEL_EVOLUTIONS])
         .filter((item) => item.minGen <= ruleGen);
-      const fact = pick(eligible, "evolution");
-      return fact && makeEvolutionQuestion(fact, ruleGen, difficulty);
+      const fact = pick(eligible, "evolution" + variant);
+      return fact && makeEvolutionQuestion(fact, ruleGen, difficulty, variant);
     }
     if (category === "moves") {
       const eligible = MOVE_FACTS.filter((item) => item.minGen <= ruleGen);
@@ -582,7 +611,6 @@ export default function NuzlockeExam({ mode = "exam" }) {
                     onClick={() => launchExam(tier.key)}>
                     <span className="exam-test-step">{index + 1}</span>
                     <strong>{tier.label}</strong>
-                    <span>{tier.subtitle}</span>
                     <span className="exam-test-start">Prüfung starten ›</span>
                   </button>
                 ))}
