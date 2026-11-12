@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import controllerIcon from "../assets/Controller.png";
 import "./guessStyles.css";
+import "./gamesHubLayout.css";
 
 function CharizardSilhouetteIcon() {
   return (
@@ -35,18 +35,6 @@ function HigherLowerIcon() {
   );
 }
 
-function ControllerIcon() {
-  return (
-    <span className="games-hub-card-icon games-hub-card-icon-muted" aria-hidden="true">
-      <img
-        className="games-hub-controller-img"
-        src={controllerIcon}
-        alt=""
-      />
-    </span>
-  );
-}
-
 export default function GamesHub() {
   const navigate = useNavigate();
 
@@ -66,7 +54,10 @@ export default function GamesHub() {
           <h1>Pokémon Games</h1>
         </header>
 
-        <div className="games-hub-card-grid">
+        <div className="games-hub-sections">
+          <section className="games-hub-section">
+            <h2 className="games-hub-section-title">Einzelspiele</h2>
+            <div className="games-hub-card-grid">
           <button
             type="button"
             className="games-hub-card games-hub-card-primary"
@@ -105,56 +96,27 @@ export default function GamesHub() {
             <span className="games-hub-card-arrow">›</span>
           </button>
 
-          <button
-            type="button"
-            className="games-hub-card games-hub-card-primary"
-            onClick={() => navigate("/games/type-trainer")}
-          >
-            <span className="games-hub-card-icon games-hub-card-icon-muted">
-              <span style={{ fontSize: 27, fontWeight: 950, color: "#c7d9ff" }} aria-hidden="true">2×</span>
-            </span>
-            <span className="games-hub-card-content">
-              <span className="games-hub-card-title">Typen-Trainer</span>
-              <span className="games-hub-card-text">
-                Lerne Effektivitäten, Immunitäten und die Typen aller Pokémon.
-              </span>
-            </span>
-            <span className="games-hub-card-arrow">›</span>
-          </button>
-
-          <button
-            type="button"
-            className="games-hub-card games-hub-card-primary"
-            onClick={() => navigate("/games/knowledge-training")}
-          >
-            <span className="games-hub-card-icon games-hub-card-icon-muted">
-              <span style={{ fontSize:29, color:"#c3d8ff", fontWeight:900 }} aria-hidden="true">?</span>
-            </span>
-            <span className="games-hub-card-content">
-              <span className="games-hub-card-title">Pokémon-Wissenstraining</span>
-              <span className="games-hub-card-text">
-                Items, Stats, Fähigkeiten, Entwicklungen und Kampfmechaniken frei üben.
-              </span>
-            </span>
-            <span className="games-hub-card-arrow">›</span>
-          </button>
-
-          <button
-            type="button"
-            className="games-hub-card games-hub-card-primary"
-            onClick={() => navigate("/games/nuzlocke-exam")}
-          >
-            <ControllerIcon />
-
-            <span className="games-hub-card-content">
-              <span className="games-hub-card-title">Nuzlocke-Eignungstest</span>
-              <span className="games-hub-card-text">
-                Drei Prüfungen mit 30 Fragen aus zwölf Pokémon-Wissensgebieten.
-              </span>
-            </span>
-
-            <span className="games-hub-card-arrow">›</span>
-          </button>
+            </div>
+          </section>
+          <section className="games-hub-section">
+            <h2 className="games-hub-section-title">Wissen &amp; Training</h2>
+            <div className="games-hub-card-grid">
+              <button type="button"
+                className="games-hub-card games-hub-card-primary games-hub-card-wide"
+                onClick={() => navigate("/games/knowledge-trainer")}>
+                <span className="games-hub-card-icon games-hub-card-icon-muted">
+                  <span className="knowledge-hub-question-icon" aria-hidden="true">?</span>
+                </span>
+                <span className="games-hub-card-content">
+                  <span className="games-hub-card-title">Wissenstrainer</span>
+                  <span className="games-hub-card-text">
+                    Typen lernen, Pokémon-Wissen üben und Prüfungen ablegen.
+                  </span>
+                </span>
+                <span className="games-hub-card-arrow">›</span>
+              </button>
+            </div>
+          </section>
         </div>
       </section>
     </main>
