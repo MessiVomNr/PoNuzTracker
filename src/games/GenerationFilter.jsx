@@ -24,7 +24,8 @@ export const ACTIVE_STARTER_GROUP = "grass";
 const StarterGroupContext = React.createContext(ACTIVE_STARTER_GROUP);
 
 export function StarterThemeProvider({ children }) {
-  const starterGroup = React.useContext(StarterGroupContext);
+  // Bei jedem erneuten Betreten einer Route eine neue, einheitliche Starter-Reihe.
+  const [starterGroup] = React.useState(chooseStarterGroup);
   return (
     <StarterGroupContext.Provider value={starterGroup}>
       {children}
@@ -50,7 +51,7 @@ export function GenerationStarter({ gen, group }) {
 }
 
 export function GenerationFilter({ generations, onToggle, onOnly, onAll, onClear, title = "Generationen" }) {
-  const [starterGroup] = React.useState(chooseStarterGroup);
+  const starterGroup = React.useContext(StarterGroupContext);
   return (
     <div className="trainer-generation-filter">
       <div className="trainer-generation-filter-header">
