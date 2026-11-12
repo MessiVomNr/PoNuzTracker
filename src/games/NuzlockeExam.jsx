@@ -179,8 +179,6 @@ export default function NuzlockeExam({ mode = "exam" }) {
   const completion = examResult(correctCount, answered);
   const qualificationLabel = QUALIFICATION_NAMES[qualification] || "Noch nicht qualifiziert";
   const isEndless = practice && settings.rounds === 0;
-  const roundDifficulty = practice ? settings.difficulty
-    : examQuestionDifficulty(examTierRef.current, answered);
 
   function changeSetting(key, value) {
     setSettings((previous) => ({ ...previous, [key]: value }));
@@ -210,7 +208,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
     return pickUnused(array, used.current[key], identity);
   }
 
-  async function makeQuestion(category) {
+  async function makeQuestion(category, difficulty) {
     if (category === "scenario") {
       const candidates = TRAP_SCENARIOS.filter((entry) => entry.minGen <= ruleGen);
       return makeScenarioQuestion(pick(candidates, "scenario"));
@@ -219,18 +217,18 @@ export default function NuzlockeExam({ mode = "exam" }) {
       const ids = new Set(pool.map((pokemon) => pokemon.dexId));
       const possible = ABILITY_CASES.filter((entry) => entry.minGen <= ruleGen && ids.has(entry.id));
       const chosen = pick(possible, "ability");
-      return chosen && makeAbilityQuestion(chosen, roundDifficulty);
+      return chosen && makeAbilityQuestion(chosen, difficulty);
     }
     if (category === "items") {
       const eligible = IMPORTANT_ITEMS.filter((item) => item.minGen <= ruleGen);
       const item = pick(eligible, "items");
-      return item && makeItemQuestion(item, ruleGen, roundDifficulty);
+      return item && makeItemQuestion(item, ruleGen, difficulty);
     }
     if (category === "evolution") {
       const eligible = [...SIMPLE_EVOLUTIONS, ...LEVEL_EVOLUTIONS]
         .filter((item) => item.minGen <= ruleGen);
       const fact = pick(eligible, "evolution");
-      return fact && makeEvolutionQuestion(fact, ruleGen, roundDifficulty);
+      return fact && makeEvolutionQuestion(fact, ruleGen, difficulty);
     }
     if (category === "moves") {
       const eligible = MOVE_FACTS.filter((item) => item.minGen <= ruleGen);
@@ -240,7 +238,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
       used.current.movePromptCount = moveQuestionNumber + 1;
       // Both type recognition and physical/special classification appear.
       const variant = moveQuestionNumber % 2 === 0 ? "type" : "class";
-      return makeMoveQuestion(move, ruleGen, variant, roundDifficulty);
+      return makeMoveQuestion(move, ruleGen, variant, difficulty);
     }
     if (category === "battle") {
       const fact = pick(availableBattleFacts(ruleGen), "battle");
@@ -253,7 +251,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
       const chosen = pick(candidates, "offense");
       if (!chosen) return null;
       const pokemon = await loadTrainerPokemon(chosen.dexId, ruleGen);
-      return makeOffenseQuestion(pokemon, roundDifficulty);
+      return makeOffenseQuestion(pokemon, difficulty);
     }
     if (category === "speed") {
       const laterEvolutions = fullyEvolved.filter((item) => item.dexId >= 387);
@@ -267,7 +265,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
         loadTrainerPokemon(first.dexId, ruleGen),
         loadTrainerPokemon(second.dexId, ruleGen),
       ]);
-      return makeSpeedQuestion(left,right,roundDifficulty);
+      return makeSpeedQuestion(left,right,difficulty);
     }
     // The medium test explicitly includes Gen 4–7 encounters alongside classics.
     let eligiblePokemon = pool;
@@ -304,8 +302,8 @@ export default function NuzlockeExam({ mode = "exam" }) {
           getGenerationTypes(ruleGen).find((type) => type.key === key)?.label || key).join(" / ") + ".",
       };
     }
-    if (category === "weakness") return makeWeaknessQuestion(pokemon, ruleGen, roundDifficulty);
-    if (category === "damage") return makeDamageQuestion(pokemon, ruleGen, roundDifficulty);
+    if (category === "weakness") return makeWeaknessQuestion(pokemon, ruleGen, difficulty);
+    if (category === "damage") return makeDamageQuestion(pokemon, ruleGen, difficulty);
     return null;
   }
 
@@ -328,7 +326,10 @@ export default function NuzlockeExam({ mode = "exam" }) {
     },pool));
   }
 
-  async function prepareNextQuestion() {
+  async function prepareNextQuestion(forcedIndex) {
+    const questionIndex = Number.isInteger(forcedIndex) ? forcedIndex : answered;
+    const difficulty = practice ? settings.difficulty
+      : examQuestionDifficulty(examTierRef.current, questionIndex);
     const requestId = ++requestRef.current;
     setLoading(true); setError(""); setBusyHint(""); setQuestion(null);
     setSelected([]); setChecked(false); setWasCorrect(false);
@@ -340,7 +341,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
         const category = schedule.current.shift();
         try {
           if (attempt > 5) setBusyHint("Suche eine passende Frage …");
-          const prepared = normalizeQuestion(await makeQuestion(category));
+          const prepared = normalizeQuestion(await makeQuestion(category, difficulty));
           if (requestId !== requestRef.current) return;
           if (!prepared || !prepared.correct?.length || (prepared.options && !prepared.options.length)) {
             schedule.current.push(category);
@@ -375,7 +376,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
     used.current = {};
     setAnswered(0); setCorrectCount(0); setByCategory({});
     setQuestion(null); setError(""); setFinished(false); setActive(true);
-    prepareNextQuestion();
+    prepareNextQuestion(0);
   }
   function launchExam(testTier) {
     if (!NUZLOCKE_TIER_RULES[testTier]) return;
