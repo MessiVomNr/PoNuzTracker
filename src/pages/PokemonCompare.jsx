@@ -1,5 +1,6 @@
 // src/pages/PokemonCompare.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { GenerationStarter } from "../games/GenerationFilter";
 import { useNavigate, useParams } from "react-router-dom";
 import { pokedex as fullPokedex } from "../data/pokedex.js";
 import dexBg from "../assets/DexBackground.png";
@@ -1099,6 +1100,8 @@ export default function PokemonCompare() {
             <div className="cmp-topgrid">
               <div>
                 <div style={{ ...faint, fontWeight: 950, marginBottom: 6 }}>Gen</div>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <GenerationStarter gen={gen} />
                 <select
                   className="cmp-select"
                   value={gen}
@@ -1111,6 +1114,7 @@ export default function PokemonCompare() {
                     </option>
                   ))}
                 </select>
+                </div>
               </div>
 
               <div>

@@ -26,6 +26,11 @@ import DuoLobby from "./duo/DuoLobby";
 import PokemonCompare from "./pages/PokemonCompare.jsx";
 import TeamCompare from "./pages/TeamCompare.jsx";
 import GamesHub from "./games/GamesHub";
+import TypeTrainerMenu from "./games/TypeTrainerMenu";
+import TypeEffectivenessGame from "./games/TypeEffectivenessGame";
+import PokemonTypeGuessGame from "./games/PokemonTypeGuessGame";
+import NuzlockeExam from "./games/NuzlockeExam";
+import { StarterThemeProvider } from "./games/GenerationFilter";
 import PokemonGuessMenu from "./games/PokemonGuessMenu";
 import PokemonGuessSolo from "./games/PokemonGuessSolo";
 import PokemonHigherLower from "./games/PokemonHigherLower";
@@ -64,14 +69,21 @@ function useBackgroundControl() {
 function AppContent() {
   useInitTheme();
   useBackgroundControl();
+  const location = useLocation();
 
   return (
     <>
       <GlobalEscapeMenu />
+      <StarterThemeProvider key={location.pathname}>
       <Routes>
         <Route path="/" element={<HomeMode />} />
 
         <Route path="/games" element={<GamesHub />} />
+        <Route path="/games/type-trainer" element={<TypeTrainerMenu />} />
+        <Route path="/games/type-trainer/effectiveness" element={<TypeEffectivenessGame />} />
+        <Route path="/games/type-trainer/pokemon-types" element={<PokemonTypeGuessGame />} />
+        <Route path="/games/nuzlocke-exam" element={<NuzlockeExam key="exam" mode="exam" />} />
+        <Route path="/games/knowledge-training" element={<NuzlockeExam key="practice" mode="practice" />} />
         <Route path="/games/pokemon-guess" element={<PokemonGuessMenu />} />
         <Route path="/games/pokemon-guess/solo" element={<PokemonGuessSolo />} />
         <Route path="/games/higher-lower" element={<PokemonHigherLower />} />
@@ -104,6 +116,7 @@ function AppContent() {
         <Route path="/compare/:leftId" element={<PokemonCompare />} />
         <Route path="/team-compare" element={<TeamCompare />} />
       </Routes>
+      </StarterThemeProvider>
     </>
   );
 }

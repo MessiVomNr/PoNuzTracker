@@ -1,3 +1,4 @@
+import { GenerationStarter } from "./GenerationFilter";
 // src/games/PokemonGuessSolo.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -1127,7 +1128,7 @@ export default function PokemonGuessSolo() {
                               />
                             </span>
 
-                            <span className="solo-gen-title">Gen {gen}</span>
+                            <span className="solo-gen-title"><GenerationStarter gen={gen} /> Gen {gen}</span>
                           </div>
 
                           <button

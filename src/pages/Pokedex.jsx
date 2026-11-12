@@ -1,5 +1,6 @@
 // src/pages/Pokedex.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { GenerationStarter } from "../games/GenerationFilter";
 import { useNavigate } from "react-router-dom";
 import { pokedex as fullPokedex } from "../data/pokedex.js";
 import dexBg from "../assets/DexBackground.png";
@@ -2018,8 +2019,15 @@ export default function Pokedex() {
                   {GEN_RANGES.map((g) => {
                     const key = String(g.gen);
                     return (
-                      <div key={key} style={chip(selectedGens.has(key))} onClick={() => toggleSet(setSelectedGens, key)}>
-                        Gen {g.gen}
+                      <div key={key} style={{ ...chip(selectedGens.has(key)), display:"inline-flex", alignItems:"center", gap:5 }}
+                        onClick={() => toggleSet(setSelectedGens, key)}>
+                        <GenerationStarter gen={g.gen} /> Gen {g.gen}
+                        <button type="button" title={"Nur Gen " + g.gen} onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedGens(new Set([key]));
+                        }} style={{ border:"1px solid rgba(143,181,249,.24)", borderRadius:7,
+                          background:"rgba(119,160,240,.12)", color:"inherit", cursor:"pointer",
+                          fontSize:11, fontWeight:800, padding:"3px 7px" }}>Nur</button>
                       </div>
                     );
                   })}

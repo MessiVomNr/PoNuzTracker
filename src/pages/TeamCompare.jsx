@@ -1,5 +1,6 @@
 // src/pages/PokemonCompare.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { GenerationStarter } from "../games/GenerationFilter";
 import { useLocation, useNavigate } from "react-router-dom";
 import { pokedex as fullPokedex } from "../data/pokedex.js";
 import dexBg from "../assets/DexBackground.png";
@@ -2564,7 +2565,10 @@ export default function TeamCompare() {
 
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
               <div style={{ width: 140 }}>
-                <DarkPicker title={null} value={gen} onChange={(v) => setGen(clamp(Number(v), 1, 9))} items={genItems} search={false} />
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <GenerationStarter gen={gen} />
+                  <DarkPicker title={null} value={gen} onChange={(v) => setGen(clamp(Number(v), 1, 9))} items={genItems} search={false} />
+                </div>
               </div>
 
               <button style={btn} onClick={() => navigate(location.state?.from || -1)}>

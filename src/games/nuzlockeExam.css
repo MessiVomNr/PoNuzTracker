@@ -1,0 +1,267 @@
+/* Nuzlocke-Eignungstest – gleicher ruhiger Blauton wie der Typen-Trainer. */
+.exam-panel .type-trainer-subtitle {margin-bottom:20px}
+.exam-kind {
+  display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid rgba(150,185,255,.24);border-radius:999px;
+  background:rgba(102,145,221,.12);color:#bad2ff;
+  letter-spacing:.07em;text-transform:uppercase;font-size:11px;font-weight:900;
+  padding:7px 13px;
+}
+.exam-pass-info {
+  display:flex;align-items:center;gap:12px;align-self:end;flex-wrap:wrap;
+  color:#c3d4ef;background:rgba(77,111,187,.15);
+  border:1px solid rgba(151,187,255,.2);border-radius:14px;padding:13px 16px;
+  font-size:13px;font-weight:800;
+}
+.exam-pass-number {font-size:25px;font-weight:1000;color:#afcfff}
+.exam-pass-divider {height:24px;width:1px;background:rgba(165,198,255,.25)}
+.exam-progress {width:100%;height:6px;background:rgba(122,153,213,.14);border-radius:999px;margin:-5px 0 16px;overflow:hidden}
+.exam-progress > span {height:100%;display:block;background:linear-gradient(90deg,#4c92ee,#8787f5);transition:width .2s ease}
+.exam-question-block {
+  text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:24px 22px;min-height:195px;
+  border:1px solid rgba(150,191,255,.16);border-radius:22px;
+  background:radial-gradient(circle at 50% 28%,rgba(69,105,188,.16),transparent 66%),rgba(8,17,36,.47);
+}
+.exam-question-block h2 {color:#fff!important;margin:0;font-size:clamp(19px,2.7vw,26px);line-height:1.3;text-shadow:none!important}
+.exam-pokemon-image {width:min(230px,52vw);height:min(230px,52vw);object-fit:contain;filter:drop-shadow(0 12px 23px rgba(0,0,0,.36));}
+.exam-type-token {display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:0;font-size:13px;font-weight:850;color:#fff}
+.exam-type-token img {width:23px;height:23px;flex-shrink:0;object-fit:contain}
+.exam-options-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:19px}
+.exam-options-grid.has-types {grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.exam-option {
+  min-height:52px;display:flex;align-items:center;justify-content:center;gap:10px;position:relative;
+  background:rgba(65,86,126,.40);color:#f3f6ff;
+  border:1px solid rgba(160,188,236,.20);border-radius:13px;
+  cursor:pointer;font:inherit;font-size:14px;font-weight:850;
+  padding:10px 14px;text-align:center;transition:background .15s,border-color .15s,transform .15s;
+}
+.exam-option:hover:not(:disabled){transform:translateY(-2px);border-color:rgba(162,206,255,.5);background:rgba(75,106,168,.45)}
+.exam-option:focus-visible,.exam-name-input:focus-visible{outline:2px solid #95c5ff;outline-offset:2px}
+.exam-option-selected{background:rgba(74,124,223,.37);border:2px solid #7daaf4}
+.exam-option-correct,.exam-option-correct:disabled{background:rgba(18,133,86,.32);border:2px solid #4ad7a4;color:#e4ffef;opacity:1}
+.exam-option-wrong,.exam-option-wrong:disabled{background:rgba(179,56,78,.30);border:2px solid #f78599;color:#ffe3e7;opacity:1}
+.exam-option:disabled{opacity:.56;cursor:default}
+.exam-check{font-size:19px;font-weight:1000;line-height:1}
+.exam-name-form{display:flex;align-items:flex-start;gap:12px;margin:20px auto 0;max-width:700px}
+.exam-input-wrap{flex:1;position:relative;min-width:0}
+.exam-name-input {
+  width:100%;box-sizing:border-box;border-radius:14px;
+  border:1px solid rgba(148,179,240,.3);background:#172845;color:#fff;
+  padding:14px 17px;font:inherit;font-size:15px;font-weight:800;
+}
+.exam-name-form .type-trainer-primary {min-height:49px}
+.exam-suggestions {
+  position:absolute;top:calc(100% + 5px);left:0;right:0;z-index:10;
+  background:#1a2b49;border:1px solid #5277b2;border-radius:12px;
+  box-shadow:0 15px 30px rgba(0,0,0,.4);overflow:hidden;max-height:260px;overflow-y:auto;
+}
+.exam-suggestions button{display:block;width:100%;background:transparent;color:#f2f6ff;padding:10px 15px;
+  font:inherit;font-weight:800;font-size:14px;border:0;text-align:left;cursor:pointer}
+.exam-suggestions button:hover,.exam-suggestions button.is-active{background:#38578b}
+.exam-results {display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  gap:12px;padding:30px 20px;background:rgba(12,24,47,.53);
+  border:1px solid rgba(161,195,251,.18);border-radius:22px}
+.exam-rank-icon{display:grid;place-items:center;width:54px;height:54px;border-radius:50%;
+  color:#c7d9ff;background:rgba(106,150,230,.18);font-size:31px}
+.exam-result-percent{font-size:clamp(52px,8vw,90px);font-weight:1000;line-height:1;color:#a8c7ff}
+.exam-results h2{color:#fff!important;font-size:clamp(23px,3vw,32px);margin:0;text-shadow:none!important}
+.exam-results p{margin:0;color:#b6c9ea}
+.exam-category-results{width:min(530px,100%);display:grid;gap:2px;margin:10px 0}
+.exam-category-row{display:flex;justify-content:space-between;gap:16px;
+  padding:10px 8px;border-bottom:1px solid rgba(165,191,242,.13);text-align:left;color:#dbe9ff}
+.exam-category-row strong{color:#b7d4ff}
+@media(max-width:800px){.exam-options-grid.has-types{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:540px){
+  .exam-option{font-size:12px;padding:9px 8px;min-height:47px}
+  .exam-options-grid,.exam-options-grid.has-types{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .exam-question-block{padding:17px 12px}
+  .exam-pokemon-image{width:165px;height:165px}
+  .exam-pass-info{align-self:stretch}
+  .exam-name-form{flex-direction:column}
+  .exam-name-form .type-trainer-primary{width:100%}
+  .exam-input-wrap{width:100%}
+}
+
+/* Knowledge training: compact selectable topic chips. */
+.exam-knowledge-header{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:0 0 11px}
+.exam-knowledge-header .type-trainer-field-title{margin:0}
+.exam-knowledge-actions{display:flex;gap:7px}
+.exam-knowledge-actions button{border:1px solid rgba(157,190,255,.26);border-radius:10px;
+  background:rgba(90,128,206,.16);color:#d7e6ff;font:inherit;font-size:12px;
+  font-weight:850;padding:7px 13px;cursor:pointer}
+.exam-knowledge-actions button:hover{background:rgba(98,146,232,.34)}
+.exam-knowledge-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.exam-knowledge-chip{display:flex;align-items:center;gap:8px;text-align:left;
+  min-height:45px;min-width:0;padding:9px 13px;
+  border-radius:12px;border:1px solid rgba(155,188,244,.21);
+  background:rgba(41,63,105,.36);color:#c9d8f2;
+  font:inherit;font-size:13px;font-weight:850;cursor:pointer}
+.exam-knowledge-chip span:first-child{width:19px;flex:0 0 19px;color:#9eb5df}
+.exam-knowledge-chip.is-selected{border-color:#6a9ee5;background:rgba(59,105,187,.27);color:#fff}
+.exam-knowledge-chip.is-selected span:first-child{color:#99c5ff}
+.exam-knowledge-chip:hover:not(:disabled){background:rgba(62,114,204,.31)}
+.exam-knowledge-chip:disabled{cursor:default;opacity:.83}
+.exam-knowledge-chip:disabled:not(.is-selected){opacity:.42}
+.exam-rank-hint{padding:8px 3px;color:#9cb7e4;font-size:12px;text-align:center;letter-spacing:.02em}
+.exam-pokemon-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px;width:min(520px,100%)}
+.exam-pokemon-pair>div{display:flex;flex-direction:column;align-items:center;gap:5px;
+  min-width:0;padding:10px;border:1px solid rgba(139,179,250,.16);
+  background:rgba(35,57,103,.18);border-radius:17px}
+.exam-pokemon-pair .exam-pokemon-image{width:min(148px,32vw);height:min(148px,32vw)}
+.exam-pokemon-pair strong{font-size:13px;color:#ebf3ff}
+.exam-item-art{width:90px;height:90px;image-rendering:pixelated;object-fit:contain;
+  filter:drop-shadow(0 10px 14px rgba(0,0,0,.35))}
+.exam-question-note{margin:0;max-width:670px;color:#bad1f6;font-size:15px;font-weight:850}
+.exam-options-grid .exam-option{min-height:48px;overflow-wrap:anywhere}
+.exam-options-grid .exam-option>span:first-child{min-width:0}
+@media(max-width:850px){.exam-knowledge-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.exam-knowledge-grid{grid-template-columns:1fr}
+.exam-pokemon-pair{gap:8px}.exam-pokemon-pair>div{padding:8px}
+.exam-pokemon-pair .exam-pokemon-image{width:min(125px,36vw);height:min(125px,36vw)}
+}
+
+/* Kategorie mit eigenem Nur-Schalter wie die Gen-Auswahl. */
+.exam-knowledge-unit{display:flex;align-items:stretch;gap:5px;min-width:0}
+.exam-knowledge-unit .exam-knowledge-chip{flex:1 1 auto;min-width:0}
+.exam-knowledge-only{flex:0 0 auto;border:1px solid rgba(155,188,244,.22);
+  background:rgba(91,126,192,.16);border-radius:12px;color:#dceaff;
+  font:inherit;font-size:12px;font-weight:850;padding:7px 10px;cursor:pointer}
+.exam-knowledge-only:hover{background:rgba(99,150,235,.30);border-color:#8cbaff}
+
+/* Drei feste Nuzlocke-Prüfungen statt konfigurierbarer Prüfungsregeln. */
+.exam-fixed-tests {display:grid;gap:19px;background:rgba(8,17,36,.48);
+  border:1px solid rgba(147,176,235,.18);border-radius:22px;padding:25px}
+.exam-fixed-header,.exam-fixed-footer {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.exam-fixed-header strong {font-size:17px;color:#edf4ff;font-weight:900}
+.exam-fixed-header>span,.exam-fixed-footer {font-size:13px;color:#b3c7ea}
+.exam-test-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.exam-test-card {border:1px solid rgba(143,184,253,.28);border-radius:18px;
+  min-height:144px;display:flex;flex-direction:column;align-items:flex-start;gap:13px;
+  text-align:left;padding:21px 19px;color:#e7f0ff;cursor:pointer;font:inherit;
+  background:linear-gradient(155deg,rgba(46,75,131,.58),rgba(17,31,59,.82));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:transform .16s,border-color .16s,background .16s}
+.exam-test-card:hover {transform:translateY(-3px);border-color:#88b6ff;
+  background:linear-gradient(155deg,rgba(61,102,177,.64),rgba(22,42,78,.88))}
+.exam-test-card:focus-visible {outline:2px solid #afd0ff;outline-offset:3px}
+.exam-test-card strong {font-size:25px;color:#fff;line-height:1.1}
+
+.exam-test-step {display:grid;place-items:center;min-width:35px;height:35px;padding:0 8px;
+  border-radius:11px;background:rgba(125,162,238,.16);border:1px solid rgba(176,205,255,.20);
+  font-size:14px;font-weight:900;color:#bed5ff}
+.exam-test-start{margin-top:auto;font-size:12px;color:#bfd5ff;letter-spacing:.01em;font-weight:900}
+.exam-fixed-footer {padding-top:12px;border-top:1px solid rgba(150,183,245,.18)}
+@media(max-width:740px){.exam-test-grid{grid-template-columns:1fr}
+  .exam-test-card{min-height:130px;gap:9px;padding:16px 18px}}
+
+/* Die Auswahl muss auch vor dem Auflösen farbig und eindeutig erkennbar sein. */
+.exam-panel .exam-options-grid .exam-option.exam-option-selected:not(:disabled) {
+  border: 2px solid #9ac9ff !important;
+  color: #fff !important;
+  background: linear-gradient(135deg,rgba(65,124,231,.64),rgba(63,82,176,.52)) !important;
+  box-shadow: inset 0 0 0 1px rgba(215,234,255,.17),0 3px 15px rgba(55,105,210,.19);
+}
+.exam-panel .exam-options-grid .exam-option.exam-option-correct:disabled {
+  background: rgba(22,155,105,.35) !important;
+  border: 2px solid #4de0a4 !important;
+  color: #e8ffef !important;
+  opacity: 1 !important;
+}
+.exam-panel .exam-options-grid .exam-option.exam-option-wrong:disabled {
+  background: rgba(188,52,74,.32) !important;
+  border: 2px solid #fd7a98 !important;
+  color: #fff0f3 !important;
+  opacity: 1 !important;
+}
+.exam-selected-mark {display:grid;place-items:center;flex:0 0 20px;min-width:20px;height:20px;
+  border-radius:50%;background:rgba(244,250,255,.19);font-size:12px;font-weight:900;color:#fff}
+.exam-panel .exam-option {gap:8px;min-height:48px}
+.exam-panel .exam-options-grid.has-types .exam-option {min-height:44px}
+
+/* Prüfungsübersicht: ein einziger, ruhiger Status statt Prozentlegende/Bestwert. */
+.exam-fixed-tests .exam-fixed-footer {
+  justify-content: center;
+  padding-top: 14px;
+  margin-top: 1px;
+}
+.exam-qualification-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #b7c9e7;
+  font-size: 14px;
+  font-weight: 750;
+}
+.exam-qualification-status strong {
+  color: #e7f1ff;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+/* Prüfungsarten: ein ruhiger Switch im bestehenden blauen Games-Stil. */
+.exam-mode-switch{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:4px;gap:4px;max-width:510px;width:100%;
+  border:1px solid rgba(139,180,244,.22);
+  border-radius:14px;background:rgba(7,17,38,.48);
+  margin:0 auto 4px;
+}
+.exam-mode-switch button{
+  font:inherit;font-size:13px;font-weight:850;min-height:43px;
+  border:1px solid transparent;border-radius:10px;
+  color:#bdcfea;background:transparent;cursor:pointer;
+  padding:9px 12px;
+}
+.exam-mode-switch button.is-active{
+  background:linear-gradient(145deg,rgba(78,127,212,.37),rgba(49,78,141,.37));
+  color:#fff;border-color:rgba(151,195,255,.40);
+  box-shadow:0 3px 13px rgba(0,0,0,.12);
+}
+.exam-mode-switch button:hover:not(.is-active){background:rgba(102,144,215,.15)}
+.exam-mode-switch button:focus-visible,
+.exam-generation-card:focus-visible{outline:2px solid #a3c9ff;outline-offset:2px}
+.exam-generation-grid{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.exam-generation-card{
+  display:flex;align-items:center;gap:11px;min-width:0;min-height:76px;
+  border:1px solid rgba(148,181,242,.26);border-radius:15px;
+  background:linear-gradient(150deg,rgba(48,78,135,.44),rgba(16,29,57,.73));
+  color:#edf4ff;font:inherit;font-weight:900;font-size:17px;
+  cursor:pointer;text-align:left;padding:11px 15px;
+  transition:border-color .16s,background .16s,transform .16s;
+}
+.exam-generation-card .trainer-gen-starter{width:49px;height:49px;flex:0 0 49px;object-fit:contain}
+.exam-generation-card:hover{
+  background:linear-gradient(150deg,rgba(68,115,198,.52),rgba(31,50,94,.77));
+  border-color:#8cb6fb;transform:translateY(-2px)
+}
+.exam-generation-check,.exam-generation-arrow{
+  margin-left:auto;display:grid;place-items:center;
+  width:25px;height:25px;flex:0 0 25px;border-radius:50%;
+  font-size:18px;
+}
+.exam-generation-check{color:#72e4b8;background:rgba(30,155,104,.15);
+  border:1px solid rgba(91,218,167,.34)}
+.exam-generation-arrow{color:#adc7f3;font-size:24px}
+.exam-generation-card.is-completed{border-color:rgba(84,194,152,.48)}
+@media(max-width:720px){.exam-generation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:470px){
+  .exam-mode-switch button{font-size:12px;padding:8px 5px}
+  .exam-generation-card{padding:9px 11px;gap:7px;min-height:66px;font-size:15px}
+  .exam-generation-card .trainer-gen-starter{width:40px;height:40px;flex-basis:40px}
+}
+
+/* Klarer Qualifikationsstatus für die neun Generationen-Prüfungen. */
+.exam-generation-qualification{
+  display:flex;flex-direction:column;align-items:center;
+  gap:7px;text-align:center;min-width:0;line-height:1.5;
+}
+.exam-generation-qualification>span{
+  font-size:13px;color:#b9cbea;font-weight:700;
+}
+.exam-generation-qualification>strong{
+  font-size:15px;color:#f0f6ff;font-weight:900;overflow-wrap:anywhere;
+}

@@ -1,3 +1,4 @@
+import { GenerationStarter } from "./GenerationFilter";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { comboMatches, isTypingTarget, loadHotkeys } from "../utils/hotkeys";
@@ -768,7 +769,7 @@ useEffect(() => {
                                   onClick={() => toggleGen(gen)}
                                 >
                                   <span style={checkStyle}>{active ? "✓" : ""}</span>
-                                  Gen {gen}
+                                  <GenerationStarter gen={gen} /> Gen {gen}
                                 </button>
 
                                 <button
