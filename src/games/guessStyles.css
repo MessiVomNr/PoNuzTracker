@@ -5905,3 +5905,43 @@ button.game-card-disabled:hover {
     font-size: 15px !important;
   }
 }
+/* Generation cards in Solo / Online: keep "Nur" on its own row.
+   Responsive minimum card widths prevent starter, checkbox and text overlap. */
+.solo-gen-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr)) !important;
+}
+.solo-gen-card {
+  min-width: 0 !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: auto auto !important;
+}
+.solo-gen-card-top,
+.online-gen-card-top {
+  min-width: 0;
+  width: 100%;
+  flex-wrap: wrap;
+}
+.solo-gen-title,
+.online-gen-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.solo-gen-only-button {
+  justify-self: end !important;
+  align-self: end !important;
+}
+.online-gen-grid-clean {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+}
+.online-gen-grid-clean .guess-gen-card {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+}
+.online-gen-grid-clean .guess-gen-card > button {
+  justify-self: end;
+  align-self: end;
+}
