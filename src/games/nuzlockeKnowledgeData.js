@@ -259,11 +259,84 @@ function asOptions(labels, correctLabel) {
     correct: [correctLabel],
   };
 }
+// Verwandte Items ergeben deutlich bessere Ablenkungsantworten als zufällige
+// Gegenstände. Die Reihenfolge enthält die stärksten inhaltlichen Verwechslungen
+// zuerst: Beim Wahlschal etwa Wahlband und Wahlglas.
+const ITEM_RELATED_DISTRACTORS = {
+  "choice-scarf": ["choice-band", "choice-specs", "quick-claw", "assault-vest", "life-orb"],
+  "choice-band": ["choice-specs", "choice-scarf", "life-orb", "expert-belt", "charcoal"],
+  "choice-specs": ["choice-band", "choice-scarf", "life-orb", "expert-belt", "assault-vest"],
+  "focus-sash": ["focus-band", "sitrus-berry", "eviolite", "leftovers", "assault-vest"],
+  "focus-band": ["focus-sash", "sitrus-berry", "leftovers", "quick-claw", "eviolite"],
+  "leftovers": ["sitrus-berry", "lum-berry", "focus-band", "focus-sash", "rocky-helmet"],
+  "sitrus-berry": ["leftovers", "lum-berry", "focus-sash", "focus-band", "eviolite"],
+  "lum-berry": ["sitrus-berry", "leftovers", "safety-goggles", "focus-band", "focus-sash"],
+  "life-orb": ["expert-belt", "choice-band", "choice-specs", "charcoal", "mystic-water"],
+  "expert-belt": ["life-orb", "choice-band", "choice-specs", "charcoal", "mystic-water"],
+  "eviolite": ["assault-vest", "focus-sash", "focus-band", "rocky-helmet", "leftovers"],
+  "assault-vest": ["eviolite", "choice-specs", "choice-band", "focus-sash", "rocky-helmet"],
+  "rocky-helmet": ["eviolite", "assault-vest", "focus-band", "leftovers", "safety-goggles"],
+  "air-balloon": ["heavy-duty-boots", "safety-goggles", "shed-shell", "focus-sash", "eviolite"],
+  "heavy-duty-boots": ["air-balloon", "safety-goggles", "shed-shell", "focus-sash", "leftovers"],
+  "safety-goggles": ["air-balloon", "heavy-duty-boots", "shed-shell", "lum-berry", "assault-vest"],
+  "shed-shell": ["air-balloon", "heavy-duty-boots", "safety-goggles", "focus-sash", "quick-claw"],
+  "quick-claw": ["choice-scarf", "kings-rock", "focus-band", "focus-sash", "choice-band"],
+  "kings-rock": ["quick-claw", "focus-band", "focus-sash", "life-orb", "metal-coat"],
+  "metal-coat": ["charcoal", "mystic-water", "magnet", "miracle-seed", "kings-rock"],
+  "charcoal": ["mystic-water", "magnet", "miracle-seed", "metal-coat", "expert-belt"],
+  "mystic-water": ["charcoal", "magnet", "miracle-seed", "metal-coat", "expert-belt"],
+  "magnet": ["charcoal", "mystic-water", "miracle-seed", "metal-coat", "expert-belt"],
+  "miracle-seed": ["charcoal", "mystic-water", "magnet", "metal-coat", "expert-belt"],
+  "amulet-coin": ["quick-claw", "kings-rock", "metal-coat", "leftovers", "focus-band"],
+};
+
+const ITEM_EFFECT_FAMILIES = [
+  ["choice-scarf", "choice-band", "choice-specs"],
+  ["focus-sash", "focus-band", "sitrus-berry", "leftovers"],
+  ["charcoal", "mystic-water", "magnet", "miracle-seed", "metal-coat"],
+  ["life-orb", "expert-belt", "choice-band", "choice-specs"],
+  ["eviolite", "assault-vest", "rocky-helmet"],
+  ["air-balloon", "heavy-duty-boots", "safety-goggles", "shed-shell"],
+  ["quick-claw", "choice-scarf", "kings-rock"],
+  ["sitrus-berry", "lum-berry", "leftovers"],
+];
+
+export function selectItemDistractors(item, ruleGen, count, difficulty = "normal") {
+  const eligible = IMPORTANT_ITEMS.filter((candidate) =>
+    candidate.id !== item.id && candidate.minGen <= ruleGen);
+  const byId = new Map(eligible.map((candidate) => [candidate.id, candidate]));
+  const relatedIds = ITEM_RELATED_DISTRACTORS[item.id] || [];
+
+  // Items der gleichen Familie stehen zuerst, danach ähnliche Effekte.
+  // Bei Einfach wird die Auswahl etwas lockerer; Normal/Schwer haben
+  // möglichst viele ähnlich klingende Wirkungen.
+  const primaryLimit = difficulty === "easy" ? 1 : count;
+  const peers = relatedIds.map((id) => byId.get(id)).filter(Boolean);
+  const picked = shuffleItems(peers.slice(0, primaryLimit));
+  const seen = new Set(picked.map((candidate) => candidate.id));
+  const sameFamily = shuffleItems(eligible.filter((candidate) =>
+    !seen.has(candidate.id) && ITEM_EFFECT_FAMILIES.some((family) =>
+      family.includes(item.id) && family.includes(candidate.id))));
+  for (const candidate of sameFamily) {
+    if (picked.length >= count) break;
+    picked.push(candidate);
+    seen.add(candidate.id);
+  }
+
+  // Falls in älteren Generationen nicht genug ähnliche Items existieren,
+  // bleiben die letzten Antworten aus dem historisch gültigen Item-Pool.
+  const additionalRelated = shuffleItems(peers.filter((candidate) => !seen.has(candidate.id)));
+  const other = shuffleItems(eligible.filter((candidate) =>
+    !seen.has(candidate.id) && !relatedIds.includes(candidate.id)));
+  return [...picked, ...additionalRelated, ...other].slice(0, count);
+}
+
 export function makeItemQuestion(item, ruleGen, difficulty="normal") {
   const available = IMPORTANT_ITEMS.filter((candidate) => candidate.minGen <= ruleGen);
   const reverse = Math.random() >= 0.5;
   const count = difficulty === "hard" ? 6 : 4;
-  const wrong = pickDifferent(available, item, count-1);
+  const wrong = selectItemDistractors(item, ruleGen, count - 1, difficulty);
+  if (wrong.length < count - 1 || !available.some((candidate) => candidate.id === item.id)) return null;
   const labels = reverse ? [item.name, ...wrong.map((x) => x.name)] : [item.effect, ...wrong.map((x) => x.effect)];
   const correctLabel = reverse ? item.name : item.effect;
   return {
