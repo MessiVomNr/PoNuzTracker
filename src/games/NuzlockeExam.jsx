@@ -9,7 +9,7 @@ import {
   examPokemonList, examCategories, buildExamSchedule, pokemonArtwork,
   makeDamageQuestion, makeWeaknessQuestion, makeAbilityQuestion,
   makeScenarioQuestion, examResult, NUZLOCKE_TESTS, NUZLOCKE_EXAM_ROUNDS, examQuestionDifficulty,
-  NUZLOCKE_TIER_RULES, NUZLOCKE_TIER_QUESTION_COUNTS, buildNuzlockeTierSchedule,
+  NUZLOCKE_TIER_RULES, buildNuzlockeTierSchedule,
 } from "./nuzlockeExamData";
 import {
   IMPORTANT_ITEMS, SIMPLE_EVOLUTIONS, LEVEL_EVOLUTIONS, MOVE_FACTS,
@@ -170,8 +170,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
   const availableCategories = useMemo(() => examCategories(ruleGen, pool), [ruleGen, pool]);
   const selectedCategories = practice
     ? availableCategories.filter((key) => settings.categories.includes(key))
-    : availableCategories.filter((key) =>
-        Object.prototype.hasOwnProperty.call(NUZLOCKE_TIER_QUESTION_COUNTS[examTier], key));
+    : availableCategories;
   // Entwicklungsziele werden als Namen eingetippt. Für die Vorschläge
   // müssen auch Pokémon aus früheren Generationen verfügbar sein,
   // selbst wenn im freien Training nur eine einzelne Gen ausgewählt ist.
@@ -179,16 +178,18 @@ export default function NuzlockeExam({ mode = "exam" }) {
     () => examPokemonList(GENS.filter((gen) => gen <= ruleGen), ruleGen),
     [ruleGen]
   );
-  const isTextAnswer = question?.category === "name" || question?.responseType === "pokemon-name";
+  const isNumericAnswer = question?.responseType === "evolution-level";
+  const isPokemonNameAnswer = question?.category === "name" || question?.responseType === "pokemon-name";
+  const isTextAnswer = isPokemonNameAnswer || isNumericAnswer;
   const nameSuggestions = useMemo(() =>
-    isTextAnswer && !checked
+    isPokemonNameAnswer && !checked
       ? getPokemonNameSuggestions(
           nameInput,
           question?.responseType === "pokemon-name" ? evolutionNamePool : pool,
           9
         )
       : [],
-    [nameInput, isTextAnswer, question?.responseType, checked, pool, evolutionNamePool]);
+    [nameInput, isPokemonNameAnswer, question?.responseType, checked, pool, evolutionNamePool]);
   const completion = examResult(correctCount, answered);
   const qualificationLabel = QUALIFICATION_NAMES[qualification] || "Noch nicht qualifiziert";
   const isEndless = practice && settings.rounds === 0;
@@ -360,7 +361,9 @@ export default function NuzlockeExam({ mode = "exam" }) {
 
   // Auswahlfragen: gerade Antwortanzahl, ohne richtige Antworten zu entfernen.
   function normalizeQuestion(prepared) {
-    if (!prepared || prepared.category === "name" || prepared.responseType === "pokemon-name") return prepared;
+    if (!prepared || prepared.category === "name" ||
+        prepared.responseType === "pokemon-name" ||
+        prepared.responseType === "evolution-level") return prepared;
     if (!Array.isArray(prepared.options) || prepared.options.length < 4) return null;
     const options = shuffleItems([...prepared.options]);
     if (options.length % 2 !== 0) {
@@ -445,10 +448,13 @@ export default function NuzlockeExam({ mode = "exam" }) {
   function submit() {
     if (!question || checked) return;
     const isName = question.category === "name" || question.responseType === "pokemon-name";
-    if (isName ? !nameInput.trim() : !selected.length) return;
-    const right = isName
-      ? doesGuessMatch({ name:question.correct[0] }, nameInput)
-      : selected.length === question.correct.length && question.correct.every((item) => selected.includes(item));
+    const isLevel = question.responseType === "evolution-level";
+    if ((isName || isLevel) ? !nameInput.trim() : !selected.length) return;
+    const right = isLevel
+      ? /^\\d{1,3}$/.test(nameInput.trim()) && Number(nameInput.trim()) === Number(question.correct[0])
+      : isName
+        ? doesGuessMatch({ name:question.correct[0] }, nameInput)
+        : selected.length === question.correct.length && question.correct.every((item) => selected.includes(item));
     setChecked(true); setWasCorrect(right);
     setAnswered((value) => value + 1);
     setCorrectCount((value) => value + Number(right));
@@ -708,11 +714,17 @@ export default function NuzlockeExam({ mode = "exam" }) {
                 {isName ? (
                   <form className="exam-name-form" onSubmit={(event) => {event.preventDefault();submit();}}>
                     <div className="exam-input-wrap">
-                      <input type="text" className="exam-name-input"
-                        placeholder="Pokémon-Name eingeben …" value={nameInput}
+                      <input type={isNumericAnswer ? "number" : "text"} className="exam-name-input"
+                        inputMode={isNumericAnswer ? "numeric" : "text"}
+                        min={isNumericAnswer ? 1 : undefined}
+                        max={isNumericAnswer ? 100 : undefined}
+                        step={isNumericAnswer ? 1 : undefined}
+                        aria-label={isNumericAnswer ? "Entwicklungslevel" : "Pokémon-Name"}
+                        placeholder={isNumericAnswer ? "Level eingeben …" : "Pokémon-Name eingeben …"}
+                        value={nameInput}
                         autoComplete="off" autoFocus disabled={checked}
                         onChange={(event) => {setNameInput(event.target.value);setSuggestionIndex(-1);}}
-                        onKeyDown={onNameKeyDown}/>
+                        onKeyDown={isNumericAnswer ? undefined : onNameKeyDown}/>
                       {!checked && nameInput.trim() && nameSuggestions.length > 0 ? (
                         <div className="exam-suggestions" role="listbox" aria-label="Pokémon-Vorschläge">
                           {nameSuggestions.map((pokemon,index) => (
@@ -746,9 +758,10 @@ export default function NuzlockeExam({ mode = "exam" }) {
                     <span>{question.explanation}</span>
                   </div>
                 ) : (
-                  <p className="type-trainer-hint">{isName?"Tippe den Pokémon-Namen oder wähle einen Vorschlag.":
-                    question.correct.length===1?"Wähle eine Antwort.":
-                      "Wähle "+question.correct.length+" richtige Antworten."}</p>
+                  <p className="type-trainer-hint">{isNumericAnswer ? "Gib das Entwicklungslevel ein." :
+                    isPokemonNameAnswer ? "Tippe den Pokémon-Namen oder wähle einen Vorschlag." :
+                    question.correct.length === 1 ? "Wähle eine Antwort." :
+                    "Wähle " + question.correct.length + " richtige Antworten."}</p>
                 )}
                 <div className="type-trainer-actions">
                   {checked ? (
