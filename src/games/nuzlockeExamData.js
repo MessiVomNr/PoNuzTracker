@@ -323,9 +323,9 @@ export function examResult(correct, total) {
 // Drei feste Nuzlocke-Prüfungen. Jede beginnt einfach und zieht an,
 // unabhängig von den frei einstellbaren Trainingsoptionen.
 export const NUZLOCKE_TESTS = [
-  { key: "easy", label: "Einfach", subtitle: "Typen, Attacken und Items · Gen 1–3" },
-  { key: "normal", label: "Mittel", subtitle: "Mit Stats und Pokémon bis Gen 7" },
-  { key: "hard", label: "Schwer", subtitle: "Alle Generationen und Wissensgebiete" },
+  { key: "easy", label: "Einfach" },
+  { key: "normal", label: "Mittel" },
+  { key: "hard", label: "Schwer" },
 ];
 export const NUZLOCKE_EXAM_ROUNDS = 30;
 
@@ -337,21 +337,22 @@ export const NUZLOCKE_TIER_RULES = {
   hard: { ruleGen: 9, generations: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
 };
 
-// Exakt 30 Fragen pro Prüfung; die Mischung ist absichtlich nicht gleich.
-// Einfach: 28/30 Fragen zu Typen, Attacken und Items, plus 2 Namen.
-// Mittel: 5 garantierte Stat-Vergleiche; Gen 4–7 werden einbezogen.
-// Schwer: Jede der 12 Kategorien mindestens zweimal.
+// Die Themenverteilung bleibt bis zur Frage eine Überraschung.
+// Einfach: viele Typ-/Attacken-/Itemfragen, zusätzlich Namen,
+// Entwicklungen und klare Vergleiche physischer/spezieller Basiswerte.
+// Mittel: Statistik und Fangfähigkeiten; Schwer: alle zwölf Themen.
 export const NUZLOCKE_TIER_QUESTION_COUNTS = {
   easy: {
-    types: 7, weakness: 5, damage: 5, moves: 6, items: 5, name: 2,
+    types: 5, weakness: 5, damage: 4, moves: 4, items: 4,
+    name: 3, evolution: 3, offense: 2,
   },
   normal: {
     name: 2, types: 4, weakness: 3, damage: 3, moves: 3, items: 3,
-    ability: 2, evolution: 2, offense: 3, speed: 2, battle: 2, scenario: 1,
+    ability: 2, evolution: 2, offense: 3, speed: 2, battle: 1, scenario: 2,
   },
   hard: {
     name: 2, types: 2, weakness: 2, damage: 2, moves: 2, items: 2,
-    ability: 3, evolution: 3, offense: 3, speed: 3, battle: 3, scenario: 3,
+    ability: 3, evolution: 3, offense: 3, speed: 3, battle: 2, scenario: 4,
   },
 };
 
