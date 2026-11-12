@@ -26,6 +26,7 @@ import DuoLobby from "./duo/DuoLobby";
 import PokemonCompare from "./pages/PokemonCompare.jsx";
 import TeamCompare from "./pages/TeamCompare.jsx";
 import GamesHub from "./games/GamesHub";
+import KnowledgeTrainerMenu from "./games/KnowledgeTrainerMenu";
 import TypeTrainerMenu from "./games/TypeTrainerMenu";
 import TypeEffectivenessGame from "./games/TypeEffectivenessGame";
 import PokemonTypeGuessGame from "./games/PokemonTypeGuessGame";
@@ -79,6 +80,7 @@ function AppContent() {
         <Route path="/" element={<HomeMode />} />
 
         <Route path="/games" element={<GamesHub />} />
+        <Route path="/games/knowledge-trainer" element={<KnowledgeTrainerMenu />} />
         <Route path="/games/type-trainer" element={<TypeTrainerMenu />} />
         <Route path="/games/type-trainer/effectiveness" element={<TypeEffectivenessGame />} />
         <Route path="/games/type-trainer/pokemon-types" element={<PokemonTypeGuessGame />} />
