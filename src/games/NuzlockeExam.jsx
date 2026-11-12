@@ -262,16 +262,12 @@ export default function NuzlockeExam({ mode = "exam" }) {
       return item && makeItemQuestion(item, ruleGen, difficulty);
     }
     if (category === "evolution") {
-      const index = used.current.evolutionPromptCount || 0;
-      used.current.evolutionPromptCount = index + 1;
-      // Regelmäßige Level-Fragen in allen Prüfungen und im Wissenstraining,
-      // dazwischen Entwicklungsziele (mit Namenseingabe) und Methoden.
-      const variants = !practice && examTier === "normal"
-        ? ["level", "target", "level", "method"]
-        : !practice && examTier === "hard"
-          ? ["level", "level", "method", "target", "level"]
-          : ["level", "target", "level", "method", "level"];
-      const variant = variants[index % variants.length];
+      // Auch die Fragetypen variieren zufällig: Level häufiger,
+      // aber keine festgelegte Anzahl je Prüfung.
+      const levelChance = !practice && examTier === "hard" ? 0.65 : 0.6;
+      const random = Math.random();
+      const variant = random < levelChance ? "level"
+        : random < levelChance + 0.2 ? "target" : "method";
       const eligible = (variant === "method" ? SIMPLE_EVOLUTIONS
         : variant === "level" ? LEVEL_EVOLUTIONS
         : [...SIMPLE_EVOLUTIONS, ...LEVEL_EVOLUTIONS])
