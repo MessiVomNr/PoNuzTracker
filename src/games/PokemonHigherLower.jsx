@@ -769,7 +769,7 @@ useEffect(() => {
                                   onClick={() => toggleGen(gen)}
                                 >
                                   <span style={checkStyle}>{active ? "✓" : ""}</span>
-                                  <GenerationStarter gen={gen} /> Gen {gen}
+                                  <span style={genPopupLabelStyle}><GenerationStarter gen={gen} /><span>Gen {gen}</span></span>
                                 </button>
 
                                 <button
@@ -1260,7 +1260,7 @@ const popupListStyle = {
 
 const genPopupListStyle = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
   gap: 8,
 };
 
@@ -1282,11 +1282,13 @@ const popupOptionStyle = {
 };
 
 const genPopupOptionStyle = {
-  minHeight: 42,
+  minWidth: 0,
+  minHeight: 90,
   display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) auto",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gridTemplateRows: "auto auto",
   alignItems: "center",
-  gap: 8,
+  gap: 4,
   border: "1px solid rgba(126, 165, 255, 0.24)",
   borderRadius: 12,
   padding: "6px 7px",
@@ -1295,7 +1297,9 @@ const genPopupOptionStyle = {
 
 const genToggleButtonStyle = {
   minWidth: 0,
-  height: 30,
+  width: "100%",
+  minHeight: 44,
+  padding: "0 3px",
   display: "flex",
   alignItems: "center",
   gap: 7,
@@ -1308,8 +1312,18 @@ const genToggleButtonStyle = {
   textAlign: "left",
 };
 
+const genPopupLabelStyle = {
+  minWidth: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  whiteSpace: "nowrap",
+};
+
 const onlyGenButtonStyle = {
-  height: 28,
+  justifySelf: "end",
+  minWidth: 56,
+  height: 29,
   border: "1px solid rgba(126, 165, 255, 0.26)",
   borderRadius: 999,
   padding: "0 9px",

@@ -72,10 +72,10 @@ export function GenerationFilter({ generations, onToggle, onOnly, onAll, onClear
                 onClick={() => onToggle(gen)}
               >
                 <GenerationStarter gen={gen} group={starterGroup} />
-                <span>Gen {gen}</span>
+                <span className="trainer-generation-label">Gen {gen}</span>
                 <span className="trainer-generation-check" aria-hidden="true">{active ? "✓" : ""}</span>
               </button>
-              <button type="button" className="trainer-generation-only" onClick={() => onOnly(gen)} title={"Nur Gen " + gen}>
+              <button type="button" className="trainer-generation-only" onClick={() => onOnly(gen)} title={"Nur Gen " + gen} aria-label={"Nur Generation " + gen + " auswählen"}>
                 Nur
               </button>
             </div>
