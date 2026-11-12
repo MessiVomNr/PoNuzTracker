@@ -25,9 +25,21 @@ const SETTINGS_KEYS = {
   practice: "ponuz-knowledge-training-settings-v1",
 };
 const BEST_KEYS = {
-  exam: "ponuz-nuzlocke-exam-best-v2",
   practice: "ponuz-knowledge-training-best-v1",
 };
+const QUALIFICATION_KEY = "ponuz-nuzlocke-exam-qualification-v1";
+const QUALIFICATION_LEVELS = { easy: 1, normal: 2, hard: 3 };
+const QUALIFICATION_NAMES = {
+  easy: "Kommt infrage",
+  normal: "Qualifiziert",
+  hard: "Nuzlocke-würdig",
+};
+function readQualification() {
+  try {
+    const value = localStorage.getItem(QUALIFICATION_KEY);
+    return Object.prototype.hasOwnProperty.call(QUALIFICATION_LEVELS, value) ? value : null;
+  } catch { return null; }
+}
 const INITIAL_SETTINGS = {
   generations: [1,2,3], ruleGen: "auto", rounds: 24,
   difficulty: "normal", categories: EXAM_CATEGORIES.map((entry) => entry.key),
@@ -62,7 +74,8 @@ function readSettings(mode) {
   } catch { return defaults; }
 }
 function readBest(mode) {
-  try { return Number(localStorage.getItem(BEST_KEYS[mode])) || 0; }
+  if (mode !== "practice") return 0;
+  try { return Number(localStorage.getItem(BEST_KEYS.practice)) || 0; }
   catch { return 0; }
 }
 function pickUnused(array, usedSet, key = (item) => item.id ?? item.dexId) {
@@ -131,6 +144,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
   const [correctCount, setCorrectCount] = useState(0);
   const [byCategory, setByCategory] = useState({});
   const [best, setBest] = useState(() => readBest(mode));
+  const [qualification, setQualification] = useState(readQualification);
   const requestRef = useRef(0);
   const schedule = useRef([]);
   const used = useRef({});
@@ -156,6 +170,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
       ? getPokemonNameSuggestions(nameInput, pool, 9) : [],
     [nameInput, question?.category, checked, pool]);
   const completion = examResult(correctCount, answered);
+  const qualificationLabel = QUALIFICATION_NAMES[qualification] || "Noch nicht qualifiziert";
   const isEndless = practice && settings.rounds === 0;
   const roundDifficulty = practice ? settings.difficulty
     : examQuestionDifficulty(examTierRef.current, answered);
@@ -348,11 +363,23 @@ export default function NuzlockeExam({ mode = "exam" }) {
     }));
   }
   function finish() {
-    const percentage = examResult(correctCount, answered).percent;
-    if (percentage > best) {
-      setBest(percentage);
-      try { localStorage.setItem(BEST_KEYS[mode],String(percentage)); }
-      catch { /* optional */ }
+    if (!practice && answered === NUZLOCKE_EXAM_ROUNDS && correctCount === NUZLOCKE_EXAM_ROUNDS) {
+      // Der Status wird ausschließlich bei einer perfekten, abgeschlossenen Prüfung erhöht.
+      // Ein neuer Versuch mit weniger Punkten kann ihn nicht herabsetzen.
+      const achieved = examTierRef.current;
+      if (QUALIFICATION_LEVELS[achieved] > (QUALIFICATION_LEVELS[qualification] || 0)) {
+        setQualification(achieved);
+        try { localStorage.setItem(QUALIFICATION_KEY, achieved); }
+        catch { /* optional */ }
+      }
+    }
+    if (practice) {
+      const percentage = examResult(correctCount, answered).percent;
+      if (percentage > best) {
+        setBest(percentage);
+        try { localStorage.setItem(BEST_KEYS.practice, String(percentage)); }
+        catch { /* optional */ }
+      }
     }
     setFinished(true);
   }
@@ -391,10 +418,9 @@ export default function NuzlockeExam({ mode = "exam" }) {
           <button type="button" className="type-trainer-home-link" onClick={() => nav("/")}>Zur Startseite</button>
         </div>
         <h1>{title}</h1>
-        <p className="type-trainer-subtitle">
-          {practice ? "Trainiere deine Lieblingskategorien – einzeln oder gemischt."
-            : "Drei Prüfungen. Je 30 Fragen. Zwölf Themen. Erst 100 % sind Nuzlocke-würdig."}
-        </p>
+        {practice ? (
+          <p className="type-trainer-subtitle">Trainiere einzelne oder mehrere Wissensgebiete.</p>
+        ) : null}
         {!active ? (
           practice ? (
           <div className="type-trainer-setup">
@@ -494,11 +520,6 @@ export default function NuzlockeExam({ mode = "exam" }) {
             </div>
             {!pool.length ? <p className="type-trainer-settings-error type-trainer-wide">Wähle mindestens eine Generation, die zum Regelstand passt.</p> : null}
             {pool.length>0&&!selectedCategories.length ? <p className="type-trainer-settings-error type-trainer-wide">Wähle mindestens ein verfügbares Wissensgebiet.</p> : null}
-            {!practice ? (
-              <div className="exam-rank-hint type-trainer-wide">
-                80 %: In Erwägung · 90 %: Kommt infrage · 100 %: Nuzlocke-würdig
-              </div>
-            ) : null}
           </div>
 
           ) : (
@@ -520,11 +541,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
                 ))}
               </div>
               <div className="exam-fixed-footer">
-                <span>Alle 12 Wissensgebiete · Steigender Schwierigkeitsgrad</span>
-                <span>Bestwert: <strong>{best} %</strong></span>
-              </div>
-              <div className="exam-rank-hint">
-                80 %: In Erwägung · 90 %: Kommt infrage · 100 %: Nuzlocke-würdig
+                <span className="exam-qualification-status">Status: <strong>{qualificationLabel}</strong></span>
               </div>
             </div>
           )
@@ -532,8 +549,10 @@ export default function NuzlockeExam({ mode = "exam" }) {
           <section className="exam-results" role="status">
             <div className="exam-rank-icon" aria-hidden="true">{!practice && completion.passed ? "★" : "◇"}</div>
             <div className="exam-result-percent">{completion.percent} %</div>
-            <h2>{practice ? "Training abgeschlossen" : completion.rank}</h2>
-            {!practice ? <p>Test: {NUZLOCKE_TESTS.find((test) => test.key === examTier)?.label}</p> : null}
+            <h2>{practice ? "Training abgeschlossen" : completion.passed ? "Prüfung bestanden!" : "Prüfung abgeschlossen"}</h2>
+            {!practice ? (
+              <p>Test: {NUZLOCKE_TESTS.find((test) => test.key === examTier)?.label} · Status: <strong>{qualificationLabel}</strong></p>
+            ) : null}
             <p>{correctCount} von {answered} Fragen richtig · {correctCount * 100} Punkte</p>
             <div className="exam-category-results">
               {EXAM_CATEGORIES.filter((category) => byCategory[category.key]?.total).map((category) => (
