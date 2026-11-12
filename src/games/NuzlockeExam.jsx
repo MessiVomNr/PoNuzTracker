@@ -263,14 +263,23 @@ export default function NuzlockeExam({ mode = "exam" }) {
     if (category === "evolution") {
       const index = used.current.evolutionPromptCount || 0;
       used.current.evolutionPromptCount = index + 1;
-      const variant = !practice && examTier === "easy"
-        ? ["target", "method", "level"][index % 3] : "mixed";
+      // Regelmäßige Level-Fragen in allen Prüfungen und im Wissenstraining,
+      // dazwischen Entwicklungsziele (mit Namenseingabe) und Methoden.
+      const variants = !practice && examTier === "normal"
+        ? ["level", "target", "level", "method"]
+        : !practice && examTier === "hard"
+          ? ["level", "level", "method", "target", "level"]
+          : ["level", "target", "level", "method", "level"];
+      const variant = variants[index % variants.length];
       const eligible = (variant === "method" ? SIMPLE_EVOLUTIONS
         : variant === "level" ? LEVEL_EVOLUTIONS
         : [...SIMPLE_EVOLUTIONS, ...LEVEL_EVOLUTIONS])
         .filter((item) => item.minGen <= ruleGen);
       const fact = pick(eligible, "evolution" + variant);
-      return fact && makeEvolutionQuestion(fact, ruleGen, difficulty, variant);
+      // Die Abstände zwischen Level-Antworten hängen vom gewählten Test ab,
+      // nicht von der internen Schwierigkeitskurve einer einzelnen Runde.
+      const evolutionDifficulty = practice ? difficulty : examTier;
+      return fact && makeEvolutionQuestion(fact, ruleGen, evolutionDifficulty, variant);
     }
     if (category === "moves") {
       const eligible = MOVE_FACTS.filter((item) => item.minGen <= ruleGen);
