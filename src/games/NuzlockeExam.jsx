@@ -285,7 +285,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
     if (category === "evolution") {
       // Auch die Fragetypen variieren zufällig: Level häufiger,
       // aber keine festgelegte Anzahl je Prüfung.
-      const levelChance = !practice && examTier === "hard" ? 0.65 : 0.6;
+      const levelChance = !practice && examGeneration === null && examTier === "hard" ? 0.65 : 0.6;
       const random = Math.random();
       const variant = random < levelChance ? "level"
         : random < levelChance + 0.2 ? "target" : "method";
@@ -299,7 +299,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
       const fact = pick(eligible, "evolution" + variant);
       // Die Abstände zwischen Level-Antworten hängen vom gewählten Test ab,
       // nicht von der internen Schwierigkeitskurve einer einzelnen Runde.
-      const evolutionDifficulty = practice ? difficulty : examTier;
+      const evolutionDifficulty = practice || examGeneration !== null ? difficulty : examTier;
       return fact && makeEvolutionQuestion(fact, ruleGen, evolutionDifficulty, variant);
     }
     if (category === "moves") {
