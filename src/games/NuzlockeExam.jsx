@@ -722,9 +722,12 @@ export default function NuzlockeExam({ mode = "exam" }) {
                     })}
                   </div>
                   <div className="exam-fixed-footer">
-                    <span className="exam-qualification-status">
-                      Bestandene Generationen: <strong>{completedGenerations.length} / 9</strong>
-                    </span>
+                    <div className="exam-generation-qualification" aria-live="polite">
+                      <span>Qualifiziert für folgende Editionen:</span>
+                      <strong>{completedGenerations.length
+                        ? completedGenerations.map((gen) => "Gen " + gen).join(" · ")
+                        : "Nicht qualifiziert"}</strong>
+                    </div>
                   </div>
                 </>
               )}
@@ -736,8 +739,9 @@ export default function NuzlockeExam({ mode = "exam" }) {
             <div className="exam-result-percent">{completion.percent} %</div>
             <h2>{practice ? "Training abgeschlossen" : completion.passed ? "Prüfung bestanden!" : "Prüfung abgeschlossen"}</h2>
             {!practice ? examGeneration !== null ? (
-              <p>Generation {examGeneration} · {completedGenerations.includes(examGeneration)
-                ? "Bestanden" : "Noch nicht bestanden"}</p>
+              <p>{completedGenerations.includes(examGeneration)
+                ? "Qualifiziert für Gen " + examGeneration
+                : "Gen " + examGeneration + " · Nicht qualifiziert"}</p>
             ) : (
               <p>Test: {NUZLOCKE_TESTS.find((test) => test.key === examTier)?.label} · Status: <strong>{qualificationLabel}</strong></p>
             ) : null}
