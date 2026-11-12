@@ -198,3 +198,58 @@
   font-size: 15px;
   font-weight: 900;
 }
+
+/* Prüfungsarten: ein ruhiger Switch im bestehenden blauen Games-Stil. */
+.exam-mode-switch{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:4px;gap:4px;max-width:510px;width:100%;
+  border:1px solid rgba(139,180,244,.22);
+  border-radius:14px;background:rgba(7,17,38,.48);
+  margin:0 auto 4px;
+}
+.exam-mode-switch button{
+  font:inherit;font-size:13px;font-weight:850;min-height:43px;
+  border:1px solid transparent;border-radius:10px;
+  color:#bdcfea;background:transparent;cursor:pointer;
+  padding:9px 12px;
+}
+.exam-mode-switch button.is-active{
+  background:linear-gradient(145deg,rgba(78,127,212,.37),rgba(49,78,141,.37));
+  color:#fff;border-color:rgba(151,195,255,.40);
+  box-shadow:0 3px 13px rgba(0,0,0,.12);
+}
+.exam-mode-switch button:hover:not(.is-active){background:rgba(102,144,215,.15)}
+.exam-mode-switch button:focus-visible,
+.exam-generation-card:focus-visible{outline:2px solid #a3c9ff;outline-offset:2px}
+.exam-generation-grid{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.exam-generation-card{
+  display:flex;align-items:center;gap:11px;min-width:0;min-height:76px;
+  border:1px solid rgba(148,181,242,.26);border-radius:15px;
+  background:linear-gradient(150deg,rgba(48,78,135,.44),rgba(16,29,57,.73));
+  color:#edf4ff;font:inherit;font-weight:900;font-size:17px;
+  cursor:pointer;text-align:left;padding:11px 15px;
+  transition:border-color .16s,background .16s,transform .16s;
+}
+.exam-generation-card .trainer-gen-starter{width:49px;height:49px;flex:0 0 49px;object-fit:contain}
+.exam-generation-card:hover{
+  background:linear-gradient(150deg,rgba(68,115,198,.52),rgba(31,50,94,.77));
+  border-color:#8cb6fb;transform:translateY(-2px)
+}
+.exam-generation-check,.exam-generation-arrow{
+  margin-left:auto;display:grid;place-items:center;
+  width:25px;height:25px;flex:0 0 25px;border-radius:50%;
+  font-size:18px;
+}
+.exam-generation-check{color:#72e4b8;background:rgba(30,155,104,.15);
+  border:1px solid rgba(91,218,167,.34)}
+.exam-generation-arrow{color:#adc7f3;font-size:24px}
+.exam-generation-card.is-completed{border-color:rgba(84,194,152,.48)}
+@media(max-width:720px){.exam-generation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:470px){
+  .exam-mode-switch button{font-size:12px;padding:8px 5px}
+  .exam-generation-card{padding:9px 11px;gap:7px;min-height:66px;font-size:15px}
+  .exam-generation-card .trainer-gen-starter{width:40px;height:40px;flex-basis:40px}
+}
