@@ -124,8 +124,8 @@ export const LEVEL_EVOLUTIONS = [
   { id:"pignite", minGen:5, from:"Ferkokel", target:"Flambirex", level:36 },
   { id:"oshawott", minGen:5, from:"Ottaro", target:"Zwottronin", level:17 },
   { id:"dewott", minGen:5, from:"Zwottronin", target:"Admurai", level:36 },
-  { id:"chespin", minGen:6, from:"Igamaro", target:"Igastarn", level:16 },
-  { id:"quilladin", minGen:6, from:"Igastarn", target:"Brigaron", level:36 },
+  { id:"chespin", minGen:6, from:"Igamaro", target:"Igastarnish", level:16 },
+  { id:"quilladin", minGen:6, from:"Igastarnish", target:"Brigaron", level:36 },
   { id:"fennekin", minGen:6, from:"Fynx", target:"Rutena", level:16 },
   { id:"braixen", minGen:6, from:"Rutena", target:"Fennexis", level:36 },
   { id:"froakie", minGen:6, from:"Froxy", target:"Amphizel", level:16 },
@@ -288,17 +288,17 @@ export function makeEvolutionQuestion(fact, ruleGen, difficulty="normal", varian
     };
   }
   if (fact.level) {
-    const levelCandidates = LEVEL_EVOLUTIONS.filter((entry) => entry.minGen <= ruleGen);
-    // Nahe Entwicklungslevel sind schwierigere Ablenkungen.
-    const levels = [...new Set([
-      ...levelCandidates.map((entry) => entry.level),
-      ...Array.from({length:8}, (_,i) => fact.level+(i-4)*2),
-    ])].filter((level) => level !== fact.level && level >= 5 && level <= 70);
-    const sorted = levels.sort((a,b) => Math.abs(a-fact.level)-Math.abs(b-fact.level));
-    const wrong = difficulty === "easy"
-      ? shuffleItems(sorted).slice(0,count-1)
-      : sorted.slice(0,count-1);
-    const labels = [fact.level, ...wrong].map((level) => "Level " + level);
+    // Level-Antworten bleiben bewusst dicht beieinander, statt zufällig
+    // weit entfernte Entwicklungslevel anzubieten:
+    // Einfach 4er-Schritte, Mittel 2er-Schritte, Schwer 1er-Schritte.
+    // Alle Level-Fragen haben genau vier Antwortmöglichkeiten.
+    const step = difficulty === "hard" ? 1 : difficulty === "normal" ? 2 : 4;
+    const positions = [0, 1, 2, 3].filter((index) =>
+      fact.level - index * step >= 1 && fact.level + (3 - index) * step <= 100);
+    if (!positions.length) return null;
+    const answerIndex = positions[Math.floor(Math.random() * positions.length)];
+    const labels = Array.from({ length: 4 }, (_, index) =>
+      "Level " + (fact.level + (index - answerIndex) * step));
     return {
       category:"evolution",
       title: "Ab welchem Level entwickelt sich " + fact.from + " zu " + fact.target + "?",
