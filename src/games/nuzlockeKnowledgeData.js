@@ -275,8 +275,21 @@ export function makeItemQuestion(item, ruleGen, difficulty="normal") {
     explanation:item.name + ": " + item.effect,
   };
 }
-export function makeEvolutionQuestion(fact, ruleGen, difficulty="normal") {
+export function makeEvolutionQuestion(fact, ruleGen, difficulty="normal", variant="mixed") {
   const count = difficulty === "hard" ? 6 : 4;
+  if (variant === "target") {
+    const otherTargets = [...SIMPLE_EVOLUTIONS, ...LEVEL_EVOLUTIONS]
+      .filter((entry) => entry.minGen <= ruleGen && entry.target !== fact.target);
+    const labels = [fact.target, ...shuffleItems([...new Set(otherTargets.map((entry) => entry.target))])
+      .slice(0, count-1)];
+    return {
+      category: "evolution",
+      title: "In welches Pokémon entwickelt sich " + fact.from + "?",
+      ...asOptions(labels, fact.target),
+      explanation: fact.from + " entwickelt sich zu " + fact.target + (fact.level
+        ? " (ab Level " + fact.level + ")." : " (" + fact.trigger + ")."),
+    };
+  }
   if (fact.level) {
     const levelCandidates = LEVEL_EVOLUTIONS.filter((entry) => entry.minGen <= ruleGen);
     // Nahe Entwicklungslevel sind schwierigere Ablenkungen.
