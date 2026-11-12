@@ -563,7 +563,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
     <main className="games-page type-trainer-page">
       <section className="type-trainer-panel exam-panel">
         <div className="type-trainer-topline">
-          <button type="button" className="type-trainer-back" onClick={() => nav("/games")}>‹ Zurück</button>
+          <button type="button" className="type-trainer-back" onClick={() => nav("/games/knowledge-trainer")}>‹ Zurück</button>
           <button type="button" className="type-trainer-home-link" onClick={() => nav("/")}>Zur Startseite</button>
         </div>
         <h1>{title}</h1>
