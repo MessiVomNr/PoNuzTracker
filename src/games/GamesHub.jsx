@@ -58,44 +58,44 @@ export default function GamesHub() {
           <section className="games-hub-section">
             <h2 className="games-hub-section-title">Einzelspiele</h2>
             <div className="games-hub-card-grid">
-          <button
-            type="button"
-            className="games-hub-card games-hub-card-primary"
-            onClick={() => navigate("/games/pokemon-guess")}
-          >
-            <CharizardSilhouetteIcon />
-
-            <span className="games-hub-card-content">
-              <span className="games-hub-card-title">
-                Wer ist dieses Pokémon?
-              </span>
-              <span className="games-hub-card-text">
-                Errate Pokémon mit Silhouette, Pixelbild, Typen, Stats und mehr.
-              </span>
-            </span>
-
-            <span className="games-hub-card-arrow">›</span>
-          </button>
-
-          <button
-            type="button"
-            className="games-hub-card games-hub-card-primary"
-            onClick={() => navigate("/games/higher-lower")}
-          >
-            <HigherLowerIcon />
-
-            <span className="games-hub-card-content">
-              <span className="games-hub-card-title">
-                Higher oder Lower
-              </span>
-              <span className="games-hub-card-text">
-                Vergleiche Pokémon-Stats, BST oder jede Runde einen zufälligen Wert.
-              </span>
-            </span>
-
-            <span className="games-hub-card-arrow">›</span>
-          </button>
-
+              <button
+                type="button"
+                className="games-hub-card games-hub-card-primary"
+                onClick={() => navigate("/games/pokemon-guess")}
+              >
+                <CharizardSilhouetteIcon />
+    
+                <span className="games-hub-card-content">
+                  <span className="games-hub-card-title">
+                    Wer ist dieses Pokémon?
+                  </span>
+                  <span className="games-hub-card-text">
+                    Errate Pokémon mit Silhouette, Pixelbild, Typen, Stats und mehr.
+                  </span>
+                </span>
+    
+                <span className="games-hub-card-arrow">›</span>
+              </button>
+    
+              <button
+                type="button"
+                className="games-hub-card games-hub-card-primary"
+                onClick={() => navigate("/games/higher-lower")}
+              >
+                <HigherLowerIcon />
+    
+                <span className="games-hub-card-content">
+                  <span className="games-hub-card-title">
+                    Higher oder Lower
+                  </span>
+                  <span className="games-hub-card-text">
+                    Vergleiche Pokémon-Stats, BST oder jede Runde einen zufälligen Wert.
+                  </span>
+                </span>
+    
+                <span className="games-hub-card-arrow">›</span>
+              </button>
+    
             </div>
           </section>
           <section className="games-hub-section">
