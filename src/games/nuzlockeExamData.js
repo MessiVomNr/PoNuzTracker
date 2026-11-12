@@ -318,15 +318,52 @@ export function examResult(correct, total) {
 // Drei feste Nuzlocke-Prüfungen. Jede beginnt einfach und zieht an,
 // unabhängig von den frei einstellbaren Trainingsoptionen.
 export const NUZLOCKE_TESTS = [
-  { key: "easy", label: "Einfach", subtitle: "Entspannt beginnen, zum Ende anspruchsvoller" },
-  { key: "normal", label: "Mittel", subtitle: "Von Grundlagen bis zu schweren Fragen" },
-  { key: "hard", label: "Schwer", subtitle: "Schneller Anstieg, schwieriges Finale" },
+  { key: "easy", label: "Einfach", subtitle: "Typen, Attacken und Items · Gen 1–3" },
+  { key: "normal", label: "Mittel", subtitle: "Mit Stats und Pokémon bis Gen 7" },
+  { key: "hard", label: "Schwer", subtitle: "Alle Generationen und Wissensgebiete" },
 ];
 export const NUZLOCKE_EXAM_ROUNDS = 30;
 
+// Jeder Test hat seinen eigenen Pokémon-Pool und historischen Regelstand.
+// Auf Gen 3 gibt es beispielsweise noch keinen Fee-Typ.
+export const NUZLOCKE_TIER_RULES = {
+  easy: { ruleGen: 3, generations: [1, 2, 3] },
+  normal: { ruleGen: 7, generations: [1, 2, 3, 4, 5, 6, 7] },
+  hard: { ruleGen: 9, generations: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
+};
+
+// Exakt 30 Fragen pro Prüfung; die Mischung ist absichtlich nicht gleich.
+// Einfach: 28/30 Fragen zu Typen, Attacken und Items, plus 2 Namen.
+// Mittel: 5 garantierte Stat-Vergleiche; Gen 4–7 werden einbezogen.
+// Schwer: Jede der 12 Kategorien mindestens zweimal.
+export const NUZLOCKE_TIER_QUESTION_COUNTS = {
+  easy: {
+    types: 7, weakness: 5, damage: 5, moves: 6, items: 5, name: 2,
+  },
+  normal: {
+    name: 2, types: 4, weakness: 3, damage: 3, moves: 3, items: 3,
+    ability: 2, evolution: 2, offense: 3, speed: 2, battle: 2, scenario: 1,
+  },
+  hard: {
+    name: 2, types: 2, weakness: 2, damage: 2, moves: 2, items: 2,
+    ability: 3, evolution: 3, offense: 3, speed: 3, battle: 3, scenario: 3,
+  },
+};
+
+export function buildNuzlockeTierSchedule(tier, availableCategories) {
+  const counts = NUZLOCKE_TIER_QUESTION_COUNTS[tier];
+  if (!counts) return [];
+  const available = new Set(availableCategories);
+  const entries = Object.entries(counts);
+  if (entries.some(([category]) => !available.has(category))) return [];
+  const questions = entries.flatMap(([category, count]) => Array(count).fill(category));
+  if (questions.length !== NUZLOCKE_EXAM_ROUNDS) return [];
+  return shuffleItems(questions);
+}
+
 export function examQuestionDifficulty(test, questionIndex) {
   const index = Math.max(0, Math.min(NUZLOCKE_EXAM_ROUNDS - 1, Number(questionIndex) || 0));
-  if (test === "easy") return index < 18 ? "easy" : index < 27 ? "normal" : "hard";
-  if (test === "hard") return index < 5 ? "easy" : index < 15 ? "normal" : "hard";
-  return index < 10 ? "easy" : index < 21 ? "normal" : "hard";
+  if (test === "easy") return index < 24 ? "easy" : "normal";
+  if (test === "hard") return index < 6 ? "normal" : "hard";
+  return index < 8 ? "easy" : index < 26 ? "normal" : "hard";
 }
