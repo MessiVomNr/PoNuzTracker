@@ -288,11 +288,20 @@ export function makeEvolutionQuestion(fact, ruleGen, difficulty="normal", varian
     };
   }
   if (fact.level) {
-    // Level-Antworten bleiben bewusst dicht beieinander, statt zufällig
-    // weit entfernte Entwicklungslevel anzubieten:
-    // Einfach 4er-Schritte, Mittel 2er-Schritte, Schwer 1er-Schritte.
-    // Alle Level-Fragen haben genau vier Antwortmöglichkeiten.
-    const step = difficulty === "hard" ? 1 : difficulty === "normal" ? 2 : 4;
+    const title = "Ab welchem Level entwickelt sich " + fact.from + " zu " + fact.target + "?";
+    const explanation = fact.from + " entwickelt sich ab Level " + fact.level + " zu " + fact.target + ".";
+    if (difficulty === "hard") {
+      return {
+        category: "evolution",
+        responseType: "evolution-level",
+        title,
+        correct: [String(fact.level)],
+        explanation,
+      };
+    }
+    // Einfach: 2er-Schritte (12, 14, 16, 18)
+    // Mittel: 1er-Schritte (14, 15, 16, 17)
+    const step = difficulty === "easy" ? 2 : 1;
     const positions = [0, 1, 2, 3].filter((index) =>
       fact.level - index * step >= 1 && fact.level + (3 - index) * step <= 100);
     if (!positions.length) return null;
@@ -300,10 +309,10 @@ export function makeEvolutionQuestion(fact, ruleGen, difficulty="normal", varian
     const labels = Array.from({ length: 4 }, (_, index) =>
       "Level " + (fact.level + (index - answerIndex) * step));
     return {
-      category:"evolution",
-      title: "Ab welchem Level entwickelt sich " + fact.from + " zu " + fact.target + "?",
-      ...asOptions(labels,"Level "+fact.level),
-      explanation:fact.from+" entwickelt sich ab Level "+fact.level+" zu "+fact.target+".",
+      category: "evolution",
+      title,
+      ...asOptions(labels, "Level " + fact.level),
+      explanation,
     };
   }
   const candidates = SIMPLE_EVOLUTIONS.filter((entry) => entry.minGen <= ruleGen);
