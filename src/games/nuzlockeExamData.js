@@ -311,6 +311,14 @@ export function pokemonArtwork(id) {
   return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + id + ".png";
 }
 
+// Gen-Tests verwenden nur Pokémon der gewählten Gen, dürfen aber
+// generationsunabhängiges Item-Wissen abfragen (auch im Gen-1-Test).
+export function generationExamCategories(ruleGen, pokemonPool) {
+  const categories = examCategories(ruleGen, pokemonPool);
+  if (pokemonPool.length && !categories.includes("items")) categories.push("items");
+  return categories;
+}
+
 export function examCategories(ruleGen, pokemonPool) {
   if (!pokemonPool.length) return [];
   const available = ["name", "types", "weakness", "damage"];
@@ -474,6 +482,30 @@ export function buildNuzlockeTierSchedule(tier, availableCategories) {
       if (drawn < 0) return entry.key;
     }
     return possible[possible.length - 1].key;
+  });
+}
+
+// 30 Fragen mit einem jeweils neuen Mix; Wissen über die Pokémon einer
+// einzelnen Generation steht im Vordergrund, Typen/Items bleiben allgemein.
+export const NUZLOCKE_GENERATION_WEIGHTS = {
+  name: 6, types: 8, weakness: 8, damage: 7,
+  offense: 3, speed: 3, ability: 3, evolution: 5,
+  moves: 5, items: 5, battle: 2, scenario: 2,
+};
+
+export function buildNuzlockeGenerationSchedule(availableCategories) {
+  const choices = availableCategories.map((key) => ({
+    key, weight: NUZLOCKE_GENERATION_WEIGHTS[key] || 0,
+  })).filter((entry) => entry.weight > 0);
+  const total = choices.reduce((sum, entry) => sum + entry.weight, 0);
+  if (!total) return [];
+  return Array.from({ length: NUZLOCKE_EXAM_ROUNDS }, () => {
+    let value = Math.random() * total;
+    for (const entry of choices) {
+      value -= entry.weight;
+      if (value < 0) return entry.key;
+    }
+    return choices[choices.length - 1].key;
   });
 }
 
