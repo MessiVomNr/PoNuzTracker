@@ -12,7 +12,7 @@ import {
   NUZLOCKE_TIER_RULES, buildNuzlockeTierSchedule,
 } from "./nuzlockeExamData";
 import {
-  IMPORTANT_ITEMS, SIMPLE_EVOLUTIONS, LEVEL_EVOLUTIONS, MOVE_FACTS,
+  IMPORTANT_ITEMS, SIMPLE_EVOLUTIONS, LEVEL_EVOLUTIONS, MOVE_FACTS, getTypeQuizMoves,
   availableBattleFacts, finalEvolutionPool,
   makeItemQuestion, makeEvolutionQuestion, makeMoveQuestion,
   makeBattleQuestion, makeOffenseQuestion, makeSpeedQuestion,
@@ -279,14 +279,16 @@ export default function NuzlockeExam({ mode = "exam" }) {
       return fact && makeEvolutionQuestion(fact, ruleGen, evolutionDifficulty, variant);
     }
     if (category === "moves") {
-      const eligible = MOVE_FACTS.filter((item) => item.minGen <= ruleGen);
-      const move = pick(eligible, "moves");
-      if (!move) return null;
       const moveQuestionNumber = used.current.movePromptCount || 0;
       used.current.movePromptCount = moveQuestionNumber + 1;
-      // Both type recognition and physical/special classification appear.
+      // Beide Frageformen abwechselnd, aber für die Typ-Fragen nur
+      // Attacken ohne offensichtlichen Typ-Hinweis im Namen auswählen.
       const variant = moveQuestionNumber % 2 === 0 ? "type" : "class";
-      return makeMoveQuestion(move, ruleGen, variant, difficulty);
+      const eligible = variant === "type"
+        ? getTypeQuizMoves(ruleGen)
+        : MOVE_FACTS.filter((item) => item.minGen <= ruleGen);
+      const move = pick(eligible, "moves-" + variant);
+      return move && makeMoveQuestion(move, ruleGen, variant, difficulty);
     }
     if (category === "battle") {
       const fact = pick(availableBattleFacts(ruleGen), "battle");
