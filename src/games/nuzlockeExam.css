@@ -177,3 +177,24 @@
   border-radius:50%;background:rgba(244,250,255,.19);font-size:12px;font-weight:900;color:#fff}
 .exam-panel .exam-option {gap:8px;min-height:48px}
 .exam-panel .exam-options-grid.has-types .exam-option {min-height:44px}
+
+/* Prüfungsübersicht: ein einziger, ruhiger Status statt Prozentlegende/Bestwert. */
+.exam-fixed-tests .exam-fixed-footer {
+  justify-content: center;
+  padding-top: 14px;
+  margin-top: 1px;
+}
+.exam-qualification-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #b7c9e7;
+  font-size: 14px;
+  font-weight: 750;
+}
+.exam-qualification-status strong {
+  color: #e7f1ff;
+  font-size: 15px;
+  font-weight: 900;
+}
