@@ -240,7 +240,10 @@ export default function NuzlockeExam({ mode = "exam" }) {
   async function makeQuestion(category, difficulty) {
     if (category === "scenario") {
       const eligible = TRAP_SCENARIOS.filter((entry) =>
-        entry.minGen <= ruleGen && (!entry.maxGen || ruleGen <= entry.maxGen));
+        entry.minGen <= ruleGen && (!entry.maxGen || ruleGen <= entry.maxGen) &&
+        // Diese Spezialfrage nennt Pokémon aus mehreren Generationen;
+        // Gen-Tests fragen dagegen nur Pokémon ihrer eigenen Generation.
+        (examGeneration === null || entry.id !== "which-shadow"));
       const index = used.current.scenarioPromptCount || 0;
       used.current.scenarioPromptCount = index + 1;
       // In einem Prüfungsdurchlauf kommen festgehaltene UND frei wechselnde
