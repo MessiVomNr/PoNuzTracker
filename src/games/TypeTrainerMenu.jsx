@@ -8,7 +8,7 @@ export default function TypeTrainerMenu() {
   return (
     <main className="games-page games-hub-page type-trainer-page">
       <section className="games-hub-panel">
-        <button type="button" className="games-hub-back-button" onClick={() => navigate("/games")}>
+        <button type="button" className="games-hub-back-button" onClick={() => navigate("/games/knowledge-trainer")}>
           <span className="games-hub-back-arrow">‹</span> Zurück
         </button>
         <header className="games-hub-header">
