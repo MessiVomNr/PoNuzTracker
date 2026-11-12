@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { GenerationFilter } from "./GenerationFilter";
+import { GenerationFilter, GenerationStarter } from "./GenerationFilter";
 import { getPokemonNameSuggestions, doesGuessMatch } from "./guessGameEngine";
 import { loadTrainerPokemon } from "./trainerPokemonApi";
 import { getGenerationTypes, getTypeColor, getTypeIconUrl, shuffleItems } from "./typeTrainerData";
@@ -10,6 +10,7 @@ import {
   makeDamageQuestion, makeWeaknessQuestion, makeAbilityQuestion,
   makeScenarioQuestion, examResult, NUZLOCKE_TESTS, NUZLOCKE_EXAM_ROUNDS, examQuestionDifficulty,
   NUZLOCKE_TIER_RULES, buildNuzlockeTierSchedule,
+  generationExamCategories, buildNuzlockeGenerationSchedule,
 } from "./nuzlockeExamData";
 import {
   IMPORTANT_ITEMS, SIMPLE_EVOLUTIONS, LEVEL_EVOLUTIONS, MOVE_FACTS, getTypeQuizMoves,
@@ -21,6 +22,14 @@ import "./typeTrainer.css";
 import "./nuzlockeExam.css";
 
 const GENS = [1,2,3,4,5,6,7,8,9];
+const SINGLE_GEN_POOLS = Object.fromEntries(GENS.map((gen) => [gen, [gen]]));
+const GENERATION_TEST_KEY = "ponuz-nuzlocke-generation-exams-v1";
+function readGenerationCompletions() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(GENERATION_TEST_KEY) || "[]");
+    return Array.isArray(saved) ? saved.map(Number).filter((gen) => GENS.includes(gen)) : [];
+  } catch { return []; }
+}
 const SETTINGS_KEYS = {
   exam: "ponuz-nuzlocke-exam-settings-v2",
   practice: "ponuz-knowledge-training-settings-v1",
@@ -131,6 +140,9 @@ export default function NuzlockeExam({ mode = "exam" }) {
   const [settings, setSettings] = useState(() => readSettings(mode));
   const [examTier, setExamTier] = useState("normal");
   const examTierRef = useRef("normal");
+  const [examSection, setExamSection] = useState("general");
+  const [examGeneration, setExamGeneration] = useState(null);
+  const [completedGenerations, setCompletedGenerations] = useState(readGenerationCompletions);
   const [pendingExamStart, setPendingExamStart] = useState(false);
   const [active, setActive] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -162,12 +174,15 @@ export default function NuzlockeExam({ mode = "exam" }) {
   const ruleGen = practice
     ? settings.ruleGen === "auto"
       ? Math.max(1, ...settings.generations) : Number(settings.ruleGen)
-    : examRules.ruleGen;
-  const generations = practice ? settings.generations : examRules.generations;
+    : examGeneration !== null ? examGeneration : examRules.ruleGen;
+  const generations = practice ? settings.generations :
+    examGeneration !== null ? SINGLE_GEN_POOLS[examGeneration] : examRules.generations;
   const pool = useMemo(() => examPokemonList(generations, ruleGen),
     [generations, ruleGen]);
   const fullyEvolved = useMemo(() => finalEvolutionPool(pool), [pool]);
-  const availableCategories = useMemo(() => examCategories(ruleGen, pool), [ruleGen, pool]);
+  const availableCategories = useMemo(() => examGeneration !== null && !practice
+    ? generationExamCategories(ruleGen, pool) : examCategories(ruleGen, pool),
+    [ruleGen, pool, examGeneration, practice]);
   const selectedCategories = practice
     ? availableCategories.filter((key) => settings.categories.includes(key))
     : availableCategories;
@@ -209,7 +224,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
     if (practice || !pendingExamStart) return;
     setPendingExamStart(false);
     start();
-  }, [pendingExamStart, examTier]);
+  }, [pendingExamStart, examTier, examGeneration]);
 
   function exit() {
     setPendingExamStart(false);
@@ -257,9 +272,12 @@ export default function NuzlockeExam({ mode = "exam" }) {
       return chosen && makeAbilityQuestion(chosen, difficulty);
     }
     if (category === "items") {
-      const eligible = IMPORTANT_ITEMS.filter((item) => item.minGen <= ruleGen);
+      // Item-Wissen ist allgemein; der Pokémon-Pool bleibt strikt auf
+      // die gewählte Generation begrenzt.
+      const itemRuleGen = !practice && examGeneration !== null ? 9 : ruleGen;
+      const eligible = IMPORTANT_ITEMS.filter((item) => item.minGen <= itemRuleGen);
       const item = pick(eligible, "items");
-      return item && makeItemQuestion(item, ruleGen, difficulty);
+      return item && makeItemQuestion(item, itemRuleGen, difficulty);
     }
     if (category === "evolution") {
       // Auch die Fragetypen variieren zufällig: Level häufiger,
@@ -268,10 +286,13 @@ export default function NuzlockeExam({ mode = "exam" }) {
       const random = Math.random();
       const variant = random < levelChance ? "level"
         : random < levelChance + 0.2 ? "target" : "method";
+      const generationPokemonNames = examGeneration !== null && !practice
+        ? new Set(pool.map((pokemon) => pokemon.name.toLocaleLowerCase("de-DE"))) : null;
       const eligible = (variant === "method" ? SIMPLE_EVOLUTIONS
         : variant === "level" ? LEVEL_EVOLUTIONS
         : [...SIMPLE_EVOLUTIONS, ...LEVEL_EVOLUTIONS])
-        .filter((item) => item.minGen <= ruleGen);
+        .filter((item) => item.minGen <= ruleGen &&
+          (!generationPokemonNames || generationPokemonNames.has(item.from.toLocaleLowerCase("de-DE"))));
       const fact = pick(eligible, "evolution" + variant);
       // Die Abstände zwischen Level-Antworten hängen vom gewählten Test ab,
       // nicht von der internen Schwierigkeitskurve einer einzelnen Runde.
@@ -296,7 +317,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
     }
     if (category === "offense") {
       const laterEvolutions = fullyEvolved.filter((item) => item.dexId >= 387);
-      const candidates = !practice && examTier === "normal" && laterEvolutions.length
+      const candidates = !practice && examGeneration === null && examTier === "normal" && laterEvolutions.length
         ? laterEvolutions : fullyEvolved;
       const chosen = pick(candidates, "offense");
       if (!chosen) return null;
@@ -305,7 +326,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
     }
     if (category === "speed") {
       const laterEvolutions = fullyEvolved.filter((item) => item.dexId >= 387);
-      const candidates = !practice && examTier === "normal" && laterEvolutions.length >= 2
+      const candidates = !practice && examGeneration === null && examTier === "normal" && laterEvolutions.length >= 2
         ? laterEvolutions : fullyEvolved;
       if (candidates.length < 2) return null;
       const first = pick(candidates, "speedA");
@@ -319,7 +340,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
     }
     // The medium test explicitly includes Gen 4–7 encounters alongside classics.
     let eligiblePokemon = pool;
-    if (!practice && examTier === "normal") {
+    if (!practice && examGeneration === null && examTier === "normal") {
       const index = used.current.mediumPokemonCount || 0;
       used.current.mediumPokemonCount = index + 1;
       const later = pool.filter((item) => item.dexId >= 387);
@@ -343,8 +364,8 @@ export default function NuzlockeExam({ mode = "exam" }) {
           const types = getGenerationTypes(ruleGen);
           const correct = types.filter((type) => pokemon.types.includes(type.key));
           const wrong = shuffleItems(types.filter((type) => !pokemon.types.includes(type.key)));
-          const count = practice ? types.length : examTier === "easy" ? 6
-            : examTier === "normal" ? 10 : types.length;
+          const count = practice ? types.length : examGeneration !== null ? 10
+            : examTier === "easy" ? 6 : examTier === "normal" ? 10 : types.length;
           return shuffleItems([...correct, ...wrong.slice(0, count-correct.length)])
             .map((type) => ({key:type.key,type:type.key}));
         })(),
@@ -381,7 +402,7 @@ export default function NuzlockeExam({ mode = "exam" }) {
   async function prepareNextQuestion(forcedIndex) {
     const questionIndex = Number.isInteger(forcedIndex) ? forcedIndex : answered;
     const difficulty = practice ? settings.difficulty
-      : examQuestionDifficulty(examTierRef.current, questionIndex);
+      : examQuestionDifficulty(examGeneration !== null ? "normal" : examTierRef.current, questionIndex);
     const requestId = ++requestRef.current;
     setLoading(true); setError(""); setBusyHint(""); setQuestion(null);
     setSelected([]); setChecked(false); setWasCorrect(false);
@@ -422,7 +443,9 @@ export default function NuzlockeExam({ mode = "exam" }) {
           ...settings, ruleGen, categories:selectedCategories,
           rounds: isEndless ? 30 : settings.rounds,
         },pool)
-      : buildNuzlockeTierSchedule(examTier, availableCategories);
+      : examGeneration !== null
+        ? buildNuzlockeGenerationSchedule(availableCategories)
+        : buildNuzlockeTierSchedule(examTier, availableCategories);
     if (!schedule.current.length) return;
     requestRef.current += 1;
     used.current = {};
@@ -433,7 +456,13 @@ export default function NuzlockeExam({ mode = "exam" }) {
   function launchExam(testTier) {
     if (!NUZLOCKE_TIER_RULES[testTier]) return;
     examTierRef.current = testTier;
+    setExamGeneration(null);
     setExamTier(testTier);
+    setPendingExamStart(true);
+  }
+  function launchGenerationExam(gen) {
+    if (!GENS.includes(gen)) return;
+    setExamGeneration(gen);
     setPendingExamStart(true);
   }
   function toggleOption(key) {
@@ -466,13 +495,21 @@ export default function NuzlockeExam({ mode = "exam" }) {
   }
   function finish() {
     if (!practice && answered === NUZLOCKE_EXAM_ROUNDS && correctCount === NUZLOCKE_EXAM_ROUNDS) {
-      // Der Status wird ausschließlich bei einer perfekten, abgeschlossenen Prüfung erhöht.
-      // Ein neuer Versuch mit weniger Punkten kann ihn nicht herabsetzen.
-      const achieved = examTierRef.current;
-      if (QUALIFICATION_LEVELS[achieved] > (QUALIFICATION_LEVELS[qualification] || 0)) {
-        setQualification(achieved);
-        try { localStorage.setItem(QUALIFICATION_KEY, achieved); }
-        catch { /* optional */ }
+      if (examGeneration !== null) {
+        // Gen-Erfolge getrennt vom Status der allgemeinen Prüfungen speichern.
+        if (!completedGenerations.includes(examGeneration)) {
+          const next = [...completedGenerations, examGeneration].sort((a,b) => a-b);
+          setCompletedGenerations(next);
+          try { localStorage.setItem(GENERATION_TEST_KEY, JSON.stringify(next)); }
+          catch { /* optional */ }
+        }
+      } else {
+        const achieved = examTierRef.current;
+        if (QUALIFICATION_LEVELS[achieved] > (QUALIFICATION_LEVELS[qualification] || 0)) {
+          setQualification(achieved);
+          try { localStorage.setItem(QUALIFICATION_KEY, achieved); }
+          catch { /* optional */ }
+        }
       }
     }
     if (practice) {
