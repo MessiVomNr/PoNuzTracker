@@ -48,10 +48,11 @@ export default function PartyGames({kind}){
    await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error("Raum gelöscht.");const s=snap.data();if(s.players.length!==2||!s.players.includes(uid))return;const next=fn(s);if(next!==s)tx.set(ref,next);});
   }catch(e){setError(e.message);}
  }
- function reset(){setRoom("");setState(null);setSecret(null);setHidden([]);setLocalSecrets([]);setHandoff(false);setError("");}
+ function reset(){setRoom("");setState(null);setReveal(false);setPick(null);setQuestion("");setLocalHidden([[],[]]);setSecret(null);setHidden([]);setLocalSecrets([]);setHandoff(false);setError("");}
  function choose(id){
+  setReveal(false);
   if(online){
-   if(secret!==null||state.ready[player])return;
+   if(state.ready[player])return;
    setSecret(id);
    change(s=>{if(s.phase!=="choose"||s.ready[player])return s;const ready=[...s.ready];ready[player]=true;return {...s,ready,phase:ready.every(Boolean)?"ask":"choose"};});
   }else{
