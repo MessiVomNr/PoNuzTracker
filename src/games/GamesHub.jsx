@@ -67,6 +67,7 @@ export default function GamesHub() {
         </header>
 
         <div className="games-hub-card-grid">
+          {[["guess-who","Wer ist es?","Errate das geheime Pokémon deines Gegners.","?"],["memory","Pokémon Memory","Finde Paare, Entwicklungsreihen oder Bildausschnitte.","▦"]].map(([path,title,description,symbol])=><button key={path} type="button" className="games-hub-card games-hub-card-primary" onClick={()=>navigate("/games/"+path)}><span className="games-hub-card-icon games-hub-card-icon-muted" style={{fontSize:34}}>{symbol}</span><span className="games-hub-card-content"><span className="games-hub-card-title">{title}</span><span className="games-hub-card-text">{description}</span></span><span className="games-hub-card-arrow">›</span></button>)}
           <button
             type="button"
             className="games-hub-card games-hub-card-primary"
